@@ -58,7 +58,7 @@ export function RangeBar({ metric, value, detailed = false }: Props) {
         </div>
         {value !== null && (
           <span
-            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-[3px] ring-surface transition-[left] duration-500 ease-(--ease-soft)"
+            className="glide absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-[3px] ring-surface transition-[left] duration-500 ease-(--ease-soft)"
             style={{ left: `${share(value) * 100}%` }}
           />
         )}

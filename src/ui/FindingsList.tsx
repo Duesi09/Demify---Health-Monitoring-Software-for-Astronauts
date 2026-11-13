@@ -16,8 +16,15 @@ export function FindingsList({ evaluation, onSelectMetric }: Props) {
   const dueTiles = TILES.filter((t) => t.metrics.some((m) => reminders.some((r) => r.metric === m)))
 
   return (
-    <section aria-label="Findings" className="card rise p-6" style={{ '--i': 4 } as React.CSSProperties}>
+    // The panel takes the height of the body map beside it (or a fixed limit
+    // when stacked) and scrolls inside, so a growing list never pushes the page.
+    <section
+      aria-label="Findings"
+      className="card rise flex max-h-[38rem] flex-col p-6 @4xl:h-0 @4xl:max-h-none @4xl:min-h-full"
+      style={{ '--i': 4 } as React.CSSProperties}
+    >
       <h2 className="text-xl font-semibold tracking-tight">Findings</h2>
+      <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
 
       {findings.length === 0 && dueTiles.length === 0 && (
         <div className="swap-in mt-5 flex items-start gap-3">
@@ -77,7 +84,7 @@ export function FindingsList({ evaluation, onSelectMetric }: Props) {
                       <span className="text-ink">
                         {tile.label}
                         <span className="text-muted">
-                          {days === null ? ' · never measured' : ` · last measured ${days} days ago`}
+                          {days === null ? ' | never measured' : ` | last measured ${days} days ago`}
                         </span>
                       </span>
                       <button type="button" onClick={() => onSelectMetric(tile.metrics[0])} className={chip}>
@@ -91,6 +98,7 @@ export function FindingsList({ evaluation, onSelectMetric }: Props) {
           </li>
         )}
       </ol>
+      </div>
     </section>
   )
 }

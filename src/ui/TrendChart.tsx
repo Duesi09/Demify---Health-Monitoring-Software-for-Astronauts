@@ -16,6 +16,7 @@ import {
 import { formatDay, formatValue } from '@/domain/format'
 import { METRICS, nominalRange } from '@/domain/metrics'
 import type { MetricId } from '@/domain/types'
+import { usePlaying } from './motion'
 
 const SERIES_COLORS = ['var(--color-series-1)', 'var(--color-series-2)']
 
@@ -77,6 +78,7 @@ function ChartTooltip({
 const DRAW_IN_MS = 900
 
 export function TrendChart({ metrics, index, fromDay, toDay, baseline }: Props) {
+  const playing = usePlaying()
   // The line draws itself once; later data changes (scrubbing, time-lapse) apply instantly.
   const [drawIn, setDrawIn] = useState(true)
   useEffect(() => {
@@ -105,6 +107,9 @@ export function TrendChart({ metrics, index, fromDay, toDay, baseline }: Props) 
 
   const single = metrics.length === 1
   if (single && baseline !== null) values.push(baseline)
+  // During the time-lapse the value axis covers the whole mission, so the
+  // chart scrolls sideways without its scale jumping from day to day.
+  if (playing) for (const m of metrics) values.push(...index[m].values())
 
   // Percentages and the 1 to 5 scale have a ceiling the axis must not exceed.
   const def = METRICS[metrics[0]]

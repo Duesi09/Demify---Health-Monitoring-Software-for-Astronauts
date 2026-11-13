@@ -18,6 +18,8 @@ const WINDOW = 7
 const MIN_WINDOW_READINGS = 2
 /** Pre-flight readings needed before a personal baseline is trusted. */
 const MIN_BASELINE_READINGS = 3
+/** Resting heart rate above which the heart counts as racing. */
+const RACING_HEART_BPM = 120
 /** Days the heart rate must stay raised before it counts as deconditioning. */
 const DECONDITIONING_MIN_DAYS = 7
 /** How far back to look when counting how long a drift has lasted. */
@@ -188,6 +190,26 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
   const findings: Finding[] = []
   const fresh = (id: MetricId) => !a[id].stale
   const delta = (id: MetricId) => a[id].delta ?? 0
+
+  // A racing heart at rest together with a sharp blood pressure change or low
+  // blood oxygen: the measurable side of a possible heart attack.
+  const urgent = (id: MetricId) =>
+    fresh(id) && (a[id].band?.status === 'act' || a[id].band?.status === 'critical')
+  const racing = fresh('restingHr') && a.restingHr.value !== null && a.restingHr.value > RACING_HEART_BPM
+  const oxygenLow = fresh('spo2') && a.spo2.band !== null && a.spo2.band.status !== 'nominal'
+  if (racing && (urgent('systolic') || urgent('diastolic') || oxygenLow)) {
+    findings.push({
+      id: 'pattern:cardiac',
+      kind: 'pattern',
+      status: 'critical',
+      title: 'Possible heart attack: racing heart with abnormal blood pressure',
+      detail:
+        'A resting heart rate above 120 together with a sharp change in blood pressure or low blood oxygen can mean the heart muscle is not getting enough oxygen. Chest pain or pressure, pain spreading to the arm or jaw, shortness of breath, cold sweat or nausea make it likely.',
+      action:
+        'Stop all activity and call the Crew Medical Officer now. Chew aspirin (160 to 325 mg) unless you are allergic, give oxygen if blood oxygen is low, record an ECG and contact the flight surgeon.',
+      metrics: ['restingHr', 'systolic', 'diastolic', 'spo2'],
+    })
+  }
 
   // Fever together with a raised heart rate suggests infection.
   if (

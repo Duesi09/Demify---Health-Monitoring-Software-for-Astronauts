@@ -24,7 +24,9 @@ describe('body regions', () => {
   })
 
   it('marks a region without indicators as unmonitored', () => {
-    expect(regionStatus(region('eyes'), evaluate(mission, 20))).toBe('unmonitored')
+    for (const id of ['eyes', 'balance', 'kidneys']) {
+      expect(regionStatus(region(id), evaluate(mission, 20)), id).toBe('unmonitored')
+    }
   })
 
   it('takes the worst status of its indicators', () => {
@@ -37,6 +39,12 @@ describe('body regions', () => {
     expect(regionStatus(region('immune'), evaluation)).toBe('act')
     expect(regionStatus(region('heart'), evaluation)).toBe('act')
     expect(regionStatus(region('metabolism'), evaluation)).toBe('nominal')
+  })
+
+  it('turns the heart and lungs critical during the simulated heart attack', () => {
+    const evaluation = evaluate(mission, 97)
+    expect(regionStatus(region('heart'), evaluation)).toBe('critical')
+    expect(regionStatus(region('lungs'), evaluation)).toBe('critical')
   })
 
   it('is stale when none of its indicators has a recent reading', () => {

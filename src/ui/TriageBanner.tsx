@@ -1,5 +1,5 @@
 import type { Evaluation } from '@/domain/types'
-import { needsAttention, StatusIcon, TONE, TRIAGE } from './status'
+import { StatusIcon, TRIAGE } from './status'
 import { TILES } from './tiles'
 
 /** The one thing to read first: the overall triage level and what to do about it. */
@@ -15,38 +15,30 @@ export function TriageBanner({ evaluation }: { evaluation: Evaluation }) {
     due > 0 ? `${due} ${due === 1 ? 'measurement' : 'measurements'} due` : null,
   ]
     .filter(Boolean)
-    .join(' · ')
+    .join(' | ')
 
   return (
     <section
       aria-label="Overall health status"
-      className="card rise relative flex flex-col overflow-hidden p-7"
+      className="card rise flex flex-col p-7"
       style={{ '--i': 1 } as React.CSSProperties}
     >
-      {/* A wash of the status colour behind the headline; it breathes when action is needed. */}
-      <div className="pointer-events-none absolute -top-28 -left-28 size-96 opacity-25" aria-hidden="true">
-        <div
-          className={`size-full rounded-full blur-3xl transition-colors duration-700 ${needsAttention(status) ? 'breathe' : ''}`}
-          style={{ background: TONE[status].color }}
-        />
-      </div>
-
-      <p className="eyebrow relative">Health status</p>
-      <div className="relative mt-3 flex items-center gap-4">
+      <div className="flex items-center gap-4">
         <StatusIcon tone={status} size={52} />
         <p className="text-6xl leading-none font-semibold tracking-tight">{triage.headline}</p>
       </div>
-      <p className="relative mt-4 text-xl leading-snug text-ink">{triage.guidance}</p>
-      <p className="relative mt-1 text-sm text-ink-2">{count}</p>
+      <p className="mt-4 text-xl leading-snug text-ink">{triage.guidance}</p>
+      <p className="mt-1 text-sm text-ink-2">{count}</p>
 
-      {first && (
-        <div key={first.id} className="swap-in relative mt-auto pt-5">
-          <div className="rounded-2xl bg-white/[0.06] p-4 ring-1 ring-edge">
-            <p className="eyebrow">Do this first</p>
-            <p className="mt-1.5 text-ink">{first.action}</p>
-          </div>
+      {/* Always present and with room for three lines, so the panel keeps its height from day to day. */}
+      <div className="mt-auto pt-5">
+        <div key={first?.id ?? 'routine'} className="swap-in min-h-31 rounded-2xl bg-white/[0.06] p-4 ring-1 ring-edge">
+          <p className="eyebrow">{first ? 'Do this first' : 'Next step'}</p>
+          <p className="mt-1.5 text-ink">
+            {first ? first.action : 'Take your routine measurements at the usual times and log them here.'}
+          </p>
         </div>
-      )}
+      </div>
     </section>
   )
 }

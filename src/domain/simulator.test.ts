@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from './engine'
 import { METRICS, METRIC_IDS } from './metrics'
-import { MISSION_DAYS, simulateMission } from './simulator'
+import { HEART_ATTACK_DAYS, MISSION_DAYS, simulateMission } from './simulator'
 
 const readings = simulateMission()
 const idsOn = (day: number) => evaluate(readings, day).findings.map((f) => f.id)
@@ -37,6 +37,10 @@ describe('simulateMission', () => {
     expect(idsOn(74)).toContain('pattern:infection')
     expect(idsOn(130)).toContain('pattern:deconditioning')
     expect(idsOn(153)).toContain('range:glucose')
+    for (const day of HEART_ATTACK_DAYS) {
+      expect(idsOn(day), `day ${day}`).toContain('pattern:cardiac')
+      expect(evaluate(readings, day).status).toBe('critical')
+    }
     expect(evaluate(readings, 90).reminders.map((r) => r.metric)).toContain('systolic')
   })
 

@@ -2,6 +2,7 @@ import { changeUnit, formatAverage, formatDelta } from '@/domain/format'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation, MetricId } from '@/domain/types'
 import { AnimatedNumber } from './AnimatedNumber'
+import { usePlaying } from './motion'
 import { RangeBar } from './RangeBar'
 import { Sparkline } from './Sparkline'
 import { needsAttention, StatusBadge, TONE } from './status'
@@ -26,6 +27,7 @@ function describe(daysSince: number | null): string {
 }
 
 export function MetricTile({ tile, evaluation, index, selected, order, onSelect }: Props) {
+  const playing = usePlaying()
   const primary = evaluation.assessments[tile.metrics[0]]
   const def = METRICS[primary.metric]
   const tone = tileTone(tile, evaluation)
@@ -44,6 +46,13 @@ export function MetricTile({ tile, evaluation, index, selected, order, onSelect 
   for (let day = evaluation.day - SPARK_DAYS + 1; day <= evaluation.day; day++) {
     const v = series.get(day)
     if (v !== undefined) points.push({ day, value: v })
+  }
+  // During the time-lapse the line keeps one scale for the whole mission, so
+  // it scrolls past instead of stretching and shrinking every day.
+  let range: [number, number] | undefined
+  if (playing) {
+    const all = [...series.values()]
+    range = [Math.min(...all), Math.max(...all)]
   }
   // The bar marks the value the status is judged on.
   const judged = stale ? null : def.evaluateOn === 'avg7' ? (primary.recentMean ?? primary.value) : primary.value
@@ -80,7 +89,7 @@ export function MetricTile({ tile, evaluation, index, selected, order, onSelect 
           </span>
           <span className="ml-1.5 text-sm text-ink-2">{def.unit}</span>
         </span>
-        <Sparkline points={points} baseline={primary.baseline} />
+        <Sparkline points={points} baseline={primary.baseline} range={range} />
       </span>
       <span className="relative block">
         <RangeBar metric={primary.metric} value={judged} />

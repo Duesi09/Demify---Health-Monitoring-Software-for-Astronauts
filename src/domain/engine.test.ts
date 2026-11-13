@@ -119,6 +119,38 @@ describe('patterns across indicators', () => {
     expect(result.status).toBe('act')
   })
 
+  it('recognises a racing heart with a blood pressure spike as a possible heart attack', () => {
+    const readings = [
+      ...log('restingHr', 58, [...days(5, 60), 128]),
+      ...log('systolic', 116, [...days(5, 114), 166]),
+      ...log('diastolic', 74, [...days(5, 73), 101]),
+    ]
+    const result = evaluate(readings, 6)
+    expect(result.findings[0].id).toBe('pattern:cardiac')
+    expect(result.status).toBe('critical')
+    // The pattern explains the single readings, so they are not listed again.
+    expect(result.findings.map((f) => f.id)).toEqual(['pattern:cardiac'])
+  })
+
+  it('also recognises it from a racing heart with low blood oxygen', () => {
+    const readings = [
+      ...log('restingHr', 58, [...days(5, 60), 128]),
+      ...log('spo2', 98, [...days(5, 98), 91]),
+    ]
+    expect(evaluate(readings, 6).findings[0].id).toBe('pattern:cardiac')
+  })
+
+  it('does not call a fast heart alone a heart attack', () => {
+    const readings = [
+      ...log('restingHr', 58, [...days(5, 60), 128]),
+      ...log('systolic', 116, days(6, 114)),
+      ...log('spo2', 98, days(6, 98)),
+    ]
+    const ids = evaluate(readings, 6).findings.map((f) => f.id)
+    expect(ids).not.toContain('pattern:cardiac')
+    expect(ids).toContain('range:restingHr')
+  })
+
   it('does not call a fever alone an infection pattern', () => {
     const readings = [
       ...log('bodyTemp', 36.7, [...days(5, 36.8), 38.4]),

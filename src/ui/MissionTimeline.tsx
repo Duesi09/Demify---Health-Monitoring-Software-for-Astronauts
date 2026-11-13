@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { Status } from '@/domain/types'
-import { AnimatedNumber } from './AnimatedNumber'
+import { TIMELAPSE_STEP_MS } from './motion'
 import { StatusIcon, TONE } from './status'
 
 interface Props {
@@ -54,15 +54,10 @@ export function MissionTimeline({ day, statuses, playing, onDayChange, onToggleP
   return (
     <section aria-label="Mission timeline" className="card rise p-5 sm:p-6" style={{ '--i': 0 } as React.CSSProperties}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div>
-          <p className="eyebrow">Mission day</p>
-          <p className="flex items-baseline gap-2">
-            <span className="text-5xl font-semibold tracking-tight tabular-nums">
-              <AnimatedNumber value={day} decimals={0} />
-            </span>
-            <span className="text-ink-2">of {MISSION_DAYS} · simulated mission data</span>
-          </p>
-        </div>
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-5xl font-semibold tracking-tight tabular-nums">Mission day {day}</span>
+          <span className="text-ink-2">of {MISSION_DAYS} | simulated mission data</span>
+        </p>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <ul className="flex gap-4 text-xs text-ink-2" aria-label="Legend">
             {(['watch', 'act', 'critical'] as const).map((tone) => (
@@ -114,7 +109,7 @@ export function MissionTimeline({ day, statuses, playing, onDayChange, onToggleP
           {statuses.map((status, i) => (
             <span
               key={i}
-              className="flex-1 rounded-[2px] transition-opacity duration-300"
+              className="flex-1 rounded-[2px] transition-opacity duration-200"
               style={{
                 background: status === 'nominal' ? 'var(--color-axis)' : TONE[status].color,
                 opacity: i < day ? 1 : 0.4,
@@ -123,10 +118,12 @@ export function MissionTimeline({ day, statuses, playing, onDayChange, onToggleP
           ))}
         </div>
         <div
-          className={`absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-ink shadow-[0_0_12px_rgb(255_255_255/0.6)] ${
-            playing ? 'transition-[left] duration-150 ease-linear' : ''
-          }`}
-          style={{ left: `${((day - 0.5) / MISSION_DAYS) * 100}%` }}
+          className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-ink shadow-[0_0_12px_rgb(255_255_255/0.6)]"
+          style={{
+            left: `${((day - 0.5) / MISSION_DAYS) * 100}%`,
+            // While playing, the marker takes exactly one step to reach the next day, so it never pauses.
+            transition: playing ? `left ${TIMELAPSE_STEP_MS}ms linear` : undefined,
+          }}
         >
           <span className="absolute -top-1 left-1/2 size-2.5 -translate-x-1/2 rounded-full bg-ink" />
         </div>

@@ -23,23 +23,23 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 | Missions-Zeitleiste | Die ganze Mission als Streifen mit einer Zelle pro Tag in der Farbe des Tagesstatus; der Streifen ist zugleich der Regler |
 | Fünf Hazards | Die fünf NASA-Hazards mit je einem Ring, der zeigt, wie viele zugehörige Messwerte nominal sind |
 | Bereichsbalken | Jeder Messwert zeigt, wo er zwischen Normal-, Watch-, Act- und Critical-Bereich liegt |
-| Körperkarte | Klickbare Figur mit sieben Körpersystemen (Gehirn, Augen, Immunsystem, Lunge, Herz, Stoffwechsel, Knochen und Muskeln). Jeder Marker zeigt den Status; die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
+| Körperkarte | Anatomische Figur mit neun Körpersystemen in ihrer Statusfarbe (Gehirn, Augen, Gleichgewicht, Immunsystem, Lunge, Herz, Stoffwechsel, Nieren, Knochen und Muskeln). Die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
 | Triage | Vier Stufen: Nominal, Watch (selbst handeln), Act (Crew Medical Officer), Critical (Flight Surgeon). Jede Stufe hat eigene Farbe und eigene Icon-Form |
 | Baseline-Drift | 7-Tage-Durchschnitt gegen den Vor-Flug-Wert, inklusive Dauer („seit 6 Tagen") |
-| Muster | Möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, Herz-Kreislauf-Abbau bei Trainingsausfall |
+| Muster | Möglicher Herzinfarkt (rasender Puls plus Blutdruckspitze oder niedriger Sauerstoff), möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, Herz-Kreislauf-Abbau bei Trainingsausfall |
 | Erinnerungen | Veraltete Messwerte werden nicht bewertet; die App fordert zur neuen Messung auf |
 | Eingabe | Werte von Hand eintragen, Prüfung im Browser und auf dem Server, Speicherung serverseitig |
 | Verlauf | Mini-Kurve pro Kachel, Detail-Chart mit Normbereich und Baseline, Tabellenansicht |
 | Demo | Simulierte 180-Tage-Mission mit eingebauten Ereignissen und Zeitraffer |
 | Quellen | Jede Messgröße verlinkt auf den passenden Hazard und das Risiko im NASA Human Research Program |
 
-Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 74 (Infekt), 90 (fällige Messung), 130 (Trainingsausfall), 153 (Unterzucker).
+Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker).
 
 ## Technik
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
-- **Tests:** Vitest, 32 Unit-Tests für Regel-Engine, Simulator und Körperkarte.
+- **Tests:** Vitest, 36 Unit-Tests für Regel-Engine, Simulator und Körperkarte.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |
@@ -85,7 +85,8 @@ Danach jeweils <http://localhost:3000> öffnen.
 - **Speicher ist eine JSON-Datei:** Reicht für einen Container auf einem Rechner. Für Mehrbenutzer-Betrieb oder Serverless-Hosting braucht es eine Datenbank.
 - **Sensordaten sind simuliert:** Echte Geräte kommen in Phase 3.
 - **Grenzwerte sind Demo-Werte:** Sie stammen aus allgemeinen klinischen Richtlinien, sind keine Flugregeln und keine medizinische Beratung.
-- **Augen ohne Messwert:** Das Körpersystem ist auf der Karte erklärt, ein Sehtest kommt in Phase 3.
+- **Drei Körpersysteme ohne Messwert:** Augen, Gleichgewicht und Nieren sind auf der Karte erklärt, aber noch nicht gemessen. Ein Sehtest kommt in Phase 3.
+- **Herzinfarkt wird nur an Messwerten erkannt:** Die App kennt keine Symptome wie Brustschmerz und kein echtes EKG. Die Regel meldet deshalb einen möglichen Herzinfarkt und fragt nach den Symptomen.
 - **Strahlung fehlt noch:** Der fünfte NASA-Hazard hat bisher keine Messgröße; er kommt mit Phase 4.
 
 ## Offene Entscheidungen
