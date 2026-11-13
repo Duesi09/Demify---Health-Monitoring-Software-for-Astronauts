@@ -1,0 +1,11 @@
+services:
+  demify:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - demify-data:/data
+    restart: unless-stopped
+
+volumes:
+  demify-data:

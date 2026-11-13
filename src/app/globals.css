@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+
+/* One dark theme: a cockpit display that stays readable in a dim module. */
+@theme {
+  --color-page: #0d0d0d;
+  --color-surface: #1a1a19;
+  --color-raised: #242422;
+  --color-ink: #f0efec;
+  --color-ink-2: #c3c2b7;
+  --color-muted: #898781;
+  --color-grid: #2c2c2a;
+  --color-axis: #383835;
+  --color-edge: rgb(255 255 255 / 0.1);
+
+  /* Status colours are reserved for triage and always paired with an icon and a label. */
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+
+  /* Data series. */
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-series-1);
+  outline-offset: 2px;
+}
+
+input[type='range'] {
+  accent-color: var(--color-series-1);
+}

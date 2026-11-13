@@ -1,0 +1,8 @@
+node_modules
+.next
+next-env.d.ts
+*.tsbuildinfo
+# Manual readings saved by the server while running locally
+.data
+.env*.local
+.DS_Store
