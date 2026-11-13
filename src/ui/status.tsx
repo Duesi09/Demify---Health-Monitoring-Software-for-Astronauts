@@ -6,13 +6,18 @@ import type { Status } from '@/domain/types'
  */
 export type Tone = Status | 'stale' | 'unmonitored'
 
-export const TONE: Record<Tone, { label: string; text: string; bg: string; glyph: string }> = {
-  nominal: { label: 'Nominal', text: 'text-good', bg: 'bg-good', glyph: '#ffffff' },
-  watch: { label: 'Watch', text: 'text-warning', bg: 'bg-warning', glyph: '#0b0b0b' },
-  act: { label: 'Act', text: 'text-serious', bg: 'bg-serious', glyph: '#ffffff' },
-  critical: { label: 'Critical', text: 'text-critical', bg: 'bg-critical', glyph: '#ffffff' },
-  stale: { label: 'No recent data', text: 'text-muted', bg: 'bg-muted', glyph: '#0b0b0b' },
-  unmonitored: { label: 'Not monitored yet', text: 'text-muted', bg: 'bg-axis', glyph: '#0b0b0b' },
+export const TONE: Record<Tone, { label: string; text: string; bg: string; color: string; glyph: string }> = {
+  nominal: { label: 'Nominal', text: 'text-good', bg: 'bg-good', color: 'var(--color-good)', glyph: '#ffffff' },
+  watch: { label: 'Watch', text: 'text-warning', bg: 'bg-warning', color: 'var(--color-warning)', glyph: '#0b0b0b' },
+  act: { label: 'Act', text: 'text-serious', bg: 'bg-serious', color: 'var(--color-serious)', glyph: '#ffffff' },
+  critical: { label: 'Critical', text: 'text-critical', bg: 'bg-critical', color: 'var(--color-critical)', glyph: '#ffffff' },
+  stale: { label: 'No recent data', text: 'text-muted', bg: 'bg-muted', color: 'var(--color-muted)', glyph: '#0b0b0b' },
+  unmonitored: { label: 'Not monitored yet', text: 'text-muted', bg: 'bg-axis', color: 'var(--color-muted)', glyph: '#0b0b0b' },
+}
+
+/** Whether a tone asks for the crew member's attention. */
+export function needsAttention(tone: Tone): boolean {
+  return tone === 'watch' || tone === 'act' || tone === 'critical'
 }
 
 export const TRIAGE: Record<Status, { headline: string; guidance: string }> = {

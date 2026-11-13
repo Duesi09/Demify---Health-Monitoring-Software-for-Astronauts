@@ -30,3 +30,6 @@ export const HAZARDS: Record<HazardId, { label: string; url: string }> = {
 
 /** NASA's list of human spaceflight risks, which the `nasaRisk` names refer to. */
 export const NASA_RISKS_URL = 'https://www.nasa.gov/hrp/risks/'
+
+/** The order NASA lists the hazards in. */
+export const HAZARD_IDS: HazardId[] = ['radiation', 'isolation', 'distance', 'gravity', 'environment']

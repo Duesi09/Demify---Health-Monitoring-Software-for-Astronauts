@@ -49,12 +49,12 @@ function bump(day: number, start: number, end: number, ramp: number): number {
  * something to find. Returns the extra offset for a metric on a given day.
  */
 function scenarioOffset(metric: MetricId, day: number): number {
-  // Days 28–46: heavy workload with shifted sleep; days 36–44 a CO₂ scrubber degrades.
+  // Days 28 to 46: heavy workload with shifted sleep; days 36 to 44 a CO₂ scrubber degrades.
   const overload = bump(day, 28, 46, 6)
   const scrubber = bump(day, 36, 44, 3)
-  // Days 70–77: an infection with fever.
+  // Days 70 to 77: an infection with fever.
   const infection = bump(day, 70, 77, 3)
-  // Days 105–140: the exercise device is out of service; the heart deconditions.
+  // Days 105 to 140: the exercise device is out of service; the heart deconditions.
   const noExercise = bump(day, 105, 140, 4)
   const deconditioning = bump(day, 108, 146, 18)
 
@@ -87,7 +87,7 @@ function scenarioOffset(metric: MetricId, day: number): number {
 function isMeasured(metric: MetricId, day: number): boolean {
   // Fasting blood sugar is a finger-prick test, done every third day.
   if (metric === 'glucose') return ((day % 3) + 3) % 3 === 0
-  // Days 86–90: blood pressure measurements were skipped.
+  // Days 86 to 90: blood pressure measurements were skipped.
   if ((metric === 'systolic' || metric === 'diastolic') && day >= 86 && day <= 90) return false
   return true
 }

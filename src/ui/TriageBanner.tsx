@@ -1,5 +1,5 @@
 import type { Evaluation } from '@/domain/types'
-import { StatusIcon, TONE, TRIAGE } from './status'
+import { needsAttention, StatusIcon, TONE, TRIAGE } from './status'
 import { TILES } from './tiles'
 
 /** The one thing to read first: the overall triage level and what to do about it. */
@@ -20,21 +20,31 @@ export function TriageBanner({ evaluation }: { evaluation: Evaluation }) {
   return (
     <section
       aria-label="Overall health status"
-      className="relative overflow-hidden rounded-lg border border-edge bg-surface p-5 pl-7"
+      className="card rise relative flex flex-col overflow-hidden p-7"
+      style={{ '--i': 1 } as React.CSSProperties}
     >
-      <span className={`absolute inset-y-0 left-0 w-2 ${TONE[status].bg}`} aria-hidden="true" />
-      <div className="flex items-center gap-3">
-        <StatusIcon tone={status} size={40} />
-        <div>
-          <p className="text-4xl leading-tight font-semibold">{triage.headline}</p>
-          <p className="text-sm text-ink-2">{count}</p>
-        </div>
+      {/* A wash of the status colour behind the headline; it breathes when action is needed. */}
+      <div className="pointer-events-none absolute -top-28 -left-28 size-96 opacity-25" aria-hidden="true">
+        <div
+          className={`size-full rounded-full blur-3xl transition-colors duration-700 ${needsAttention(status) ? 'breathe' : ''}`}
+          style={{ background: TONE[status].color }}
+        />
       </div>
-      <p className="mt-3 text-ink">{triage.guidance}</p>
+
+      <p className="eyebrow relative">Health status</p>
+      <div className="relative mt-3 flex items-center gap-4">
+        <StatusIcon tone={status} size={52} />
+        <p className="text-6xl leading-none font-semibold tracking-tight">{triage.headline}</p>
+      </div>
+      <p className="relative mt-4 text-xl leading-snug text-ink">{triage.guidance}</p>
+      <p className="relative mt-1 text-sm text-ink-2">{count}</p>
+
       {first && (
-        <div className="mt-3 rounded-md bg-raised p-3">
-          <p className="text-xs font-semibold tracking-wide text-muted uppercase">Do this first</p>
-          <p className="mt-1 text-sm text-ink">{first.action}</p>
+        <div key={first.id} className="swap-in relative mt-auto pt-5">
+          <div className="rounded-2xl bg-white/[0.06] p-4 ring-1 ring-edge">
+            <p className="eyebrow">Do this first</p>
+            <p className="mt-1.5 text-ink">{first.action}</p>
+          </div>
         </div>
       )}
     </section>

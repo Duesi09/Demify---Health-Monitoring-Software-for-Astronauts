@@ -7,6 +7,7 @@ import { METRICS } from '@/domain/metrics'
 import { PREFLIGHT_DAYS } from '@/domain/simulator'
 import { STATUS_ORDER, type Evaluation, type MetricId, type Reading } from '@/domain/types'
 import { LogForm } from './LogForm'
+import { RangeBar } from './RangeBar'
 import { StatusBadge } from './status'
 import { tileTone, type Tile } from './tiles'
 import { TrendChart } from './TrendChart'
@@ -45,10 +46,10 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
   }
 
   return (
-    <section aria-label={`${tile.label} details`} className="flex flex-col gap-5 rounded-lg border border-edge bg-surface p-5">
+    <section aria-label={`${tile.label} details`} className="card swap-in flex flex-col gap-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-xl font-semibold">{tile.label}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{tile.label}</h2>
           <p className="text-sm text-muted">
             {def.unit === '/ 5' ? 'Self-rated, 1 to 5' : def.unit}
             {def.evaluateOn === 'avg7' ? ' · judged on the 7-day average' : ''}
@@ -58,15 +59,31 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
       </header>
 
       <div>
-        <div className="mb-2 flex gap-1" role="group" aria-label="Period shown">
+        <p className="eyebrow mb-3">Where you are</p>
+        <div className="flex flex-col gap-4">
+          {tile.metrics.map((m) => {
+            const a = evaluation.assessments[m]
+            const judged = a.stale ? null : METRICS[m].evaluateOn === 'avg7' ? (a.recentMean ?? a.value) : a.value
+            return (
+              <div key={m}>
+                {tile.metrics.length > 1 && <p className="mb-2 text-xs text-ink-2">{METRICS[m].label}</p>}
+                <RangeBar metric={m} value={judged} detailed />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 flex gap-1 rounded-full bg-page/60 p-1 ring-1 ring-edge w-fit" role="group" aria-label="Period shown">
           {PERIODS.map((p) => (
             <button
               key={p.label}
               type="button"
               aria-pressed={periodDays === p.days}
               onClick={() => setPeriodDays(p.days)}
-              className={`rounded-md px-2.5 py-1 text-xs ${
-                periodDays === p.days ? 'bg-raised text-ink' : 'text-ink-2 hover:bg-raised'
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                periodDays === p.days ? 'bg-raised text-ink' : 'text-ink-2 hover:text-ink'
               }`}
             >
               {p.label}
@@ -107,7 +124,7 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
                     const v = index[m].get(d)
                     return (
                       <td key={m} className="py-1 text-ink">
-                        {v === undefined ? '–' : formatValue(m, v)}
+                        {v === undefined ? '--' : formatValue(m, v)}
                       </td>
                     )
                   })}
@@ -121,7 +138,7 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
         </details>
       </div>
 
-      <div className="rounded-md bg-raised p-4">
+      <div className="rounded-2xl bg-white/[0.05] p-5 ring-1 ring-edge">
         <h3 className="mb-3 font-semibold">Log a reading for {formatDay(day).toLowerCase()}</h3>
         <LogForm key={`${tile.id}:${day}`} metrics={tile.metrics} day={day} onLogged={onLogged} />
       </div>

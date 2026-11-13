@@ -1,4 +1,4 @@
-# Demify – Projektübersicht
+# Demify: Projektübersicht
 
 Stand: 13. November 2026, Phase 1 abgeschlossen, aus Phase 2 ist die Körperkarte fertig (Branch `Phase-1`).
 
@@ -19,6 +19,10 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 | Bereich | Umsetzung |
 |---|---|
 | Messwerte | Ruhepuls, Blutdruck, Körpertemperatur, Blutsauerstoff, Nüchternzucker, Schlaf, Stimmung, Training, Kabinen-CO₂ |
+| Herzmonitor | Herzschlag-Kurve im Takt des gemessenen Pulses und Druckwelle zwischen diastolischem und systolischem Wert, daneben Puls, Blutdruck, Sauerstoff und Temperatur. Die Kurven werden aus den letzten Messwerten gezeichnet und sind kein Live-Sensorsignal |
+| Missions-Zeitleiste | Die ganze Mission als Streifen mit einer Zelle pro Tag in der Farbe des Tagesstatus; der Streifen ist zugleich der Regler |
+| Fünf Hazards | Die fünf NASA-Hazards mit je einem Ring, der zeigt, wie viele zugehörige Messwerte nominal sind |
+| Bereichsbalken | Jeder Messwert zeigt, wo er zwischen Normal-, Watch-, Act- und Critical-Bereich liegt |
 | Körperkarte | Klickbare Figur mit sieben Körpersystemen (Gehirn, Augen, Immunsystem, Lunge, Herz, Stoffwechsel, Knochen und Muskeln). Jeder Marker zeigt den Status; die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
 | Triage | Vier Stufen: Nominal, Watch (selbst handeln), Act (Crew Medical Officer), Critical (Flight Surgeon). Jede Stufe hat eigene Farbe und eigene Icon-Form |
 | Baseline-Drift | 7-Tage-Durchschnitt gegen den Vor-Flug-Wert, inklusive Dauer („seit 6 Tagen") |
@@ -34,8 +38,8 @@ Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 74 (Infekt), 
 ## Technik
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
-- **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, ein dunkles Cockpit-Design.
-- **Tests:** Vitest, 31 Unit-Tests für Regel-Engine, Simulator und Körperkarte.
+- **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
+- **Tests:** Vitest, 32 Unit-Tests für Regel-Engine, Simulator und Körperkarte.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |

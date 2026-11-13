@@ -275,7 +275,11 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
 
 /** Assesses every indicator as of `today` and derives the overall triage level. */
 export function evaluate(readings: Reading[], today: number): Evaluation {
-  const index = indexReadings(readings)
+  return evaluateIndexed(indexReadings(readings), today)
+}
+
+/** Same as `evaluate`, for callers that already hold the index. */
+export function evaluateIndexed(index: Record<MetricId, Series>, today: number): Evaluation {
   const assessments = Object.fromEntries(
     METRIC_IDS.map((id) => [id, assessMetric(id, index[id], today)]),
   ) as Record<MetricId, MetricAssessment>
@@ -303,4 +307,9 @@ export function evaluate(readings: Reading[], today: number): Evaluation {
 
   const status = findings.reduce<Status>((s, f) => worst(s, f.status), 'nominal')
   return { day: today, status, assessments, findings, reminders }
+}
+
+/** The overall triage level of every mission day from 1 to `days`. */
+export function missionStatuses(index: Record<MetricId, Series>, days: number): Status[] {
+  return Array.from({ length: days }, (_, i) => evaluateIndexed(index, i + 1).status)
 }

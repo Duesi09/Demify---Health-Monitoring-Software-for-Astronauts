@@ -32,7 +32,7 @@ export const BODY_REGIONS: BodyRegion[] = [
     label: 'Brain & mind',
     role: 'Controls attention, memory, mood and sleep.',
     inSpace:
-      'Isolation, confinement, heavy workload and a disturbed day–night rhythm cause sleep loss. Together they can lower mood and performance on critical tasks.',
+      'Isolation, confinement, heavy workload and a disturbed day-night rhythm cause sleep loss. Together they can lower mood and performance on critical tasks.',
     protect: [
       'Keep a fixed sleep time and dim lights before sleep.',
       'Stay in regular contact with family and friends.',
@@ -139,15 +139,15 @@ export function regionForMetric(metric: MetricId): BodyRegion {
 }
 
 /** A triage level, `stale` when all data is out of date, or `unmonitored`. */
-export type RegionStatus = Status | 'stale' | 'unmonitored'
+export type GroupStatus = Status | 'stale' | 'unmonitored'
 
 /**
- * The status of a body system: the worst of its indicators and of any
+ * The status of a group of indicators: the worst of the indicators and of any
  * pattern finding that involves one of them.
  */
-export function regionStatus(region: BodyRegion, evaluation: Evaluation): RegionStatus {
-  if (region.metrics.length === 0) return 'unmonitored'
-  const fresh = region.metrics.filter((m) => !evaluation.assessments[m].stale)
+export function groupStatus(metrics: MetricId[], evaluation: Evaluation): GroupStatus {
+  if (metrics.length === 0) return 'unmonitored'
+  const fresh = metrics.filter((m) => !evaluation.assessments[m].stale)
   if (fresh.length === 0) return 'stale'
 
   let status = fresh.reduce<Status>((s, m) => worst(s, evaluation.assessments[m].status), 'nominal')
@@ -157,4 +157,8 @@ export function regionStatus(region: BodyRegion, evaluation: Evaluation): Region
     }
   }
   return status
+}
+
+export function regionStatus(region: BodyRegion, evaluation: Evaluation): GroupStatus {
+  return groupStatus(region.metrics, evaluation)
 }

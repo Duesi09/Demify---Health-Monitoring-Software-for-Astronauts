@@ -6,7 +6,7 @@ export function formatValue(metric: MetricId, value: number): string {
 }
 
 /**
- * Formats an average. Small scales such as mood (1–5) get one decimal, since
+ * Formats an average. Small scales such as mood (1 to 5) get one decimal, since
  * a whole-number average would hide the change that matters.
  */
 export function formatAverage(metric: MetricId, value: number): string {
@@ -15,7 +15,7 @@ export function formatAverage(metric: MetricId, value: number): string {
   return value.toFixed(smallScale ? Math.max(1, def.decimals) : def.decimals)
 }
 
-/** Unit to print after a change: a change in % or on a 1–5 scale is in points. */
+/** Unit to print after a change: a change in % or on a 1 to 5 scale is in points. */
 export function changeUnit(metric: MetricId): string {
   const unit = METRICS[metric].unit
   return unit === '%' || unit === '/ 5' ? 'points' : unit

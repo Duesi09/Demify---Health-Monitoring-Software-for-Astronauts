@@ -67,6 +67,8 @@ export interface MetricDef {
   inputMin: number
   inputMax: number
   inputStep: number
+  /** Value range drawn on the range bar, wide enough to show every band. */
+  scale: [number, number]
   /** The NASA spaceflight hazard that drives this indicator. */
   hazard: HazardId
   /** The matching risk in NASA's Human Research Program list, as NASA names it. */

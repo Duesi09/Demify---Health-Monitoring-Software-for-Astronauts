@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import '@fontsource-variable/inter'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
     'Health monitoring for astronauts on long-duration missions: gathers health indicators, compares them with your personal baseline and tells you what to do next.',
 }
 
-export const viewport: Viewport = { themeColor: '#0d0d0d' }
+export const viewport: Viewport = { themeColor: '#000000' }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,4 +1,4 @@
-# Demify — Health Monitoring Software for Astronauts
+# Demify: Health Monitoring Software for Astronauts
 
 Our solution to the NASA Space Apps Challenge "Create Health Monitoring Software for Astronauts on Space Missions."
 
@@ -7,6 +7,10 @@ On long missions, astronauts face radiation, isolation, altered gravity and a cl
 ## What it does today (phases 1 and 2)
 
 - **Nine indicators:** resting heart rate, blood pressure, body temperature, blood oxygen, fasting blood sugar, sleep, mood, exercise and cabin CO₂.
+- **Vital signs monitor:** a heartbeat trace that beats at the measured heart rate and a pressure wave that swings between the measured diastolic and systolic values, next to heart rate, blood pressure, blood oxygen and temperature. The traces are drawn from the latest readings; they are an illustration, not a live sensor signal.
+- **Mission timeline:** the whole mission as one strip with a cell per day in the colour of that day's status. The strip is also the control that moves through the mission.
+- **Five hazards:** NASA's five hazards of human spaceflight, each with a ring showing how many of its indicators are nominal.
+- **Range bars:** every indicator shows where its value sits among its normal, watch, act and critical ranges.
 - **Clickable body map:** a human figure with one marker per body system (brain, eyes, immune system, lungs, heart, metabolism, bones and muscles). Each marker shows that system's status; selecting it explains what spaceflight does to it, how to protect it, and which indicators describe it.
 - **Four triage levels:** Nominal, Watch (self-care), Act (consult the Crew Medical Officer), Critical (contact the flight surgeon). Each level has its own colour and icon shape.
 - **Personal baseline:** a value can be textbook-normal and still be flagged when it has drifted from that person's pre-flight average.
@@ -54,7 +58,7 @@ Manually entered readings are saved to `.data/manual-readings.json` (or the fold
 |---|---|
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and server |
-| `npm test` | Unit tests for the rule engine and simulator |
+| `npm test` | Unit tests for the rule engine, simulator and body map |
 | `npm run typecheck` | Type check |
 
 ## Sources

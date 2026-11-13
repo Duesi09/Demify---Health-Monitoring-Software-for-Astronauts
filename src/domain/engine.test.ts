@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from './engine'
+import { evaluate, indexReadings, missionStatuses } from './engine'
 import { classify } from './metrics'
 import type { MetricId, Reading } from './types'
 
@@ -173,5 +173,16 @@ describe('patterns across indicators', () => {
     ]
     const finding = evaluate(readings, 14).findings.find((f) => f.id === 'pattern:deconditioning')
     expect(finding?.status).toBe('act')
+  })
+})
+
+describe('missionStatuses', () => {
+  it('gives one status per mission day, matching evaluate', () => {
+    const readings = [...log('bodyTemp', 36.7, [...days(5, 36.8), 38.4, 36.8])]
+    const statuses = missionStatuses(indexReadings(readings), 7)
+    expect(statuses).toHaveLength(7)
+    expect(statuses[5]).toBe(evaluate(readings, 6).status)
+    expect(statuses[5]).toBe('act')
+    expect(statuses[6]).toBe('nominal')
   })
 })

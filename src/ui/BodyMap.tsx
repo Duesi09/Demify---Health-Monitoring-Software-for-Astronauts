@@ -6,7 +6,7 @@ import { formatValue } from '@/domain/format'
 import { HAZARDS, NASA_RISKS_URL } from '@/domain/hazards'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation, MetricId } from '@/domain/types'
-import { StatusBadge, StatusIcon, TONE } from './status'
+import { needsAttention, StatusBadge, StatusIcon, TONE } from './status'
 import { TILES, tileTone } from './tiles'
 
 /** Where each body system sits on the figure, in the figure's own coordinates. */
@@ -40,15 +40,21 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
   const toggle = (id: RegionId) => onSelectRegion(selectedId === id ? null : id)
 
   return (
-    <section aria-label="Body map" className="rounded-lg border border-edge bg-surface p-5">
-      <h2 className="text-xl font-semibold">Body map</h2>
+    <section aria-label="Body map" className="card rise @container p-6" style={{ '--i': 3 } as React.CSSProperties}>
+      <h2 className="text-xl font-semibold tracking-tight">Body map</h2>
       <p className="mt-1 text-sm text-ink-2">
         Select a body system to see what spaceflight does to it and how to protect it.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-[200px_minmax(0,1fr)] sm:items-start">
-        <svg viewBox="0 0 200 440" className="mx-auto w-40 sm:w-full" role="group" aria-label="Human figure">
-          <g className="fill-axis stroke-axis" strokeLinecap="round" strokeLinejoin="round">
+      <div className="mt-5 grid gap-5 @md:grid-cols-[190px_minmax(0,1fr)] @md:items-start">
+        <svg viewBox="0 0 200 440" className="mx-auto w-44 @md:w-full" role="group" aria-label="Human figure">
+          <defs>
+            <linearGradient id="figure-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#4a4a50" />
+              <stop offset="1" stopColor="#2a2a2e" />
+            </linearGradient>
+          </defs>
+          <g fill="url(#figure-fill)" stroke="url(#figure-fill)" strokeLinecap="round" strokeLinejoin="round">
             <ellipse cx="100" cy="42" rx="27" ry="32" stroke="none" />
             <rect x="89" y="66" width="22" height="26" rx="4" stroke="none" />
             <path d="M58 98Q58 84 72 84H128Q142 84 142 98L134 196Q133 222 139 238H61Q67 222 66 196Z" stroke="none" />
@@ -83,7 +89,24 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
                 className="cursor-pointer outline-none"
               >
                 <circle cx={x} cy={y} r="17" fill="transparent" />
-                {active && <circle cx={x} cy={y} r="15" fill="none" className="stroke-series-1" strokeWidth="2" />}
+                {needsAttention(tone) && (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r="11"
+                    fill={TONE[tone].color}
+                    className={`ripple ${tone === 'critical' ? 'ripple-fast' : ''}`}
+                  />
+                )}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="15"
+                  fill="none"
+                  className="stroke-series-1 transition-opacity duration-200"
+                  strokeWidth="2"
+                  opacity={active ? 1 : 0}
+                />
                 <circle cx={x} cy={y} r="12" className="fill-surface" />
                 <StatusIcon tone={tone} size={20} x={x - 10} y={y - 10} />
               </g>
@@ -96,22 +119,35 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
             const tone = regionStatus(region, evaluation)
             const open = region.id === selectedId
             return (
-              <li key={region.id} className={`rounded-md ${open ? 'bg-raised' : ''}`}>
+              <li
+                key={region.id}
+                className={`rounded-2xl transition-colors duration-300 ${open ? 'bg-white/[0.05] ring-1 ring-edge' : ''}`}
+              >
                 <button
                   type="button"
                   aria-expanded={open}
                   onClick={() => toggle(region.id)}
                   onMouseEnter={() => setHoveredId(region.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left hover:bg-raised ${
-                    region.id === hoveredId ? 'bg-raised' : ''
+                  className={`flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-raised ${
+                    region.id === hoveredId && !open ? 'bg-raised' : ''
                   }`}
                 >
                   <StatusIcon tone={tone} size={18} />
                   <span className="min-w-0 flex-1 font-medium text-ink">{region.label}</span>
                   <span className="text-xs text-ink-2">{TONE[tone].label}</span>
                 </button>
-                {open && <RegionDetail region={region} evaluation={evaluation} onSelectMetric={onSelectMetric} />}
+                {/* Kept in the page while closed so opening and closing can glide. */}
+                <div
+                  inert={!open}
+                  className={`grid transition-[grid-template-rows,opacity,visibility] duration-500 ease-(--ease-soft) ${
+                    open ? 'visible grid-rows-[1fr] opacity-100' : 'invisible grid-rows-[0fr] opacity-0'
+                  }`}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                    <RegionDetail region={region} evaluation={evaluation} onSelectMetric={onSelectMetric} />
+                  </div>
+                </div>
               </li>
             )
           })}
@@ -141,7 +177,7 @@ function RegionDetail({
               key={tile.id}
               type="button"
               onClick={() => onSelectMetric(tile.metrics[0])}
-              className="flex flex-col gap-1 rounded-md border border-edge bg-surface px-3 py-2 text-left hover:border-series-1"
+              className="flex flex-col gap-1 rounded-xl bg-page/60 px-3 py-2 text-left ring-1 ring-edge transition-shadow hover:ring-series-1"
             >
               <span className="text-xs text-ink-2">{tile.label}</span>
               <span className="text-ink">
@@ -149,7 +185,7 @@ function RegionDetail({
                   {tile.metrics
                     .map((m) => {
                       const v = evaluation.assessments[m].value
-                      return v === null ? '–' : formatValue(m, v)
+                      return v === null ? '--' : formatValue(m, v)
                     })
                     .join('/')}
                 </span>{' '}

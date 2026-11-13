@@ -40,7 +40,7 @@ describe('body regions', () => {
   })
 
   it('is stale when none of its indicators has a recent reading', () => {
-    // Blood pressure is not measured on days 86–90, but heart rate still is.
+    // Blood pressure is not measured on days 86 to 90, but heart rate still is.
     expect(regionStatus(region('heart'), evaluate(mission, 90))).toBe('nominal')
     const withoutSleepAndMood = mission.filter((r) => r.metric !== 'sleepHours' && r.metric !== 'mood')
     expect(regionStatus(region('brain'), evaluate(withoutSleepAndMood, 20))).toBe('stale')
