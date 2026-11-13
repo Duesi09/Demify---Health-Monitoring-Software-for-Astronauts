@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from './engine'
 import { METRICS, METRIC_IDS } from './metrics'
-import { MISSION_DAYS, simulateMission } from './simulator'
+import { HEART_ATTACK_DAYS, MISSION_DAYS, simulateMission } from './simulator'
 
 const readings = simulateMission()
 const idsOn = (day: number) => evaluate(readings, day).findings.map((f) => f.id)
@@ -37,23 +37,35 @@ describe('simulateMission', () => {
     expect(idsOn(74)).toContain('pattern:infection')
     expect(idsOn(130)).toContain('pattern:deconditioning')
     expect(idsOn(153)).toContain('range:glucose')
+    for (const day of HEART_ATTACK_DAYS) {
+      expect(idsOn(day), `day ${day}`).toContain('pattern:cardiac')
+      expect(evaluate(readings, day).status).toBe('critical')
+    }
     expect(evaluate(readings, 90).reminders.map((r) => r.metric)).toContain('systolic')
   })
 
   it('reaches the highest triage level during the life-support fault', () => {
-    const result = evaluate(readings, 167)
+    const result = evaluate(readings, 56)
     expect(result.status).toBe('critical')
     expect(result.findings[0].id).toBe('pattern:atmosphere')
-    for (const day of [166, 168]) expect(evaluate(readings, day).status, `day ${day}`).toBe('critical')
-    for (let day = 172; day <= MISSION_DAYS; day++) {
-      expect(idsOn(day).filter((id) => id.startsWith('pattern:')), `day ${day}`).toEqual([])
-    }
+    for (const day of [55, 57]) expect(evaluate(readings, day).status, `day ${day}`).toBe('critical')
+    // The cabin air is blamed, not the heart.
+    for (let day = 54; day <= 58; day++) expect(idsOn(day), `day ${day}`).not.toContain('pattern:cardiac')
   })
 
   it('does not mistake the tail of the infection for deconditioning', () => {
     for (let day = 70; day <= 85; day++) {
       expect(idsOn(day), `day ${day}`).not.toContain('pattern:deconditioning')
     }
+  })
+
+  it('does not call the recovery from a heart attack deconditioning', () => {
+    for (const attack of HEART_ATTACK_DAYS) {
+      for (let day = attack; day <= Math.min(attack + 13, MISSION_DAYS); day++) {
+        expect(idsOn(day), `day ${day}`).not.toContain('pattern:deconditioning')
+      }
+    }
+    expect(idsOn(130)).toContain('pattern:deconditioning')
   })
 
   it('recovers after each event', () => {

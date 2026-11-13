@@ -1,6 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef } from 'react'
+import { TIMELAPSE_STEP_MS, usePlaying } from './motion'
 
 const DURATION_MS = 450
 
@@ -14,6 +15,7 @@ const format = (value: number | null, decimals: number) =>
 
 /** A number that glides to its new value instead of jumping. */
 export function AnimatedNumber({ value, decimals }: Props) {
+  const playing = usePlaying()
   const ref = useRef<HTMLSpanElement>(null)
   // What is on screen right now, so a change mid-glide continues from there.
   const shown = useRef(value)
@@ -32,14 +34,16 @@ export function AnimatedNumber({ value, decimals }: Props) {
     el.textContent = format(from, decimals)
     const start = performance.now()
     let frame = requestAnimationFrame(function tick(now) {
-      const t = Math.min(1, (now - start) / DURATION_MS)
-      const current = from + (value - from) * (1 - Math.pow(1 - t, 3))
+      // During the time-lapse a value travels evenly and arrives exactly when
+      // the next day starts, so numbers count steadily instead of lurching.
+      const t = Math.min(1, (now - start) / (playing ? TIMELAPSE_STEP_MS : DURATION_MS))
+      const current = from + (value - from) * (playing ? t : 1 - Math.pow(1 - t, 3))
       shown.current = current
       el.textContent = format(current, decimals)
       if (t < 1) frame = requestAnimationFrame(tick)
     })
     return () => cancelAnimationFrame(frame)
-  }, [value, decimals])
+  }, [value, decimals, playing])
 
   return <span ref={ref}>{format(value, decimals)}</span>
 }

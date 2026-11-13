@@ -14,13 +14,20 @@ interface Point {
  * hairline. It stretches to the space the tile has left, so the end marker is
  * an HTML dot that stays round at any width.
  */
-export function Sparkline({ points, baseline }: { points: Point[]; baseline: number | null }) {
+interface Props {
+  points: Point[]
+  baseline: number | null
+  /** A fixed value range; without it the line is scaled to its own points. */
+  range?: [number, number]
+}
+
+export function Sparkline({ points, baseline, range }: Props) {
   if (points.length < 2) return null
 
   const values = points.map((p) => p.value)
   if (baseline !== null) values.push(baseline)
-  const lo = Math.min(...values)
-  const hi = Math.max(...values)
+  const lo = range ? Math.min(range[0], ...values) : Math.min(...values)
+  const hi = range ? Math.max(range[1], ...values) : Math.max(...values)
   const span = hi - lo || 1
   const firstDay = points[0].day
   const lastDay = points[points.length - 1].day

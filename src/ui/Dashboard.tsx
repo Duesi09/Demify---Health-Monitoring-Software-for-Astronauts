@@ -12,12 +12,10 @@ import { HazardRow } from './HazardRow'
 import { MetricDetail } from './MetricDetail'
 import { MetricTile } from './MetricTile'
 import { MissionTimeline } from './MissionTimeline'
+import { PlaybackContext, TIMELAPSE_STEP_MS } from './motion'
 import { TILES, tileFor } from './tiles'
 import { TriageBanner } from './TriageBanner'
 import { VitalsMonitor } from './VitalsMonitor'
-
-/** Milliseconds per mission day while the time-lapse plays. */
-const TIMELAPSE_STEP_MS = 160
 
 interface Props {
   initialReadings: Reading[]
@@ -95,13 +93,17 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[2200px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+    <PlaybackContext value={playing}>
+    <div
+      data-playing={playing || undefined}
+      className="mx-auto flex w-full max-w-[2200px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8"
+    >
       <header className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-4xl font-semibold tracking-tight">
-          Demify <span className="text-xl font-normal text-ink-2">Crew health monitor</span>
+          Demify <span className="text-ink-2">Crew Health Monitor</span>
         </h1>
         <p className="rounded-full bg-white/[0.06] px-4 py-1.5 text-sm text-ink-2 ring-1 ring-edge">
-          Flight Engineer A. Morgan · simulated crew member
+          Flight Engineer A. Morgan | simulated crew member
         </p>
       </header>
 
@@ -125,7 +127,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
             <TriageBanner evaluation={evaluation} />
             <VitalsMonitor evaluation={evaluation} onSelectMetric={selectMetric} />
           </div>
-          <div className="grid gap-5 @4xl:grid-cols-2 @4xl:items-start">
+          <div className="grid gap-5 @4xl:grid-cols-2">
             <BodyMap
               evaluation={evaluation}
               selectedId={regionId}
@@ -181,5 +183,6 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
         )}
       </footer>
     </div>
+    </PlaybackContext>
   )
 }

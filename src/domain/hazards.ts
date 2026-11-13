@@ -50,6 +50,8 @@ const RISK_PAGES: Record<string, string> = {
   'Risk from Inadequate Sleep and Irregular Schedules':
     'https://www.nasa.gov/reference/risk-from-inadequate-sleep-and-irregular-schedules/',
   'Risk of Altered Immune System Responses': 'https://www.nasa.gov/reference/risk-of-altered-immune-system-responses/',
+  'Risk of Altered Sensorimotor and Vestibular Function':
+    'https://www.nasa.gov/reference/risk-of-altered-sensorimotor-and-vestibular-function/',
   'Risk of Acute and Chronic Carbon Dioxide Exposure':
     'https://www.nasa.gov/directorates/esdmd/hhp/risk-of-acute-and-chronic-carbon-dioxide-exposure/',
 }

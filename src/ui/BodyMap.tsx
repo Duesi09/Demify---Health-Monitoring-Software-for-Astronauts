@@ -6,18 +6,159 @@ import { formatValue } from '@/domain/format'
 import { HAZARDS, riskUrl } from '@/domain/hazards'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation, MetricId } from '@/domain/types'
-import { needsAttention, StatusBadge, StatusIcon, TONE } from './status'
+import { needsAttention, StatusBadge, StatusIcon, TONE, type Tone } from './status'
 import { TILES, tileTone } from './tiles'
 
-/** Where each body system sits on the figure, in the figure's own coordinates. */
-const HOTSPOT: Record<RegionId, { x: number; y: number }> = {
-  brain: { x: 100, y: 24 },
-  eyes: { x: 100, y: 52 },
-  immune: { x: 100, y: 82 },
-  lungs: { x: 80, y: 128 },
-  heart: { x: 120, y: 140 },
-  metabolism: { x: 100, y: 194 },
-  bones: { x: 79, y: 302 },
+const WIDTH = 260
+const HEIGHT = 548
+
+/**
+ * Left half of the body outline from the neck down to the crotch, as curves:
+ * [controlX, controlY, endX, endY]. The right half is its mirror image.
+ */
+const HALF_OUTLINE: [number, number, number, number][] = [
+  [116, 96, 100, 100], // neck to shoulder
+  [72, 104, 66, 126], // shoulder
+  [60, 160, 56, 198], // upper arm, outside
+  [50, 236, 44, 270], // forearm, outside
+  [38, 288, 40, 302], // hand
+  [44, 314, 52, 306],
+  [58, 292, 58, 274],
+  [66, 236, 72, 204], // forearm, inside
+  [80, 170, 86, 140], // upper arm, inside, up to the armpit
+  [88, 180, 92, 214], // chest down to the waist
+  [84, 244, 84, 270], // hip
+  [86, 330, 94, 392], // thigh, outside, down to the knee
+  [92, 440, 100, 496], // calf, outside
+  [94, 512, 91, 522], // foot
+  [98, 532, 117, 528],
+  [121, 512, 116, 496],
+  [122, 440, 120, 392], // calf, inside
+  [126, 330, 130, 286], // thigh, inside, up to the crotch
+]
+
+function bodyOutline(): string {
+  const ends: [number, number][] = [[118, 88], ...HALF_OUTLINE.map(([, , x, y]) => [x, y] as [number, number])]
+  let d = 'M118 74L118 88'
+  for (const [cx, cy, x, y] of HALF_OUTLINE) d += `Q${cx} ${cy} ${x} ${y}`
+  for (let i = HALF_OUTLINE.length - 1; i >= 0; i--) {
+    const [cx, cy] = HALF_OUTLINE[i]
+    const [x, y] = ends[i]
+    d += `Q${WIDTH - cx} ${cy} ${WIDTH - x} ${y}`
+  }
+  return `${d}L142 74Z`
+}
+const BODY_OUTLINE = bodyOutline()
+
+/** Where each body system is marked: centre and size of its selection ring, and where its status badge sits. */
+const MARKER: Record<RegionId, { x: number; y: number; r: number; badge: [number, number] }> = {
+  brain: { x: 130, y: 35, r: 21, badge: [152, 20] },
+  eyes: { x: 130, y: 60, r: 14, badge: [150, 66] },
+  balance: { x: 155.5, y: 50, r: 10, badge: [166, 42] },
+  immune: { x: 138, y: 86, r: 9, badge: [150, 80] },
+  lungs: { x: 110, y: 144, r: 17, badge: [96, 120] },
+  heart: { x: 134, y: 149, r: 17, badge: [152, 134] },
+  metabolism: { x: 117, y: 190, r: 17, badge: [98, 198] },
+  kidneys: { x: 146, y: 224, r: 13, badge: [160, 214] },
+  bones: { x: 107, y: 332, r: 15, badge: [122, 318] },
+}
+
+/** Drawn back to front, so the heart sits on top of the lungs. */
+const DRAW_ORDER: RegionId[] = ['bones', 'lungs', 'metabolism', 'kidneys', 'heart', 'immune', 'brain', 'eyes', 'balance']
+
+/**
+ * The shapes of one body system. Measured systems are filled in their status
+ * colour; systems without an indicator are dashed outlines.
+ */
+function Organ({ id, hollow }: { id: RegionId; hollow: boolean }) {
+  const paint = hollow
+    ? ({ fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeDasharray: '3 2.5' } as const)
+    : ({ fill: 'currentColor' } as const)
+  const bone = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round' } as const
+  const fold = { fill: 'none', stroke: 'var(--color-page)', strokeOpacity: 0.4, strokeWidth: 1.2, strokeLinecap: 'round' } as const
+
+  switch (id) {
+    case 'brain':
+      return (
+        <>
+          <path {...paint} d="M130 20c-11 0-19 7-19 16 0 8 6 13 14 13h10c8 0 14-5 14-13 0-9-8-16-19-16z" />
+          {!hollow && <path {...fold} d="M130 22v25M120 28q6 5 0 12M140 28q-6 5 0 12" />}
+        </>
+      )
+    case 'eyes':
+      return (
+        <>
+          <ellipse {...paint} cx="120" cy="60" rx="5.5" ry="3.5" />
+          <ellipse {...paint} cx="140" cy="60" rx="5.5" ry="3.5" />
+        </>
+      )
+    case 'balance':
+      return (
+        <>
+          <ellipse {...paint} cx="104.5" cy="50" rx="3" ry="6.5" />
+          <ellipse {...paint} cx="155.5" cy="50" rx="3" ry="6.5" />
+        </>
+      )
+    case 'immune':
+      // Lymph nodes at the neck, the armpits and the groin.
+      return (
+        <>
+          {[
+            [122, 86],
+            [138, 86],
+            [93, 142],
+            [167, 142],
+            [114, 270],
+            [146, 270],
+          ].map(([cx, cy]) => (
+            <circle key={`${cx}-${cy}`} {...paint} cx={cx} cy={cy} r="3.4" />
+          ))}
+        </>
+      )
+    case 'lungs':
+      return (
+        <>
+          <path {...paint} d="M124 108C110 110 100 130 100 158C100 170 105 176 113 174C120 172 124 164 124 152Z" />
+          <path {...paint} d="M136 108C150 110 160 130 160 158C160 170 155 176 147 174C140 172 136 164 136 152Z" />
+        </>
+      )
+    case 'heart':
+      return (
+        <path
+          {...paint}
+          stroke="var(--color-surface)"
+          strokeWidth="2"
+          d="M134 140c3-6 13-5 13 4 0 7-7 12-13 18-6-6-13-11-13-18 0-9 10-10 13-4z"
+        />
+      )
+    case 'metabolism':
+      // Liver on the left of the picture, stomach and pancreas on the right.
+      return (
+        <>
+          <path {...paint} d="M98 184C110 176 126 178 136 184C134 198 124 202 112 200C104 198 98 192 98 184Z" />
+          <path {...paint} d="M142 184C152 180 160 184 160 192C160 200 152 204 146 202C140 198 140 190 142 184Z" />
+        </>
+      )
+    case 'kidneys':
+      return (
+        <>
+          <ellipse {...paint} cx="114" cy="224" rx="6" ry="10" transform="rotate(12 114 224)" />
+          <ellipse {...paint} cx="146" cy="224" rx="6" ry="10" transform="rotate(-12 146 224)" />
+        </>
+      )
+    case 'bones':
+      // The lower spine, the pelvis and the long bones of arms and legs.
+      return (
+        <>
+          <path {...bone} strokeWidth="5" strokeDasharray="0.1 7" d="M130 180V250" />
+          <path {...bone} strokeWidth="4" d="M108 256Q130 268 152 256" />
+          <path {...bone} strokeWidth="4" d="M76 128L65 196M184 128L195 196" />
+          <path {...bone} strokeWidth="3.5" d="M63 208L51 268M197 208L209 268" />
+          <path {...bone} strokeWidth="5" d="M106 284L107 382M154 284L153 382" />
+          <path {...bone} strokeWidth="4" d="M107 402L108 488M153 402L152 488" />
+        </>
+      )
+  }
 }
 
 interface Props {
@@ -30,14 +171,18 @@ interface Props {
 const link = 'underline underline-offset-2 hover:text-ink'
 
 /**
- * A human figure with one marker per body system. Each marker shows the
- * system's status; selecting it explains what spaceflight does to that system,
- * how to protect it, and which indicators describe it.
+ * A human figure showing every body system in its status colour. Selecting a
+ * system explains what spaceflight does to it, how to protect it, and which
+ * indicators describe it.
  */
 export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric }: Props) {
-  // Hovering or focusing a marker highlights its list entry, and the reverse.
+  // Hovering or focusing a system on the figure highlights its list entry, and the reverse.
   const [hoveredId, setHoveredId] = useState<RegionId | null>(null)
   const toggle = (id: RegionId) => onSelectRegion(selectedId === id ? null : id)
+  const tones = Object.fromEntries(BODY_REGIONS.map((r) => [r.id, regionStatus(r, evaluation)])) as Record<
+    RegionId,
+    Tone
+  >
 
   return (
     <section aria-label="Body map" className="card rise @container p-6" style={{ '--i': 3 } as React.CSSProperties}>
@@ -46,69 +191,81 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
         Select a body system to see what spaceflight does to it and how to protect it.
       </p>
 
-      <div className="mt-5 grid gap-5 @md:grid-cols-[190px_minmax(0,1fr)] @md:items-start">
-        <svg viewBox="0 0 200 440" className="mx-auto w-44 @md:w-full" role="group" aria-label="Human figure">
+      <div className="mt-5 grid gap-5 @md:grid-cols-[250px_minmax(0,1fr)] @md:items-start">
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="mx-auto w-60 @md:w-full"
+          role="group"
+          aria-label="Human figure"
+        >
           <defs>
-            <linearGradient id="figure-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#4a4a50" />
-              <stop offset="1" stopColor="#2a2a2e" />
+            <linearGradient id="body-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
+              <stop offset="1" stopColor="#ffffff" stopOpacity="0.04" />
             </linearGradient>
           </defs>
-          <g fill="url(#figure-fill)" stroke="url(#figure-fill)" strokeLinecap="round" strokeLinejoin="round">
-            <ellipse cx="100" cy="42" rx="27" ry="32" stroke="none" />
-            <rect x="89" y="66" width="22" height="26" rx="4" stroke="none" />
-            <path d="M58 98Q58 84 72 84H128Q142 84 142 98L134 196Q133 222 139 238H61Q67 222 66 196Z" stroke="none" />
-            <path d="M55 100L41 170L35 238" fill="none" strokeWidth="19" />
-            <path d="M145 100L159 170L165 238" fill="none" strokeWidth="19" />
-            <path d="M80 236L78 330L76 420" fill="none" strokeWidth="27" />
-            <path d="M120 236L122 330L124 420" fill="none" strokeWidth="27" />
+          <g fill="url(#body-fill)" stroke="rgb(255 255 255 / 0.3)" strokeWidth="1.5" strokeLinejoin="round">
+            <path d={BODY_OUTLINE} />
+            <ellipse cx="130" cy="46" rx="26" ry="32" />
           </g>
 
-          {BODY_REGIONS.map((region) => {
-            const { x, y } = HOTSPOT[region.id]
-            const tone = regionStatus(region, evaluation)
-            const active = region.id === selectedId || region.id === hoveredId
+          {DRAW_ORDER.map((id) => {
+            const region = BODY_REGIONS.find((r) => r.id === id)!
+            const tone = tones[id]
+            const marker = MARKER[id]
+            const active = id === selectedId || id === hoveredId
+            const attention = needsAttention(tone)
+            const strength = active ? 1 : attention ? 0.95 : tone === 'nominal' ? 0.5 : tone === 'stale' ? 0.35 : 0.75
             return (
               <g
-                key={region.id}
+                key={id}
                 role="button"
                 tabIndex={0}
                 aria-label={`${region.label}: ${TONE[tone].label}`}
-                aria-pressed={region.id === selectedId}
-                onClick={() => toggle(region.id)}
+                aria-pressed={id === selectedId}
+                onClick={() => toggle(id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    toggle(region.id)
+                    toggle(id)
                   }
                 }}
-                onMouseEnter={() => setHoveredId(region.id)}
+                onMouseEnter={() => setHoveredId(id)}
                 onMouseLeave={() => setHoveredId(null)}
-                onFocus={() => setHoveredId(region.id)}
+                onFocus={() => setHoveredId(id)}
                 onBlur={() => setHoveredId(null)}
                 className="cursor-pointer outline-none"
+                style={{ color: TONE[tone].color, pointerEvents: 'all' }}
               >
-                <circle cx={x} cy={y} r="17" fill="transparent" />
-                {needsAttention(tone) && (
+                {attention && (
                   <circle
-                    cx={x}
-                    cy={y}
-                    r="11"
-                    fill={TONE[tone].color}
+                    cx={marker.x}
+                    cy={marker.y}
+                    r={marker.r * 0.7}
+                    fill="currentColor"
                     className={`ripple ${tone === 'critical' ? 'ripple-fast' : ''}`}
                   />
                 )}
+                <g opacity={strength} className="transition-[opacity,color] duration-500">
+                  <Organ id={id} hollow={tone === 'unmonitored'} />
+                </g>
+                {/* A generous target, since some systems are drawn very small. */}
+                <circle cx={marker.x} cy={marker.y} r={Math.max(marker.r, 11)} fill="transparent" />
                 <circle
-                  cx={x}
-                  cy={y}
-                  r="15"
+                  cx={marker.x}
+                  cy={marker.y}
+                  r={marker.r + 4}
                   fill="none"
                   className="stroke-series-1 transition-opacity duration-200"
                   strokeWidth="2"
                   opacity={active ? 1 : 0}
                 />
-                <circle cx={x} cy={y} r="12" className="fill-surface" />
-                <StatusIcon tone={tone} size={20} x={x - 10} y={y - 10} />
+                {attention && (
+                  <>
+                    <circle cx={marker.badge[0]} cy={marker.badge[1]} r="9" className="fill-surface" />
+                    <StatusIcon tone={tone} size={14} x={marker.badge[0] - 7} y={marker.badge[1] - 7} />
+                  </>
+                )}
               </g>
             )
           })}
@@ -116,7 +273,7 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
 
         <ul className="flex flex-col gap-1">
           {BODY_REGIONS.map((region) => {
-            const tone = regionStatus(region, evaluation)
+            const tone = tones[region.id]
             const open = region.id === selectedId
             return (
               <li
@@ -196,7 +353,9 @@ function RegionDetail({
           ))}
         </div>
       ) : (
-        <p className="text-ink-2">No indicator is tracked for this body system yet. {region.planned}</p>
+        <p className="text-ink-2">
+          No indicator is tracked for this body system yet.{region.planned ? ` ${region.planned}` : ''}
+        </p>
       )}
 
       <dl className="flex flex-col gap-3">
@@ -224,10 +383,14 @@ function RegionDetail({
             <a href={HAZARDS[region.hazard].url} target="_blank" rel="noreferrer" className={link}>
               {HAZARDS[region.hazard].label}
             </a>
-            {' · '}
-            <a href={riskUrl(region.nasaRisk)} target="_blank" rel="noreferrer" className={link}>
-              {region.nasaRisk}
-            </a>
+            {region.nasaRisk && (
+              <>
+                {' | '}
+                <a href={riskUrl(region.nasaRisk)} target="_blank" rel="noreferrer" className={link}>
+                  {region.nasaRisk}
+                </a>
+              </>
+            )}
           </dd>
         </div>
       </dl>

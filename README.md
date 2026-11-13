@@ -11,13 +11,13 @@ On long missions, astronauts face radiation, isolation, altered gravity and a cl
 - **Mission timeline:** the whole mission as one strip with a cell per day in the colour of that day's status. The strip is also the control that moves through the mission.
 - **Five hazards:** NASA's five hazards of human spaceflight, each with a ring showing how many of its indicators are nominal.
 - **Range bars:** every indicator shows where its value sits among its normal, watch, act and critical ranges.
-- **Clickable body map:** a human figure with one marker per body system (brain, eyes, immune system, lungs, heart, metabolism, bones and muscles). Each marker shows that system's status; selecting it explains what spaceflight does to it, how to protect it, and which indicators describe it.
+- **Clickable body map:** an anatomical figure showing nine body systems in their status colour: brain, eyes, balance, immune system, lungs, heart, metabolism, kidneys, and bones and muscles. Selecting a system explains what spaceflight does to it, how to protect it, and which indicators describe it. Eyes, balance and kidneys have no indicator yet and are drawn as outlines.
 - **Four triage levels:** Nominal, Watch (self-care), Act (consult the Crew Medical Officer), Critical (contact the flight surgeon). Each level has its own colour and icon shape.
 - **Personal baseline:** a value can be textbook-normal and still be flagged when it has drifted from that person's pre-flight average.
-- **Patterns across indicators:** fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low blood oxygen with raised cabin CO₂ (life-support fault), low exercise with a climbing heart rate (deconditioning).
+- **Patterns across indicators:** a racing heart with a blood pressure spike or low blood oxygen (possible heart attack), fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low blood oxygen with raised cabin CO₂ (life-support fault), low exercise with a climbing heart rate (deconditioning).
 - **Measurement reminders:** readings that are too old are not judged; the crew member is asked to measure again, and the overall status is not shown as nominal until they do.
 - **Manual entry:** readings are validated and stored on the server.
-- **Simulated 180-day mission** with scripted health events, and a time-lapse to play through it.
+- **Simulated 180-day mission** with scripted health events, including a life-support fault (days 54 to 58) and two heart attacks (days 97 and 168), and a time-lapse to play through it.
 - **NASA sources:** every indicator links to NASA's page for its hazard and for its risk.
 
 The reference ranges are demo defaults based on general clinical ranges. They are not flight rules and not medical advice.

@@ -52,7 +52,7 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
           <h2 className="text-2xl font-semibold tracking-tight">{tile.label}</h2>
           <p className="text-sm text-muted">
             {def.unit === '/ 5' ? 'Self-rated, 1 to 5' : def.unit}
-            {def.evaluateOn === 'avg7' ? ' · judged on the 7-day average' : ''}
+            {def.evaluateOn === 'avg7' ? ' | judged on the 7-day average' : ''}
           </p>
         </div>
         <StatusBadge tone={tone} label={tone === 'stale' ? undefined : leading.band?.label} />
@@ -160,7 +160,7 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
             </a>
             {def.nasaRisk && (
               <>
-                {' · '}
+                {' | '}
                 <a href={riskUrl(def.nasaRisk)} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-ink">
                   {def.nasaRisk}
                 </a>

@@ -6,7 +6,16 @@ import { worst, type Evaluation, type MetricId, type Status } from './types'
  * describe it and explains what spaceflight does to it, based on NASA's Human
  * Research Program hazard pages (https://www.nasa.gov/hrp/hazards/).
  */
-export type RegionId = 'brain' | 'eyes' | 'immune' | 'lungs' | 'heart' | 'metabolism' | 'bones'
+export type RegionId =
+  | 'brain'
+  | 'eyes'
+  | 'balance'
+  | 'immune'
+  | 'lungs'
+  | 'heart'
+  | 'metabolism'
+  | 'kidneys'
+  | 'bones'
 
 export interface BodyRegion {
   id: RegionId
@@ -21,7 +30,7 @@ export interface BodyRegion {
   metrics: MetricId[]
   hazard: HazardId
   /** The matching NASA human spaceflight risk, by the short name of NASA's page for it. */
-  nasaRisk: string
+  nasaRisk?: string
   /** For systems without an indicator: what is planned. */
   planned?: string
 }
@@ -56,6 +65,21 @@ export const BODY_REGIONS: BodyRegion[] = [
     hazard: 'gravity',
     nasaRisk: 'Risk of Spaceflight Associated Neuro-ocular Syndrome (SANS)',
     planned: 'A vision self-test for this app is planned.',
+  },
+  {
+    id: 'balance',
+    label: 'Balance & coordination',
+    role: 'The inner ear tells the brain which way is up and steadies gaze, posture and movement.',
+    inSpace:
+      'Changing from one gravity field to another upsets spatial orientation, head-eye and hand-eye coordination, balance and walking. Some crew members get space motion sickness.',
+    protect: [
+      'Move your head slowly in the first days after a gravity change.',
+      'Avoid safety-critical manual tasks until you have adapted.',
+      'Take the prescribed motion sickness medication when you need it.',
+    ],
+    metrics: [],
+    hazard: 'gravity',
+    nasaRisk: 'Risk of Altered Sensorimotor and Vestibular Function',
   },
   {
     id: 'immune',
@@ -116,6 +140,20 @@ export const BODY_REGIONS: BodyRegion[] = [
     metrics: ['glucose'],
     hazard: 'distance',
     nasaRisk: 'Risk of Inadequate Food and Nutrition',
+  },
+  {
+    id: 'kidneys',
+    label: 'Kidneys & fluids',
+    role: 'Filter the blood and keep water and salts in balance.',
+    inSpace:
+      'Bones release calcium in weightlessness, and crews often drink too little. Without preventive measures, both raise the risk of kidney stones.',
+    protect: [
+      'Drink enough through the day.',
+      'Keep up resistance exercise to slow the loss of calcium from bone.',
+      'Report pain in the side or blood in the urine at once.',
+    ],
+    metrics: [],
+    hazard: 'gravity',
   },
   {
     id: 'bones',

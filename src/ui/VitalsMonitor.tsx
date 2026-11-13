@@ -176,6 +176,9 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
     }
   }, [])
 
+  // The engine's heart-attack pattern puts the monitor into its alarm state.
+  const cardiac = evaluation.findings.some((f) => f.id === 'pattern:cardiac')
+
   const vitals: { label: string; unit: string; tile: string; swatch?: string; beat?: boolean }[] = [
     { label: 'Heart rate', unit: 'bpm', tile: 'restingHr', swatch: ECG_COLOR, beat: true },
     { label: 'Blood pressure', unit: 'mmHg', tile: 'bloodPressure', swatch: PRESSURE_COLOR },
@@ -185,13 +188,25 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
 
   return (
     <section aria-label="Vital signs monitor" className="card rise @container flex flex-col p-6" style={{ '--i': 2 } as React.CSSProperties}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Vital signs</h2>
-        <p className="text-xs text-muted">Drawn from your latest readings</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-xl font-semibold tracking-tight">Vital signs</h2>
+          <p className="text-xs text-muted">Drawn from your latest readings</p>
+        </div>
+        {cardiac && (
+          <p role="status" className="alarm flex items-center gap-1.5 rounded-full bg-critical/25 px-3 py-1 text-xs font-semibold text-ink ring-1 ring-critical">
+            <StatusIcon tone="critical" size={12} />
+            Possible heart attack
+          </p>
+        )}
       </div>
 
       <div className="mt-4 grid flex-1 gap-5 @lg:grid-cols-[minmax(0,1fr)_11.5rem]">
-        <div className="monitor-grid relative min-h-52 overflow-hidden rounded-2xl bg-page ring-1 ring-edge">
+        <div
+          className={`monitor-grid relative min-h-52 overflow-hidden rounded-2xl bg-page ring-1 transition-shadow duration-500 ${
+            cardiac ? 'ring-critical' : 'ring-edge'
+          }`}
+        >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
           <p className="absolute top-3 left-4 text-[11px] font-medium tracking-wide text-ink-2 uppercase">Heartbeat</p>
           <p className="absolute top-[56%] left-4 text-[11px] font-medium tracking-wide text-ink-2 uppercase">

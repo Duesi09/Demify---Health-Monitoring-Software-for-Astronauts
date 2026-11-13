@@ -50,7 +50,7 @@ export function HazardRow({ evaluation }: { evaluation: Evaluation }) {
                     strokeLinecap="round"
                     strokeDasharray={`${share * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
                     transform="rotate(-90 30 30)"
-                    className="transition-[stroke-dasharray,stroke] duration-700 ease-(--ease-soft)"
+                    className="glide transition-[stroke-dasharray,stroke] duration-700 ease-(--ease-soft)"
                   />
                 )}
                 <text x="30" y="35" textAnchor="middle" className="fill-ink text-[14px] font-semibold">

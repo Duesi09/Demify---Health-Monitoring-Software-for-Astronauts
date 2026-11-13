@@ -120,22 +120,34 @@ body {
   animation-duration: 1.1s;
 }
 
-/* Slow glow behind the triage headline. */
-@keyframes breathe {
+/* The tag on the heart monitor during a possible heart attack. */
+@keyframes alarm {
   50% {
-    opacity: 0.55;
-    transform: scale(1.12);
+    opacity: 0.45;
   }
 }
-.breathe {
-  animation: breathe 3.6s ease-in-out infinite;
+.alarm {
+  animation: alarm 1s ease-in-out infinite;
+}
+
+/*
+ * Time-lapse: things that normally ease to a new position travel evenly and
+ * arrive as the next day starts, and content that changes every day stops
+ * replaying its entrance.
+ */
+[data-playing] .glide {
+  transition-duration: 180ms;
+  transition-timing-function: linear;
+}
+[data-playing] .swap-in {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rise,
   .swap-in,
   .ripple,
-  .breathe {
+  .alarm {
     animation: none;
   }
   .ripple {

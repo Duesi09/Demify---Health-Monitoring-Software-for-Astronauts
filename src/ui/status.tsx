@@ -23,7 +23,7 @@ export function needsAttention(tone: Tone): boolean {
 export const TRIAGE: Record<Status, { headline: string; guidance: string }> = {
   nominal: {
     headline: 'All nominal',
-    guidance: 'No action needed. Keep up your routine measurements.',
+    guidance: 'No action needed.',
   },
   watch: {
     headline: 'Watch',
