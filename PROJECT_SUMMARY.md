@@ -1,6 +1,6 @@
 # Demify – Projektübersicht
 
-Stand: 13. November 2026, Phase 1 abgeschlossen (Branch `Phase-1`).
+Stand: 13. November 2026, Phase 1 abgeschlossen, aus Phase 2 ist die Körperkarte fertig (Branch `Phase-1`).
 
 ## Worum es geht
 
@@ -14,11 +14,12 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 - **Zusammenhänge statt Einzelwerte:** Mehrere Werte zusammen zeigen oft die Ursache, nicht nur das Symptom.
 - **Klare Triage mit Handlungsanweisung:** Jede Auffälligkeit endet in einem konkreten nächsten Schritt.
 
-## Was heute funktioniert (Phase 1)
+## Was heute funktioniert
 
 | Bereich | Umsetzung |
 |---|---|
 | Messwerte | Ruhepuls, Blutdruck, Körpertemperatur, Blutsauerstoff, Nüchternzucker, Schlaf, Stimmung, Training, Kabinen-CO₂ |
+| Körperkarte | Klickbare Figur mit sieben Körpersystemen (Gehirn, Augen, Immunsystem, Lunge, Herz, Stoffwechsel, Knochen und Muskeln). Jeder Marker zeigt den Status; die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
 | Triage | Vier Stufen: Nominal, Watch (selbst handeln), Act (Crew Medical Officer), Critical (Flight Surgeon). Jede Stufe hat eigene Farbe und eigene Icon-Form |
 | Baseline-Drift | 7-Tage-Durchschnitt gegen den Vor-Flug-Wert, inklusive Dauer („seit 6 Tagen") |
 | Muster | Möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, Herz-Kreislauf-Abbau bei Trainingsausfall |
@@ -34,12 +35,12 @@ Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 74 (Infekt), 
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, ein dunkles Cockpit-Design.
-- **Tests:** Vitest, 25 Unit-Tests für Regel-Engine und Simulator.
+- **Tests:** Vitest, 31 Unit-Tests für Regel-Engine, Simulator und Körperkarte.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |
 |---|---|
-| `src/domain` | Kernlogik ohne Framework: Metrik-Katalog mit Grenzwerten, Regel-Engine, Simulator, Validierung |
+| `src/domain` | Kernlogik ohne Framework: Metrik-Katalog mit Grenzwerten, Körpersysteme, Regel-Engine, Simulator, Validierung |
 | `src/server` | Speicher für von Hand eingetragene Messwerte (JSON-Datei) |
 | `src/app` | Next.js-Seite und Server Actions |
 | `src/ui` | Dashboard-Komponenten |
@@ -69,7 +70,7 @@ Danach jeweils <http://localhost:3000> öffnen.
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | Datenmodell, Simulator, Regel-Engine, Dashboard mit Farbcodes | Fertig |
-| 2 | Klickbare Körperkarte, ausführlichere Anleitungen pro Befund | Offen |
+| 2 | Klickbare Körperkarte, ausführlichere Anleitungen pro Befund | Körperkarte fertig, Schritt-für-Schritt-Anleitungen offen |
 | 3 | Echte Messungen: Bluetooth-Geräte, Puls per Webcam, Reaktionstest, Sehtest | Offen |
 | 4 | Missionskontext (ISS, Mond, Mars), Weltraumwetter mit NASA-Daten, Funkverzögerungs-Modus | Offen |
 | 5 | Gamification, Feinschliff, Pitch | Offen |
@@ -80,6 +81,7 @@ Danach jeweils <http://localhost:3000> öffnen.
 - **Speicher ist eine JSON-Datei:** Reicht für einen Container auf einem Rechner. Für Mehrbenutzer-Betrieb oder Serverless-Hosting braucht es eine Datenbank.
 - **Sensordaten sind simuliert:** Echte Geräte kommen in Phase 3.
 - **Grenzwerte sind Demo-Werte:** Sie stammen aus allgemeinen klinischen Richtlinien, sind keine Flugregeln und keine medizinische Beratung.
+- **Augen ohne Messwert:** Das Körpersystem ist auf der Karte erklärt, ein Sehtest kommt in Phase 3.
 - **Strahlung fehlt noch:** Der fünfte NASA-Hazard hat bisher keine Messgröße; er kommt mit Phase 4.
 
 ## Offene Entscheidungen

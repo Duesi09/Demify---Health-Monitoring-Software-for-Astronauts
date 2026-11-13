@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { resetManualReadings } from '@/app/actions'
+import { regionForMetric, type RegionId } from '@/domain/bodyRegions'
 import { evaluate, indexReadings } from '@/domain/engine'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
+import { BodyMap } from './BodyMap'
 import { DayControls } from './DayControls'
 import { FindingsList } from './FindingsList'
 import { MetricDetail } from './MetricDetail'
@@ -39,6 +41,11 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
     () => tileFor(evaluation.findings[0]?.metrics[0] ?? 'restingHr').id,
   )
   const selected = TILES.find((t) => t.id === selectedId) ?? TILES[0]
+  // The body map opens on the body system behind the most urgent finding.
+  const [regionId, setRegionId] = useState<RegionId | null>(() => {
+    const metric = evaluation.findings[0]?.metrics[0]
+    return metric ? regionForMetric(metric).id : null
+  })
 
   useEffect(() => {
     if (!playing) return
@@ -109,6 +116,12 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
         <main className="flex min-w-0 flex-col gap-4">
           <TriageBanner evaluation={evaluation} />
+          <BodyMap
+            evaluation={evaluation}
+            selectedId={regionId}
+            onSelectRegion={setRegionId}
+            onSelectMetric={selectMetric}
+          />
           <FindingsList evaluation={evaluation} onSelectMetric={selectMetric} />
           <section aria-label="Health indicators" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {TILES.map((tile) => (

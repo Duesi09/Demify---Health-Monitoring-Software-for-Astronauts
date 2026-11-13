@@ -1,7 +1,10 @@
 import type { Status } from '@/domain/types'
 
-/** A triage level, or `stale` when the data is too old to judge. */
-export type Tone = Status | 'stale'
+/**
+ * A triage level, `stale` when the data is too old to judge, or
+ * `unmonitored` when nothing is measured yet.
+ */
+export type Tone = Status | 'stale' | 'unmonitored'
 
 export const TONE: Record<Tone, { label: string; text: string; bg: string; glyph: string }> = {
   nominal: { label: 'Nominal', text: 'text-good', bg: 'bg-good', glyph: '#ffffff' },
@@ -9,6 +12,7 @@ export const TONE: Record<Tone, { label: string; text: string; bg: string; glyph
   act: { label: 'Act', text: 'text-serious', bg: 'bg-serious', glyph: '#ffffff' },
   critical: { label: 'Critical', text: 'text-critical', bg: 'bg-critical', glyph: '#ffffff' },
   stale: { label: 'No recent data', text: 'text-muted', bg: 'bg-muted', glyph: '#0b0b0b' },
+  unmonitored: { label: 'Not monitored yet', text: 'text-muted', bg: 'bg-axis', glyph: '#0b0b0b' },
 }
 
 export const TRIAGE: Record<Status, { headline: string; guidance: string }> = {
@@ -34,7 +38,18 @@ export const TRIAGE: Record<Status, { headline: string; guidance: string }> = {
  * Each level has its own shape as well as its own colour, so the status is
  * readable without colour vision.
  */
-export function StatusIcon({ tone, size = 16 }: { tone: Tone; size?: number }) {
+export function StatusIcon({
+  tone,
+  size = 16,
+  x,
+  y,
+}: {
+  tone: Tone
+  size?: number
+  /** Position, when the icon is placed inside another SVG. */
+  x?: number
+  y?: number
+}) {
   const glyph = TONE[tone].glyph
   const stroke = { stroke: glyph, strokeWidth: 1.8, strokeLinecap: 'round', fill: 'none' } as const
   return (
@@ -42,6 +57,8 @@ export function StatusIcon({ tone, size = 16 }: { tone: Tone; size?: number }) {
       viewBox="0 0 16 16"
       width={size}
       height={size}
+      x={x}
+      y={y}
       aria-hidden="true"
       className={`shrink-0 ${TONE[tone].text}`}
     >
@@ -76,6 +93,9 @@ export function StatusIcon({ tone, size = 16 }: { tone: Tone; size?: number }) {
           <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M8 4.4V8l2.4 1.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </>
+      )}
+      {tone === 'unmonitored' && (
+        <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeDasharray="2.6 2.4" />
       )}
     </svg>
   )

@@ -4,9 +4,10 @@ Our solution to the NASA Space Apps Challenge "Create Health Monitoring Software
 
 On long missions, astronauts face radiation, isolation, altered gravity and a closed environment, which can lead to immune changes, bone loss, cardiovascular problems and mental strain. They are often the first to notice these changes in themselves, and on the way to Mars a question to the flight surgeon takes up to 20 minutes to arrive. Demify collects the key health indicators in one place, judges them against the crew member's own pre-flight baseline, and says what to do next.
 
-## What it does today (phase 1)
+## What it does today (phases 1 and 2)
 
 - **Nine indicators:** resting heart rate, blood pressure, body temperature, blood oxygen, fasting blood sugar, sleep, mood, exercise and cabin CO₂.
+- **Clickable body map:** a human figure with one marker per body system (brain, eyes, immune system, lungs, heart, metabolism, bones and muscles). Each marker shows that system's status; selecting it explains what spaceflight does to it, how to protect it, and which indicators describe it.
 - **Four triage levels:** Nominal, Watch (self-care), Act (consult the Crew Medical Officer), Critical (contact the flight surgeon). Each level has its own colour and icon shape.
 - **Personal baseline:** a value can be textbook-normal and still be flagged when it has drifted from that person's pre-flight average.
 - **Patterns across indicators:** fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low exercise with a climbing heart rate (deconditioning).
