@@ -29,7 +29,7 @@ export interface BodyRegion {
   /** Indicators that describe this system; empty when none is tracked yet. */
   metrics: MetricId[]
   hazard: HazardId
-  /** The matching risk in NASA's list, as NASA names it. */
+  /** The matching NASA human spaceflight risk, by the short name of NASA's page for it. */
   nasaRisk?: string
   /** For systems without an indicator: what is planned. */
   planned?: string

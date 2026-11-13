@@ -24,12 +24,12 @@ interface Profile {
 
 const PROFILE: Record<MetricId, Profile> = {
   restingHr: { base: 58, noise: 2.2, inFlightShift: 3, min: 35, max: 200, step: 1 },
-  systolic: { base: 116, noise: 3.5, inFlightShift: -3, min: 60, max: 230, step: 1 },
+  systolic: { base: 116, noise: 2.5, inFlightShift: -3, min: 60, max: 230, step: 1 },
   diastolic: { base: 74, noise: 2.5, inFlightShift: -2, min: 35, max: 140, step: 1 },
-  glucose: { base: 88, noise: 4, inFlightShift: 3, min: 40, max: 400, step: 1 },
+  glucose: { base: 88, noise: 3, inFlightShift: 3, min: 40, max: 400, step: 1 },
   bodyTemp: { base: 36.7, noise: 0.12, inFlightShift: 0.3, min: 34, max: 41.5, step: 0.1 },
   spo2: { base: 98, noise: 0.6, inFlightShift: -0.5, min: 70, max: 100, step: 1 },
-  sleepHours: { base: 7.6, noise: 0.5, inFlightShift: -0.8, min: 2, max: 11, step: 0.1 },
+  sleepHours: { base: 7.6, noise: 0.5, inFlightShift: -0.5, min: 2, max: 11, step: 0.1 },
   mood: { base: 4.2, noise: 0.45, inFlightShift: -0.2, min: 1, max: 5, step: 1 },
   exerciseMin: { base: 110, noise: 12, inFlightShift: 15, min: 0, max: 240, step: 5 },
   cabinCo2: { base: 0.4, noise: 0.15, inFlightShift: 2, min: 0.2, max: 9, step: 0.1 },
@@ -44,8 +44,11 @@ function bump(day: number, start: number, end: number, ramp: number): number {
   return Math.min(1, (day - start + 1) / ramp, (end - day + 1) / ramp)
 }
 
-/** Mission days on which the crew member has a heart attack. */
-export const HEART_ATTACK_DAYS = [97, 168]
+/**
+ * Mission days on which the crew member has a heart attack. The second one and
+ * its after-effects (days 158 to 163) end before the life-support fault begins.
+ */
+export const HEART_ATTACK_DAYS = [55, 97]
 /** Days the after-effects of a heart attack last. */
 const RECOVERY_DAYS = 6
 
@@ -71,10 +74,12 @@ function scenarioOffset(metric: MetricId, day: number): number {
   // Days 105 to 140: the exercise device is out of service; the heart deconditions.
   const noExercise = bump(day, 105, 140, 4)
   const deconditioning = bump(day, 108, 146, 18)
-  // Days 97 and 168: a heart attack. The heart races, blood pressure shoots up and
+  // Days 55 and 97: a heart attack. The heart races, blood pressure shoots up and
   // blood oxygen drops. In the days after, the heart stays fast and pressure runs low.
   const attack = HEART_ATTACK_DAYS.includes(day) ? 1 : 0
   const afterAttack = afterHeartAttack(day)
+  // Days 165 to 169: a life-support fault; CO₂ removal and oxygen supply degrade.
+  const airFault = bump(day, 165, 169, 2)
 
   switch (metric) {
     case 'sleepHours':
@@ -82,19 +87,21 @@ function scenarioOffset(metric: MetricId, day: number): number {
     case 'mood':
       return -1.4 * overload - 0.9 * infection - 2 * attack - afterAttack
     case 'cabinCo2':
-      return 1.5 * scrubber
+      return 1.5 * scrubber + 3.8 * airFault
     case 'bodyTemp':
       return 1.5 * infection + 0.3 * attack
+    case 'spo2':
+      return -6 * attack - 2 * afterAttack - 9.5 * airFault
     case 'restingHr':
-      return 16 * infection + 12 * deconditioning + 3 * overload + 68 * attack + 30 * afterAttack
+      return (
+        16 * infection + 12 * deconditioning + 3 * overload + 68 * attack + 30 * afterAttack + 8 * airFault
+      )
     case 'exerciseMin':
       return -90 * infection - 88 * noExercise - 125 * attack - 110 * afterAttack
     case 'systolic':
       return 12 * deconditioning + 52 * attack - 14 * afterAttack
     case 'diastolic':
       return 6 * deconditioning + 27 * attack - 8 * afterAttack
-    case 'spo2':
-      return -6 * attack - 2 * afterAttack
     case 'glucose':
       // Day 153: a missed meal before the morning measurement.
       return day === 153 ? -36 : 0

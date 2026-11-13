@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { formatDay, formatValue } from '@/domain/format'
-import { HAZARDS, NASA_RISKS_URL } from '@/domain/hazards'
+import { HAZARDS, riskUrl } from '@/domain/hazards'
 import { METRICS } from '@/domain/metrics'
 import { PREFLIGHT_DAYS } from '@/domain/simulator'
 import { STATUS_ORDER, type Evaluation, type MetricId, type Reading } from '@/domain/types'
@@ -161,7 +161,7 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
             {def.nasaRisk && (
               <>
                 {' | '}
-                <a href={NASA_RISKS_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-ink">
+                <a href={riskUrl(def.nasaRisk)} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-ink">
                   {def.nasaRisk}
                 </a>
               </>

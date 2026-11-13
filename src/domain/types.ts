@@ -71,7 +71,7 @@ export interface MetricDef {
   scale: [number, number]
   /** The NASA spaceflight hazard that drives this indicator. */
   hazard: HazardId
-  /** The matching risk in NASA's Human Research Program list, as NASA names it. */
+  /** The matching NASA human spaceflight risk, by the short name of NASA's page for it. */
   nasaRisk?: string
   whyInSpace: string
   howToMeasure: string

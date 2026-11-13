@@ -14,11 +14,11 @@ On long missions, astronauts face radiation, isolation, altered gravity and a cl
 - **Clickable body map:** an anatomical figure showing nine body systems in their status colour: brain, eyes, balance, immune system, lungs, heart, metabolism, kidneys, and bones and muscles. Selecting a system explains what spaceflight does to it, how to protect it, and which indicators describe it. Eyes, balance and kidneys have no indicator yet and are drawn as outlines.
 - **Four triage levels:** Nominal, Watch (self-care), Act (consult the Crew Medical Officer), Critical (contact the flight surgeon). Each level has its own colour and icon shape.
 - **Personal baseline:** a value can be textbook-normal and still be flagged when it has drifted from that person's pre-flight average.
-- **Patterns across indicators:** a racing heart with a blood pressure spike or low blood oxygen (possible heart attack), fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low exercise with a climbing heart rate (deconditioning).
-- **Measurement reminders:** readings that are too old are not judged; the crew member is asked to measure again.
+- **Patterns across indicators:** a racing heart with a blood pressure spike or low blood oxygen (possible heart attack), low blood oxygen with raised cabin CO₂ (life-support fault), fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low exercise with a climbing heart rate (deconditioning).
+- **Measurement reminders:** readings that are too old are not judged; the crew member is asked to measure again, and the overall status is not shown as nominal until they do.
 - **Manual entry:** readings are validated and stored on the server.
-- **Simulated 180-day mission** with scripted health events, including two heart attacks (days 97 and 168), and a time-lapse to play through it.
-- **NASA sources:** every indicator links to its hazard and risk in NASA's Human Research Program.
+- **Simulated 180-day mission** with scripted health events, including two heart attacks (days 55 and 97) and a life-support fault (days 165 to 169), and a time-lapse to play through it.
+- **NASA sources:** every indicator links to NASA's page for its hazard and for its risk.
 
 The reference ranges are demo defaults based on general clinical ranges. They are not flight rules and not medical advice.
 
