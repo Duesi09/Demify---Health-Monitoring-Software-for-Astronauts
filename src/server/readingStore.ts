@@ -36,7 +36,16 @@ export async function loadManualReadings(): Promise<Reading[]> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw error
   }
-  const parsed: unknown = JSON.parse(text)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // A damaged log must not take the whole monitor down. Set the file aside
+    // for recovery and carry on without the manual readings.
+    await fs.rename(FILE, `${FILE}.damaged-${Date.now()}`).catch(() => undefined)
+    console.error('The manual readings file could not be read and was set aside.')
+    return []
+  }
   return Array.isArray(parsed) ? parsed.filter(isReading) : []
 }
 

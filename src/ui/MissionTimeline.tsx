@@ -76,7 +76,7 @@ export function MissionTimeline({ day, statuses, playing, onDayChange, onToggleP
             </button>
             <button
               type="button"
-              className={`${button} ${playing ? '' : 'bg-series-1 text-white hover:bg-series-1 hover:brightness-110'}`}
+              className={`${button} ${playing ? '' : 'bg-action text-white hover:bg-action hover:brightness-110'}`}
               onClick={onTogglePlay}
               aria-pressed={playing}
             >

@@ -75,7 +75,7 @@ export function LogForm({ metrics, day, onLogged }: Props) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-full bg-series-1 px-5 py-2.5 text-base font-semibold text-white transition hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
+          className="rounded-full bg-action px-5 py-2.5 text-base font-semibold text-white transition hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
         >
           {pending ? 'Saving…' : 'Log reading'}
         </button>
