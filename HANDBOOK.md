@@ -2,7 +2,7 @@
 
 Everything in one place: where the project stands, how it is built, what was changed in the review, what is still open, ideas that go beyond a dashboard, and tips for the pitch and the submission.
 
-Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Monitoring Software for Astronauts on Space Missions". It describes the `test` branch after the merge of the `Phase-1` redesign.
+Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Monitoring Software for Astronauts on Space Missions". It describes the `test` branch after the latest merge of `Phase-1` (redesign, heart attack scenario, new body map) and the hardening pass.
 
 ## Contents
 
@@ -30,10 +30,11 @@ Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Mon
 
 | Item | State |
 |---|---|
-| Unit tests | 40 of 40 pass |
+| Unit tests | 51 of 51 pass |
 | Type check and production build | Clean |
 | Browser run | No console errors on desktop and phone width |
-| Simulated mission | 99 nominal days, 23 Watch, 55 Act, 3 Critical |
+| Accessibility scan | No WCAG A or AA violations found by the automated scan |
+| Simulated mission | 79 nominal days, 26 Watch, 70 Act, 5 Critical |
 | Hazards covered | 4 of 5. Space radiation has no indicator yet |
 
 ### Branches
@@ -41,11 +42,11 @@ Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Mon
 | Branch | Contains | Notes |
 |---|---|---|
 | `main` | README only | Nothing merged yet |
-| `Phase-1` | Phase 1, body map, redesign | Another session pushes here |
-| `Phase-2` | README only | Empty; the body map went to `Phase-1` instead |
-| `test` | Everything on `Phase-1` plus the review fixes | The most complete branch right now |
+| `Phase-1` | Phase 1, body map, redesign, heart attack scenario | Another session pushes here |
+| `Phase-2` | README only | Empty; later work went to `Phase-1` instead |
+| `test` | Everything on `Phase-1` plus the review fixes and the hardening | The most complete branch right now |
 
-`test` is ahead of `Phase-1` by the fixes in [section 7](#7-changes-made-in-the-review). To bring them back, merge `test` into `Phase-1`. It is a clean merge as long as `Phase-1` has no new commits touching `src/ui/TriageBanner.tsx` or `src/domain/hazards.ts`.
+`test` is ahead of `Phase-1` by the changes in [section 7](#7-changes-made-in-the-review). The two branches are edited in parallel in the same files, and every merge so far needed conflicts fixed by hand. See [section 16](#16-working-tips).
 
 ---
 
@@ -66,7 +67,7 @@ Three principles carry the whole app:
 | Health status banner | The overall triage level, its guidance and the first thing to do |
 | Vital signs monitor | A heartbeat trace at the measured heart rate and a pressure wave, drawn from the latest readings. It is an illustration, not a live sensor signal |
 | Mission timeline | One cell per mission day in the colour of that day's status. It is also the day control |
-| Body map | A clickable figure with seven body systems. Each marker shows the status of its system |
+| Body map | A clickable anatomical figure with nine body systems. Each system is filled in the colour of its status |
 | Findings list | Each finding with detail, action and links to its indicators |
 | Five hazards row | One ring per NASA hazard showing how many of its indicators are nominal |
 | Indicator tiles | Value, trend line, range bar and change against the pre-flight baseline |
@@ -104,7 +105,7 @@ src/
     types.ts              data shapes: Reading, MetricDef, Finding, Status
     metrics.ts            every indicator: unit, ranges, drift rule, how to measure
     hazards.ts            the five NASA hazards and the page for each NASA risk
-    bodyRegions.ts        the seven body systems and their indicators
+    bodyRegions.ts        the nine body systems and their indicators
     engine.ts             rule engine: ranges, baseline drift, patterns, reminders
     simulator.ts          180-day demo mission with scripted events
     validate.ts           input checks, used on both sides
@@ -112,9 +113,10 @@ src/
     *.test.ts             unit tests
   server/                 back
     mission.ts            merges simulated and manual readings
-    readingStore.ts       reads and writes the JSON file
+    readingStore.ts       reads and writes the JSON file, with its own tests
   app/                    back and entry point
     page.tsx              loads readings on the server, renders the dashboard
+    error.tsx             shown when the dashboard cannot load
     actions.ts            server actions: save readings, reset
     layout.tsx, globals.css
   ui/                     front
@@ -218,10 +220,12 @@ The 7-day average is compared with the pre-flight average. A drift raises its ow
 |---|---|---|
 | Brain and mind | Sleep, mood | Isolation and confinement |
 | Eyes and vision | None yet | Gravity fields |
+| Balance and coordination | None yet | Gravity fields |
 | Immune system | Body temperature | Hostile/closed environments |
 | Lungs and cabin air | Blood oxygen, cabin CO₂ | Hostile/closed environments |
 | Heart and circulation | Heart rate, blood pressure | Gravity fields |
 | Metabolism and nutrition | Fasting blood sugar | Distance from Earth |
+| Kidneys and fluids | None yet | Gravity fields |
 | Bones and muscles | Exercise | Gravity fields |
 
 ---
@@ -243,11 +247,12 @@ A fifth state exists on the banner: **Measurements due**. It appears when nothin
 
 | Pattern | Fires when | Level |
 |---|---|---|
+| Possible heart attack | Resting heart rate above 120 bpm together with blood pressure in the Act or Critical range, or reduced blood oxygen | Critical |
 | Possible infection | Temperature at 38.0 °C or more and heart rate at least 10 bpm above baseline | Act; Critical from 39.5 °C |
 | Low blood oxygen with raised cabin CO₂ | Both indicators are off at the same time | The worse of the two |
 | Symptoms may come from the cabin air | Cabin CO₂ is raised and sleep or mood is down | At least Watch |
 | Sleep loss together with falling mood | Both are down | Watch, or Act when severe |
-| Cardiovascular deconditioning | Exercise is low and heart rate has drifted up for 7 days or more, with no recent fever | The worse of the two |
+| Cardiovascular deconditioning | Exercise is low and heart rate has drifted up for 7 days or more, with no recent fever and no racing heart in the last two weeks | The worse of the two |
 
 A pattern replaces the single findings it explains, unless a single finding is more urgent than the pattern.
 
@@ -263,11 +268,15 @@ One crew member, 14 pre-flight days for the baseline, then 180 mission days. The
 |---|---|---|
 | 28 to 46 | Heavy workload with shifted sleep | Sleep loss with falling mood, Watch from day 34, Act from day 38 |
 | 36 to 44 | CO₂ scrubber degrades | "Symptoms may come from the cabin air" |
+| 54 to 58 | Life-support fault: the scrubber fails | Act on day 54, **Critical on days 55 to 57**, "low blood oxygen with raised cabin CO₂" |
 | 70 to 77 | Infection with fever | Possible infection, Act from day 71 |
 | 86 to 90 | Blood pressure not measured | "Measurements due" on days 89 and 90 |
-| 105 to 140 | Exercise device out of service | Exercise below target from day 109, deconditioning pattern from day 124 |
+| 97 | Heart attack | **Critical**, "possible heart attack"; recovery shows as Act until day 105 |
+| 105 to 140 | Exercise device out of service | Exercise below target, deconditioning pattern from day 124 |
 | 153 | Missed meal before the morning test | Low blood sugar, Act |
-| 165 to 169 | Life-support fault | Act on day 165, **Critical on days 166 to 168** |
+| 168 | Second heart attack | **Critical**; recovery shows as Act until day 175 |
+
+The mission shows two kinds of Critical on purpose: one where the cabin is the cause and one where the body is.
 
 ### Status of every day
 
@@ -277,26 +286,28 @@ One crew member, 14 pre-flight days for the baseline, then 180 mission days. The
 | 34 to 37 | Watch |
 | 38 to 47 | Act |
 | 48 | Watch |
-| 49 to 60 | Nominal |
-| 61 to 62 | Watch (random variation) |
-| 63 to 69 | Nominal |
+| 49 to 53 | Nominal |
+| 54 | Act |
+| 55 to 57 | Critical (life-support fault) |
+| 58 to 61 | Act |
+| 62 to 63 | Watch |
+| 64 to 69 | Nominal |
 | 70 | Watch |
 | 71 to 79 | Act |
 | 80 to 82 | Watch |
-| 83 to 102 | Nominal (89 and 90: measurements due) |
-| 103 | Watch (random variation) |
-| 104 to 108 | Nominal |
-| 109 to 112 | Watch |
+| 83 to 96 | Nominal (89 and 90: measurements due) |
+| 97 | Critical (heart attack) |
+| 98 to 105 | Act |
+| 106 to 112 | Watch |
 | 113 to 140 | Act |
 | 141 to 145 | Watch |
 | 146 to 152 | Nominal |
 | 153 to 155 | Act |
-| 156 to 164 | Nominal |
-| 165 | Act |
-| 166 to 168 | Critical |
-| 169 to 172 | Act |
-| 173 to 174 | Watch |
-| 175 to 180 | Nominal |
+| 156 to 167 | Nominal |
+| 168 | Critical (heart attack) |
+| 169 to 175 | Act |
+| 176 to 178 | Watch |
+| 179 to 180 | Nominal |
 
 ### Best days for a demo
 
@@ -304,13 +315,14 @@ One crew member, 14 pre-flight days for the baseline, then 180 mission days. The
 |---|---|
 | 20 | A calm, all-nominal day |
 | 42 | Two patterns at once: the cabin air behind poor sleep |
+| 56 | Critical from the cabin: the lungs turn red, the app blames the air and not the astronaut |
 | 74 | Infection: immune system and heart light up on the body map |
 | 90 | "Measurements due" instead of a false green |
+| 97 | Critical from the body: possible heart attack, with the alarm on the vital signs monitor |
 | 130 | Deconditioning: heart and bones light up |
 | 153 | A single acute value: low blood sugar |
-| 167 | Critical: the lungs turn red, the action says to contact the flight surgeon |
 
-Open a day directly with `?day=167` at the end of the address.
+Open a day directly with `?day=56` at the end of the address.
 
 ---
 
@@ -318,19 +330,26 @@ Open a day directly with `?day=167` at the end of the address.
 
 | # | Problem found | Fix | Commit |
 |---|---|---|---|
-| 1 | The highest level, Critical, never appeared in 180 days | A life-support fault on days 165 to 169 and a new pattern "low blood oxygen with raised cabin CO₂" | `75fbc4e` |
+| 1 | The highest level, Critical, never appeared in 180 days | A life-support fault and a new pattern "low blood oxygen with raised cabin CO₂" | `75fbc4e` |
 | 2 | "Deconditioning" fired on days 78 to 80, which was only the tail of the infection | The pattern stays off while a fever is recent | `75fbc4e` |
 | 3 | Day 90 showed a green "All nominal" although blood pressure was 5 days old | A neutral "Measurements due" state on the banner | `6482c60` |
-| 4 | About 15 healthy days showed a one-day alert from random variation alone | Less variation in simulated blood pressure, blood sugar and sleep; 3 such days remain | `75fbc4e` |
+| 4 | About 15 healthy days showed a one-day alert from random variation alone | Less variation in simulated blood pressure, blood sugar and sleep | `75fbc4e` |
 | 5 | Every NASA risk linked to the same list page; cabin CO₂ had no risk | Each risk opens NASA's own page; cabin CO₂ cites its Human System Risk | `75fbc4e` |
-| 6 | `test` and `Phase-1` had drifted apart | The redesign was merged into `test`, two conflicts resolved | `4015c1f` |
+| 6 | `test` and `Phase-1` had drifted apart | The redesign was merged into `test`, conflicts resolved | `4015c1f` |
+| 7 | The new heart attack on day 168 landed on the life-support fault | The fault moved to days 54 to 58; second merge of `Phase-1` | `446a616` |
+| 8 | In the week after a heart attack the app reported "deconditioning" and advised to restore exercise | That pattern stays off for two weeks after a racing heart | `446a616` |
+| 9 | A damaged data file made the whole app fail with an error page | The file is set aside and the app carries on; the store has its own tests | `f25ced7` |
+| 10 | No protective response headers; the server announced its framework | Three security headers added, the framework header removed | `f25ced7` |
+| 11 | A failure showed the framework's default error screen | An error page that says what to do and offers a retry | `f25ced7` |
+| 12 | White text on the blue buttons failed the contrast check (3.6 to 1) | A darker button blue (4.9 to 1) | `f25ced7` |
+| 13 | Nothing checked pushes automatically | A workflow runs type check, tests and build on every push | `f25ced7` |
 
-Tests grew from 31 to 40. New tests cover the new pattern, the fever rule, the Critical days and the risk links.
+Tests grew from 31 to 51. New tests cover the new patterns, the fever and heart rules, the Critical days, the risk links and the data store.
 
 ### Deliberately left alone
 
-- **Tails after events.** Days 154 to 155 and 169 to 174 still show alerts because the last reading and the 7-day averages lag behind. It reads as recovery, which is honest.
-- **Three stray Watch days** (61, 62, 103) from blood pressure readings of 120 and 121 against the 120 limit. Removing them would mean fitting the noise to one seed.
+- **Tails after events.** The days right after an event still show alerts (for example 58 to 63 and 154 to 155) because the last reading and the 7-day averages lag behind. It reads as recovery, which is honest.
+- **A few stray Watch findings** from blood pressure readings of 120 and 121 against the 120 limit. Removing them would mean fitting the noise to one seed.
 - **Thresholds.** No range or band was changed.
 
 ---
@@ -340,10 +359,13 @@ Tests grew from 31 to 40. New tests cover the new pattern, the fever rule, the C
 ### Checked
 
 - All unit tests, the type check and the production build.
-- The app in a real browser on days 20, 42, 74, 79, 90, 130, 153, 165, 167, 172 and 180.
+- The app in a real browser on days 20, 56, 90, 97, 104, 153, 168 and 175 after the last merge, and more days before it.
 - Logging a value: bad input is rejected, good input is saved, survives a reload, and the reset button removes it.
 - Time-lapse, and no sideways scrolling at phone width.
 - Every one of the 180 days, counted by status.
+- An automated accessibility scan (WCAG A and AA rules) on a calm day and on a Critical day.
+- A damaged data file and a file with invalid rows: the app keeps running in both cases.
+- The response headers of the running server.
 
 ### Not checked
 
@@ -351,6 +373,8 @@ Tests grew from 31 to 40. New tests cover the new pattern, the fever rule, the C
 |---|---|---|
 | NASA links | nasa.gov cannot be reached from the review session. The addresses come from search results | Click every link once before the pitch |
 | Docker image | Docker does not run in the review session. The same self-contained server did start and work | Run `docker compose up --build` once on a laptop |
+| The check workflow | It was added but has not run yet at the time of writing | Look at the Actions tab after the next push |
+| Screen readers and real keyboards | Only the automated scan was run | Tab through the app once and try a screen reader |
 | NASA and NOAA data services | Not reachable from the review session | Test before building anything on them |
 | Real devices | No hardware was involved | Only matters if Bluetooth devices are added |
 
@@ -365,8 +389,26 @@ Tests grew from 31 to 40. New tests cover the new pattern, the fever rule, the C
 - **Sensor data is simulated.** Only manual entry is real.
 - **Thresholds are demo values**, not flight rules and not medical advice.
 - **Radiation is missing.** It is the only one of the five hazards without an indicator, and the hazard row shows it as "Not monitored yet". Judges will see that.
-- **Eyes have no indicator.** The body system is explained on the map; a vision test is planned.
+- **Eyes, balance and kidneys have no indicator.** The body systems are explained on the map and drawn as dashed outlines.
 - **The vital signs traces are drawn, not measured.** The app says so on screen. Say it in the pitch too.
+
+### What real flight use would still need
+
+A hackathon prototype cannot be a flight product, and saying so plainly is a strength in front of NASA judges. This is the honest distance:
+
+| Area | What is missing |
+|---|---|
+| Medical validity | Thresholds and patterns signed off by flight surgeons, tested against real astronaut data, with known false alarm and miss rates |
+| Clinical safety | A hazard analysis of wrong advice. Example: the heart attack text names a drug and a dose, which needs medical review |
+| Software assurance | NASA has its own software engineering and safety requirements for crewed missions; none of that process was followed here |
+| Identity and privacy | Accounts, roles (crew member, medical officer, surgeon), an audit trail, encryption of stored health data |
+| Data | A real database with backups and a migration path, instead of one JSON file |
+| Devices | Tested connections to real sensors, with handling for dropouts and bad readings |
+| Offline and delay | Proven behaviour with no link to Earth, and a sync that copes with minutes of delay |
+| Testing | End-to-end tests of the screens, usability tests with gloves and in poor light, tests on the actual hardware |
+| Accessibility | A manual audit on top of the automated scan |
+
+What the prototype can honestly claim today: the logic is transparent and tested, every number names its source, the app does not overstate what it knows, and it stays up when its data file is damaged.
 
 ### Decisions the team still has to make
 
@@ -442,7 +484,7 @@ Assumption: a 48-hour hackathon with roughly 40 hours left when this was written
 - **Freeze features 6 hours before the deadline.** After that only fix, record and write.
 - **Reserve the last 6 hours** for the video, the project page and the submission.
 - **If you fall behind, cut from the bottom of the list**, never from the video.
-- **Keep the demo days working.** After every change, open days 42, 74, 90, 130, 153 and 167.
+- **Keep the demo days working.** After every change, open days 42, 56, 74, 90, 97, 130 and 153.
 
 ### Stretch goals
 
@@ -614,7 +656,7 @@ All of these come from search-result summaries, not from reading the full papers
 
 | Seconds | Picture | Line |
 |---|---|---|
-| 0 to 5 | Earth shrinks to a dot, or the timeline plays | "Day 167 on the way to Mars." |
+| 0 to 5 | Earth shrinks to a dot, or the timeline plays | "Day 56 on the way to Mars." |
 | 5 to 12 | Banner turns Critical, lungs turn red on the body map | "Blood oxygen falls while cabin CO₂ climbs." |
 | 12 to 20 | The finding and its action | "Demify sees the cause: the cabin air, not the astronaut." |
 | 20 to 26 | Day 42 or 74 in fast cuts | "It knows your own baseline and reads values together." |
@@ -624,10 +666,10 @@ All of these come from search-result summaries, not from reading the full papers
 
 1. **Day 20:** all nominal. Point at the body map and the timeline.
 2. **Play the time-lapse** to about day 42 and pause. Two patterns: the app blames the cabin air for poor sleep.
-3. **Day 74:** infection. Immune system and heart light up together.
+3. **Day 56:** Critical. The app says the cabin air is failing, not the astronaut. Read the action aloud.
 4. **Day 90:** the app refuses to say "nominal" because blood pressure is out of date.
-5. **Day 153:** log a new blood sugar value by hand and watch the status change.
-6. **Day 167:** Critical. Read the action aloud.
+5. **Day 97:** Critical again, this time from the body: possible heart attack.
+6. **Day 153:** log a new blood sugar value by hand and watch the status change.
 
 ### What judges usually score
 
@@ -688,7 +730,7 @@ Check the exact requirements on this year's event page; the list below is what S
 Another session pushes to `Phase-1` while the fixes live on `test`. To avoid losing work:
 
 - Decide which branch is the trunk and say so in the team.
-- Merge often. Small merges conflict less than one big merge at the end.
+- Merge often. Small merges conflict less than one big merge at the end. The two merges so far hit 2 and then 7 conflicting files.
 - After each merge, run the three checks and open the demo days.
 - Do not let two people or sessions edit the same file at the same time. The files most likely to collide are `src/ui/Dashboard.tsx`, `src/ui/TriageBanner.tsx`, `src/domain/engine.ts` and `src/domain/metrics.ts`.
 
