@@ -62,3 +62,6 @@ export function riskUrl(nasaRisk: string): string {
 export function hasRiskPage(nasaRisk: string): boolean {
   return Object.hasOwn(RISK_PAGES, nasaRisk)
 }
+
+/** The order NASA lists the hazards in. */
+export const HAZARD_IDS: HazardId[] = ['radiation', 'isolation', 'distance', 'gravity', 'environment']

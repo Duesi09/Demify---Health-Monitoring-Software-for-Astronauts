@@ -64,13 +64,14 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 25,
     inputMax: 230,
     inputStep: 1,
+    scale: [30, 160],
     hazard: 'gravity',
     nasaRisk: 'Risk of Cardiovascular Adaptations',
     whyInSpace:
       'In microgravity the heart works against less load and blood volume drops, so the cardiovascular system deconditions. A resting heart rate that creeps up over weeks is one of the earliest signs.',
     howToMeasure:
       'Measure after waking, before caffeine or exercise. Stay still for 5 minutes, then count your pulse for 60 seconds or read it from the monitor.',
-    reference: 'Adult resting heart rate, 60–100 bpm (American Heart Association); lower values are usual in trained people.',
+    reference: 'Adult resting heart rate, 60 to 100 bpm (American Heart Association); lower values are usual in trained people.',
   },
 
   systolic: {
@@ -128,6 +129,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 50,
     inputMax: 260,
     inputStep: 1,
+    scale: [60, 200],
     hazard: 'gravity',
     nasaRisk: 'Risk of Cardiovascular Adaptations',
     whyInSpace:
@@ -191,6 +193,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 30,
     inputMax: 160,
     inputStep: 1,
+    scale: [30, 130],
     hazard: 'gravity',
     nasaRisk: 'Risk of Cardiovascular Adaptations',
     whyInSpace:
@@ -212,7 +215,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
         status: 'critical',
         label: 'Severe low blood sugar',
         action:
-          'Take 15–20 g of fast sugar now (juice or glucose gel), tell a crewmate and re-measure in 15 minutes. Contact the flight surgeon.',
+          'Take 15 to 20 g of fast sugar now (juice or glucose gel), tell a crewmate and re-measure in 15 minutes. Contact the flight surgeon.',
       },
       {
         below: 70,
@@ -255,13 +258,14 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 20,
     inputMax: 600,
     inputStep: 1,
+    scale: [40, 280],
     hazard: 'distance',
     nasaRisk: 'Risk of Inadequate Food and Nutrition',
     whyInSpace:
       'Studies of astronauts and of bed rest on Earth have found reduced insulin sensitivity when the body is unloaded and less active. The fixed mission diet and irregular schedules add to the risk.',
     howToMeasure:
       'Measure in the morning after at least 8 hours without food. Clean the fingertip, use a fresh lancet and apply the first full drop to the test strip.',
-    reference: 'American Diabetes Association: fasting glucose 70–99 mg/dL normal, 100–125 elevated, 126 or above high; below 70 and below 54 mg/dL hypoglycaemia levels 1 and 2.',
+    reference: 'American Diabetes Association: fasting glucose 70 to 99 mg/dL normal, 100 to 125 elevated, 126 or above high; below 70 and below 54 mg/dL hypoglycaemia levels 1 and 2.',
   },
 
   bodyTemp: {
@@ -318,6 +322,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 30,
     inputMax: 43,
     inputStep: 0.1,
+    scale: [34.5, 40.5],
     hazard: 'environment',
     nasaRisk: 'Risk of Altered Immune System Responses',
     whyInSpace:
@@ -368,13 +373,14 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 50,
     inputMax: 100,
     inputStep: 1,
+    scale: [86, 100],
     hazard: 'environment',
     nasaRisk: 'Risk of Hypoxia',
     whyInSpace:
       'The air you breathe is made by the life-support system. A falling oxygen saturation can reveal a cabin-air or lung problem before you feel it.',
     howToMeasure:
       'Clip the pulse oximeter on a warm, still finger without nail polish and wait until the reading is steady for 10 seconds.',
-    reference: 'Pulse oximetry: 95–100% normal at sea-level pressure; below 90% is hypoxaemia (standard clinical definition).',
+    reference: 'Pulse oximetry: 95 to 100% normal at sea-level pressure; below 90% is hypoxaemia (standard clinical definition).',
   },
 
   sleepHours: {
@@ -418,6 +424,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 0,
     inputMax: 16,
     inputStep: 0.1,
+    scale: [3, 11],
     hazard: 'isolation',
     nasaRisk: 'Risk from Inadequate Sleep and Irregular Schedules',
     whyInSpace:
@@ -461,13 +468,14 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 1,
     inputMax: 5,
     inputStep: 1,
+    scale: [1, 5],
     hazard: 'isolation',
     nasaRisk: 'Risk of Behavioral Changes and Psychiatric Disorders',
     whyInSpace:
       'Isolation, confinement and distance from home add up over months. A decline that lasts matters more than one bad day, so the weekly average is judged.',
     howToMeasure:
       'Once a day, rate how you felt overall from 1 (very low) to 5 (very good). Answer quickly and honestly; this log is yours.',
-    reference: 'Self-reported 1–5 scale; thresholds are project defaults, not a clinical instrument.',
+    reference: 'Self-reported 1 to 5 scale; thresholds are project defaults, not a clinical instrument.',
   },
 
   exerciseMin: {
@@ -497,6 +505,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 0,
     inputMax: 360,
     inputStep: 5,
+    scale: [0, 180],
     hazard: 'gravity',
     nasaRisk: 'Risk of Reduced Cardiorespiratory and Musculoskeletal Fitness',
     whyInSpace:
@@ -540,6 +549,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMin: 0,
     inputMax: 20,
     inputStep: 0.1,
+    scale: [0, 7],
     hazard: 'environment',
     nasaRisk: 'Risk of Acute and Chronic Carbon Dioxide Exposure',
     whyInSpace:
@@ -563,4 +573,9 @@ export function nominalRange(metric: MetricId): { min: number; max: number } | n
   const i = bands.findIndex((b) => b.status === 'nominal')
   if (i < 0) return null
   return { min: i === 0 ? -Infinity : bands[i - 1].below, max: bands[i].below }
+}
+
+/** The indicators driven by one NASA hazard; empty when none is tracked yet. */
+export function metricsForHazard(hazard: MetricDef['hazard']): MetricId[] {
+  return METRIC_IDS.filter((id) => METRICS[id].hazard === hazard)
 }

@@ -5,6 +5,7 @@ import { logReadings } from '@/app/actions'
 import { METRICS } from '@/domain/metrics'
 import { validateReading } from '@/domain/validate'
 import type { MetricId, Reading } from '@/domain/types'
+import { StatusIcon } from './status'
 
 interface Props {
   metrics: MetricId[]
@@ -54,7 +55,7 @@ export function LogForm({ metrics, day, onLogged }: Props) {
           const def = METRICS[metric]
           return (
             <label key={metric} className="flex min-w-0 flex-1 flex-col gap-1 text-sm text-ink-2">
-              {def.label} ({def.unit.replace('/ 5', '1–5')})
+              {def.label} ({def.unit.replace('/ 5', '1 to 5')})
               <input
                 type="number"
                 inputMode="decimal"
@@ -66,7 +67,7 @@ export function LogForm({ metrics, day, onLogged }: Props) {
                   setInputs({ ...inputs, [metric]: e.target.value })
                   setMessage(null)
                 }}
-                className="w-full rounded-md border border-edge bg-page px-3 py-2 text-base text-ink"
+                className="w-full rounded-xl bg-page px-3 py-2.5 text-base text-ink ring-1 ring-edge transition-shadow focus:ring-2 focus:ring-series-1 focus:outline-none"
               />
             </label>
           )
@@ -74,7 +75,7 @@ export function LogForm({ metrics, day, onLogged }: Props) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-series-1 px-4 py-2 text-base font-semibold text-white hover:brightness-110 disabled:opacity-60"
+          className="rounded-full bg-series-1 px-5 py-2.5 text-base font-semibold text-white transition hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
         >
           {pending ? 'Saving…' : 'Log reading'}
         </button>
@@ -82,9 +83,9 @@ export function LogForm({ metrics, day, onLogged }: Props) {
       {message && (
         <p
           role={message.kind === 'error' ? 'alert' : 'status'}
-          className={`text-sm ${message.kind === 'error' ? 'text-ink' : 'text-ink-2'}`}
+          className="swap-in flex items-center gap-2 text-sm text-ink"
         >
-          {message.kind === 'error' ? '⚠ ' : '✓ '}
+          <StatusIcon tone={message.kind === 'error' ? 'watch' : 'nominal'} />
           {message.text}
         </p>
       )}

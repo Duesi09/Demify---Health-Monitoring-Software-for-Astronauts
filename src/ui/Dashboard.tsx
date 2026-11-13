@@ -3,16 +3,18 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { resetManualReadings } from '@/app/actions'
 import { regionForMetric, type RegionId } from '@/domain/bodyRegions'
-import { evaluate, indexReadings } from '@/domain/engine'
+import { evaluateIndexed, indexReadings, missionStatuses } from '@/domain/engine'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
 import { BodyMap } from './BodyMap'
-import { DayControls } from './DayControls'
 import { FindingsList } from './FindingsList'
+import { HazardRow } from './HazardRow'
 import { MetricDetail } from './MetricDetail'
 import { MetricTile } from './MetricTile'
+import { MissionTimeline } from './MissionTimeline'
 import { TILES, tileFor } from './tiles'
 import { TriageBanner } from './TriageBanner'
+import { VitalsMonitor } from './VitalsMonitor'
 
 /** Milliseconds per mission day while the time-lapse plays. */
 const TIMELAPSE_STEP_MS = 160
@@ -30,7 +32,8 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
   const detailRef = useRef<HTMLDivElement>(null)
 
   const index = useMemo(() => indexReadings(readings), [readings])
-  const evaluation = useMemo(() => evaluate(readings, day), [readings, day])
+  const evaluation = useMemo(() => evaluateIndexed(index, day), [index, day])
+  const statuses = useMemo(() => missionStatuses(index, MISSION_DAYS), [index])
   const manualKeys = useMemo(
     () => new Set(readings.filter((r) => r.source === 'manual').map((r) => `${r.day}:${r.metric}`)),
     [readings],
@@ -69,8 +72,8 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
 
   function selectMetric(metric: MetricId) {
     setSelectedId(tileFor(metric).id)
-    // On narrow screens the detail panel sits below the tiles; bring it into view.
-    if (window.matchMedia('(max-width: 1023px)').matches) {
+    // On narrower screens the detail panel sits below everything else; bring it into view.
+    if (window.matchMedia('(max-width: 1279px)').matches) {
       detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
@@ -92,16 +95,19 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
   }
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4 lg:p-6">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-semibold">
-          Demify <span className="text-base font-normal text-ink-2">Crew health monitor</span>
+    <div className="mx-auto flex w-full max-w-[2200px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-4xl font-semibold tracking-tight">
+          Demify <span className="text-xl font-normal text-ink-2">Crew health monitor</span>
         </h1>
-        <p className="text-sm text-muted">Flight Engineer A. Morgan · simulated crew member</p>
+        <p className="rounded-full bg-white/[0.06] px-4 py-1.5 text-sm text-ink-2 ring-1 ring-edge">
+          Flight Engineer A. Morgan · simulated crew member
+        </p>
       </header>
 
-      <DayControls
+      <MissionTimeline
         day={day}
+        statuses={statuses}
         playing={playing}
         onDayChange={(d) => {
           setPlaying(false)
@@ -113,31 +119,41 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
         }}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
-        <main className="flex min-w-0 flex-col gap-4">
-          <TriageBanner evaluation={evaluation} />
-          <BodyMap
-            evaluation={evaluation}
-            selectedId={regionId}
-            onSelectRegion={setRegionId}
-            onSelectMetric={selectMetric}
-          />
-          <FindingsList evaluation={evaluation} onSelectMetric={selectMetric} />
-          <section aria-label="Health indicators" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {TILES.map((tile) => (
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_minmax(0,31rem)]">
+        <main className="@container flex min-w-0 flex-col gap-5">
+          <div className="grid gap-5 @4xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+            <TriageBanner evaluation={evaluation} />
+            <VitalsMonitor evaluation={evaluation} onSelectMetric={selectMetric} />
+          </div>
+          <div className="grid gap-5 @4xl:grid-cols-2 @4xl:items-start">
+            <BodyMap
+              evaluation={evaluation}
+              selectedId={regionId}
+              onSelectRegion={setRegionId}
+              onSelectMetric={selectMetric}
+            />
+            <FindingsList evaluation={evaluation} onSelectMetric={selectMetric} />
+          </div>
+          <HazardRow evaluation={evaluation} />
+          <section
+            aria-label="Health indicators"
+            className="grid grid-cols-1 gap-5 @lg:grid-cols-2 @3xl:grid-cols-3"
+          >
+            {TILES.map((tile, i) => (
               <MetricTile
                 key={tile.id}
                 tile={tile}
                 evaluation={evaluation}
                 index={index}
                 selected={tile.id === selected.id}
+                order={i}
                 onSelect={() => selectMetric(tile.metrics[0])}
               />
             ))}
           </section>
         </main>
 
-        <aside ref={detailRef} className="min-w-0 scroll-mt-4 lg:sticky lg:top-4">
+        <aside ref={detailRef} className="min-w-0 scroll-mt-4 xl:sticky xl:top-5">
           <MetricDetail
             key={selected.id}
             tile={selected}
@@ -149,7 +165,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
         </aside>
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-grid pt-4 text-xs text-muted">
+      <footer className="flex flex-wrap items-center justify-between gap-2 pt-2 text-xs text-muted">
         <p>
           Prototype for the NASA Space Apps Challenge. Reference ranges are demo defaults and not medical advice.
         </p>
@@ -158,7 +174,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
             type="button"
             onClick={reset}
             disabled={resetting}
-            className="rounded-md border border-edge px-2.5 py-1 text-ink-2 hover:bg-raised disabled:opacity-60"
+            className="rounded-full bg-raised px-3 py-1.5 text-ink-2 transition-colors hover:bg-axis disabled:opacity-60"
           >
             Remove my {manualKeys.size} manual {manualKeys.size === 1 ? 'reading' : 'readings'}
           </button>

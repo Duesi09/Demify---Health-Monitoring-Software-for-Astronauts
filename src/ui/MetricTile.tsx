@@ -1,8 +1,10 @@
-import { changeUnit, formatAverage, formatDelta, formatValue } from '@/domain/format'
+import { changeUnit, formatAverage, formatDelta } from '@/domain/format'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation, MetricId } from '@/domain/types'
+import { AnimatedNumber } from './AnimatedNumber'
+import { RangeBar } from './RangeBar'
 import { Sparkline } from './Sparkline'
-import { StatusBadge, TONE } from './status'
+import { needsAttention, StatusBadge, TONE } from './status'
 import { tileTone, type Tile } from './tiles'
 
 const SPARK_DAYS = 30
@@ -12,6 +14,8 @@ interface Props {
   evaluation: Evaluation
   index: Record<MetricId, Map<number, number>>
   selected: boolean
+  /** Position in the grid, for the staggered entrance. */
+  order: number
   onSelect: () => void
 }
 
@@ -21,18 +25,11 @@ function describe(daysSince: number | null): string {
   return `Last measured ${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago`
 }
 
-export function MetricTile({ tile, evaluation, index, selected, onSelect }: Props) {
+export function MetricTile({ tile, evaluation, index, selected, order, onSelect }: Props) {
   const primary = evaluation.assessments[tile.metrics[0]]
   const def = METRICS[primary.metric]
   const tone = tileTone(tile, evaluation)
   const stale = tone === 'stale'
-
-  const value = tile.metrics
-    .map((m) => {
-      const v = evaluation.assessments[m].value
-      return v === null ? '–' : formatValue(m, v)
-    })
-    .join('/')
 
   let note: string
   if (stale) note = describe(primary.daysSinceReading)
@@ -48,29 +45,47 @@ export function MetricTile({ tile, evaluation, index, selected, onSelect }: Prop
     const v = series.get(day)
     if (v !== undefined) points.push({ day, value: v })
   }
+  // The bar marks the value the status is judged on.
+  const judged = stale ? null : def.evaluateOn === 'avg7' ? (primary.recentMean ?? primary.value) : primary.value
 
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-surface p-4 pt-5 text-left transition-colors hover:bg-raised ${
-        selected ? 'border-series-1' : 'border-edge'
+      className={`card rise relative flex flex-col gap-3 overflow-hidden p-5 text-left transition-[translate,box-shadow] duration-300 ease-(--ease-soft) hover:-translate-y-1 ${
+        selected ? 'ring-2 ring-series-1' : ''
       }`}
+      style={{ '--i': 6 + order } as React.CSSProperties}
     >
-      <span className={`absolute inset-x-0 top-0 h-1 ${TONE[tone].bg}`} aria-hidden="true" />
-      <span className="text-sm text-ink-2">{tile.label}</span>
-      <span className="flex items-end justify-between gap-2">
+      {/* A wash of the status colour marks tiles that need attention. */}
+      <span
+        className="pointer-events-none absolute -top-16 -right-16 size-40 rounded-full blur-3xl transition-[opacity,background-color] duration-700"
+        style={{ background: TONE[tone].color, opacity: needsAttention(tone) ? 0.22 : 0 }}
+        aria-hidden="true"
+      />
+      <span className="relative flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-ink-2">{tile.label}</span>
+        <StatusBadge tone={tone} />
+      </span>
+      <span className="relative flex items-end justify-between gap-3">
         <span className={`shrink-0 ${stale ? 'text-muted' : 'text-ink'}`}>
-          <span className="text-3xl font-semibold">{value}</span>
-          <span className="ml-1 text-sm text-ink-2">{def.unit}</span>
+          <span className="text-4xl font-semibold tracking-tight tabular-nums">
+            {tile.metrics.map((m, i) => (
+              <span key={m}>
+                {i > 0 && '/'}
+                <AnimatedNumber value={evaluation.assessments[m].value} decimals={METRICS[m].decimals} />
+              </span>
+            ))}
+          </span>
+          <span className="ml-1.5 text-sm text-ink-2">{def.unit}</span>
         </span>
         <Sparkline points={points} baseline={primary.baseline} />
       </span>
-      <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <StatusBadge tone={tone} />
-        <span className="text-xs text-muted">{note}</span>
+      <span className="relative block">
+        <RangeBar metric={primary.metric} value={judged} />
       </span>
+      <span className="relative text-xs text-muted">{note}</span>
     </button>
   )
 }
