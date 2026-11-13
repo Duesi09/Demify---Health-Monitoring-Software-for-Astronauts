@@ -40,6 +40,22 @@ describe('simulateMission', () => {
     expect(evaluate(readings, 90).reminders.map((r) => r.metric)).toContain('systolic')
   })
 
+  it('reaches the highest triage level during the life-support fault', () => {
+    const result = evaluate(readings, 167)
+    expect(result.status).toBe('critical')
+    expect(result.findings[0].id).toBe('pattern:atmosphere')
+    for (const day of [166, 168]) expect(evaluate(readings, day).status, `day ${day}`).toBe('critical')
+    for (let day = 172; day <= MISSION_DAYS; day++) {
+      expect(idsOn(day).filter((id) => id.startsWith('pattern:')), `day ${day}`).toEqual([])
+    }
+  })
+
+  it('does not mistake the tail of the infection for deconditioning', () => {
+    for (let day = 70; day <= 85; day++) {
+      expect(idsOn(day), `day ${day}`).not.toContain('pattern:deconditioning')
+    }
+  })
+
   it('recovers after each event', () => {
     expect(idsOn(60).filter((id) => id.startsWith('pattern:'))).toEqual([])
     expect(idsOn(95).filter((id) => id.startsWith('pattern:'))).toEqual([])

@@ -10,11 +10,11 @@ On long missions, astronauts face radiation, isolation, altered gravity and a cl
 - **Clickable body map:** a human figure with one marker per body system (brain, eyes, immune system, lungs, heart, metabolism, bones and muscles). Each marker shows that system's status; selecting it explains what spaceflight does to it, how to protect it, and which indicators describe it.
 - **Four triage levels:** Nominal, Watch (self-care), Act (consult the Crew Medical Officer), Critical (contact the flight surgeon). Each level has its own colour and icon shape.
 - **Personal baseline:** a value can be textbook-normal and still be flagged when it has drifted from that person's pre-flight average.
-- **Patterns across indicators:** fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low exercise with a climbing heart rate (deconditioning).
-- **Measurement reminders:** readings that are too old are not judged; the crew member is asked to measure again.
+- **Patterns across indicators:** fever with a raised heart rate (possible infection), sleep loss with falling mood, raised cabin CO₂ behind poor sleep, low blood oxygen with raised cabin CO₂ (life-support fault), low exercise with a climbing heart rate (deconditioning).
+- **Measurement reminders:** readings that are too old are not judged; the crew member is asked to measure again, and the overall status is not shown as nominal until they do.
 - **Manual entry:** readings are validated and stored on the server.
 - **Simulated 180-day mission** with scripted health events, and a time-lapse to play through it.
-- **NASA sources:** every indicator links to its hazard and risk in NASA's Human Research Program.
+- **NASA sources:** every indicator links to NASA's page for its hazard and for its risk.
 
 The reference ranges are demo defaults based on general clinical ranges. They are not flight rules and not medical advice.
 

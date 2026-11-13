@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { BODY_REGIONS, regionStatus, type BodyRegion, type RegionId } from '@/domain/bodyRegions'
 import { formatValue } from '@/domain/format'
-import { HAZARDS, NASA_RISKS_URL } from '@/domain/hazards'
+import { HAZARDS, riskUrl } from '@/domain/hazards'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation, MetricId } from '@/domain/types'
 import { StatusBadge, StatusIcon, TONE } from './status'
@@ -189,7 +189,7 @@ function RegionDetail({
               {HAZARDS[region.hazard].label}
             </a>
             {' · '}
-            <a href={NASA_RISKS_URL} target="_blank" rel="noreferrer" className={link}>
+            <a href={riskUrl(region.nasaRisk)} target="_blank" rel="noreferrer" className={link}>
               {region.nasaRisk}
             </a>
           </dd>

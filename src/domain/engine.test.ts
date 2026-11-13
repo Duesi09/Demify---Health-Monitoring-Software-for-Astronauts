@@ -157,6 +157,46 @@ describe('patterns across indicators', () => {
     expect(result.findings.map((f) => f.id)).toContain('range:sleepHours')
   })
 
+  it('reads low blood oxygen with raised cabin CO₂ as a cabin-air problem', () => {
+    const readings = [
+      ...log('cabinCo2', 0.4, days(10, 3.6)),
+      ...log('spo2', 98, [...days(9, 98), 93]),
+    ]
+    const result = evaluate(readings, 10)
+    // The pattern replaces the two single-indicator findings it explains.
+    expect(result.findings.map((f) => f.id)).toEqual(['pattern:atmosphere'])
+    expect(result.findings[0].metrics).toEqual(['cabinCo2', 'spo2'])
+    expect(result.status).toBe('watch')
+  })
+
+  it('does not blame the cabin air for raised CO₂ alone', () => {
+    const readings = [
+      ...log('cabinCo2', 0.4, days(10, 3.6)),
+      ...log('spo2', 98, days(10, 98)),
+    ]
+    const ids = evaluate(readings, 10).findings.map((f) => f.id)
+    expect(ids).not.toContain('pattern:atmosphere')
+    expect(ids).toContain('range:cabinCo2')
+  })
+
+  it('makes the cabin-air pattern critical when either reading is critical', () => {
+    const lowOxygen = evaluate(
+      [...log('cabinCo2', 0.4, days(10, 3.6)), ...log('spo2', 98, [...days(9, 98), 88])],
+      10,
+    )
+    expect(lowOxygen.findings[0].id).toBe('pattern:atmosphere')
+    expect(lowOxygen.findings[0].status).toBe('critical')
+    expect(lowOxygen.findings[0].action).toContain('life-support fault')
+    expect(lowOxygen.status).toBe('critical')
+
+    const highCo2 = evaluate(
+      [...log('cabinCo2', 0.4, [...days(9, 2.4), 5.5]), ...log('spo2', 98, [...days(9, 98), 93])],
+      10,
+    )
+    expect(highCo2.findings[0].id).toBe('pattern:atmosphere')
+    expect(highCo2.findings[0].status).toBe('critical')
+  })
+
   it('does not read a few days of raised heart rate as deconditioning', () => {
     const readings = [
       ...log('exerciseMin', 60, [...days(10, 120), ...days(7, 20)]),
@@ -173,5 +213,46 @@ describe('patterns across indicators', () => {
     ]
     const finding = evaluate(readings, 14).findings.find((f) => f.id === 'pattern:deconditioning')
     expect(finding?.status).toBe('act')
+  })
+
+  it('does not read the days during or after a fever as deconditioning', () => {
+    const lowExerciseRaisedPulse = [
+      ...log('exerciseMin', 60, days(14, 30)),
+      ...log('restingHr', 58, days(14, 68)),
+    ]
+    const during = evaluate(
+      [...lowExerciseRaisedPulse, ...log('bodyTemp', 36.7, [...days(10, 36.8), ...days(4, 38.4)])],
+      14,
+    )
+    expect(during.findings.map((f) => f.id)).not.toContain('pattern:deconditioning')
+
+    // Fever gone for four days, but the 7-day average is still raised.
+    const after = evaluate(
+      [...lowExerciseRaisedPulse, ...log('bodyTemp', 36.7, [...days(10, 38.4), ...days(4, 36.8)])],
+      14,
+    )
+    expect(after.assessments.bodyTemp.band?.status).toBe('nominal')
+    expect(after.assessments.bodyTemp.status).toBe('watch')
+    expect(after.findings.map((f) => f.id)).not.toContain('pattern:deconditioning')
+  })
+
+  it('still reports deconditioning when temperature is normal or out of date', () => {
+    const lowExerciseRaisedPulse = [
+      ...log('exerciseMin', 60, days(14, 30)),
+      ...log('restingHr', 58, days(14, 68)),
+    ]
+    const normal = evaluate(
+      [...lowExerciseRaisedPulse, ...log('bodyTemp', 36.7, days(14, 36.8))],
+      14,
+    )
+    expect(normal.findings.map((f) => f.id)).toContain('pattern:deconditioning')
+
+    // A fever last measured nine days ago says nothing about today.
+    const outOfDate = evaluate(
+      [...lowExerciseRaisedPulse, ...log('bodyTemp', 36.7, [...days(4, 36.8), 38.4])],
+      14,
+    )
+    expect(outOfDate.assessments.bodyTemp.stale).toBe(true)
+    expect(outOfDate.findings.map((f) => f.id)).toContain('pattern:deconditioning')
   })
 })

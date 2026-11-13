@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { BODY_REGIONS, regionForMetric, regionStatus } from './bodyRegions'
 import { evaluate } from './engine'
-import { METRIC_IDS } from './metrics'
+import { hasRiskPage } from './hazards'
+import { METRICS, METRIC_IDS } from './metrics'
 import { simulateMission } from './simulator'
 import type { Reading } from './types'
 
@@ -14,6 +15,11 @@ describe('body regions', () => {
       expect(BODY_REGIONS.filter((r) => r.metrics.includes(id)), id).toHaveLength(1)
       expect(regionForMetric(id).metrics).toContain(id)
     }
+  })
+
+  it('links every cited NASA risk to its own page', () => {
+    const cited = [...BODY_REGIONS.map((r) => r.nasaRisk), ...METRIC_IDS.map((id) => METRICS[id].nasaRisk)]
+    for (const risk of cited) if (risk) expect(hasRiskPage(risk), risk).toBe(true)
   })
 
   it('is nominal everywhere on an uneventful day', () => {

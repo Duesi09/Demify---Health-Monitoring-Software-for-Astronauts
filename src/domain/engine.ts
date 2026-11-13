@@ -215,8 +215,28 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
   const sleepLow = fresh('sleepHours') && a.sleepHours.status !== 'nominal' && delta('sleepHours') < 0
   const moodLow = fresh('mood') && (a.mood.status !== 'nominal' || delta('mood') <= -0.75)
 
-  // High cabin CO₂ alongside poor sleep or mood: fix the air before the symptoms.
   const co2High = fresh('cabinCo2') && a.cabinCo2.status !== 'nominal'
+  const oxygenLow = fresh('spo2') && a.spo2.status !== 'nominal'
+
+  // Low blood oxygen while cabin CO₂ is raised: the air is failing, not the person.
+  if (co2High && oxygenLow) {
+    const status = worst(a.cabinCo2.status, a.spo2.status) as Finding['status']
+    findings.push({
+      id: 'pattern:atmosphere',
+      kind: 'pattern',
+      status,
+      title: 'Low blood oxygen with raised cabin CO₂',
+      detail:
+        'Your oxygen saturation is down while cabin CO₂ is up. Both together point to the cabin air, not to an illness of your own.',
+      action:
+        status === 'critical'
+          ? 'Treat as a life-support fault. Use supplemental oxygen if available, move to another module and follow the cabin atmosphere procedure. Alert the crew and contact mission control and the flight surgeon.'
+          : 'Check the cabin atmosphere readings and the airflow where you are. Re-measure your oxygen saturation in 15 minutes and tell the Crew Medical Officer.',
+      metrics: ['cabinCo2', 'spo2'],
+    })
+  }
+
+  // High cabin CO₂ alongside poor sleep or mood: fix the air before the symptoms.
   if (co2High && (sleepLow || moodLow)) {
     findings.push({
       id: 'pattern:co2',
@@ -248,8 +268,12 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
     })
   }
 
+  // A recent fever already explains both the missed exercise and the raised pulse.
+  const feverish = fresh('bodyTemp') && a.bodyTemp.status !== 'nominal'
+
   // Too little exercise together with a rising heart rate: deconditioning.
   if (
+    !feverish &&
     fresh('exerciseMin') &&
     fresh('restingHr') &&
     a.exerciseMin.status !== 'nominal' &&

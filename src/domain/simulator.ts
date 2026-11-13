@@ -24,12 +24,12 @@ interface Profile {
 
 const PROFILE: Record<MetricId, Profile> = {
   restingHr: { base: 58, noise: 2.2, inFlightShift: 3, min: 35, max: 200, step: 1 },
-  systolic: { base: 116, noise: 3.5, inFlightShift: -3, min: 60, max: 230, step: 1 },
+  systolic: { base: 116, noise: 2.5, inFlightShift: -3, min: 60, max: 230, step: 1 },
   diastolic: { base: 74, noise: 2.5, inFlightShift: -2, min: 35, max: 140, step: 1 },
-  glucose: { base: 88, noise: 4, inFlightShift: 3, min: 40, max: 400, step: 1 },
+  glucose: { base: 88, noise: 3, inFlightShift: 3, min: 40, max: 400, step: 1 },
   bodyTemp: { base: 36.7, noise: 0.12, inFlightShift: 0.3, min: 34, max: 41.5, step: 0.1 },
   spo2: { base: 98, noise: 0.6, inFlightShift: -0.5, min: 70, max: 100, step: 1 },
-  sleepHours: { base: 7.6, noise: 0.5, inFlightShift: -0.8, min: 2, max: 11, step: 0.1 },
+  sleepHours: { base: 7.6, noise: 0.5, inFlightShift: -0.5, min: 2, max: 11, step: 0.1 },
   mood: { base: 4.2, noise: 0.45, inFlightShift: -0.2, min: 1, max: 5, step: 1 },
   exerciseMin: { base: 110, noise: 12, inFlightShift: 15, min: 0, max: 240, step: 5 },
   cabinCo2: { base: 0.4, noise: 0.15, inFlightShift: 2, min: 0.2, max: 9, step: 0.1 },
@@ -57,6 +57,8 @@ function scenarioOffset(metric: MetricId, day: number): number {
   // Days 105–140: the exercise device is out of service; the heart deconditions.
   const noExercise = bump(day, 105, 140, 4)
   const deconditioning = bump(day, 108, 146, 18)
+  // Days 165–169: a life-support fault; CO₂ removal and oxygen supply degrade.
+  const airFault = bump(day, 165, 169, 2)
 
   switch (metric) {
     case 'sleepHours':
@@ -64,11 +66,13 @@ function scenarioOffset(metric: MetricId, day: number): number {
     case 'mood':
       return -1.4 * overload - 0.9 * infection
     case 'cabinCo2':
-      return 1.5 * scrubber
+      return 1.5 * scrubber + 3.8 * airFault
     case 'bodyTemp':
       return 1.5 * infection
+    case 'spo2':
+      return -9.5 * airFault
     case 'restingHr':
-      return 16 * infection + 12 * deconditioning + 3 * overload
+      return 16 * infection + 12 * deconditioning + 3 * overload + 8 * airFault
     case 'exerciseMin':
       return -90 * infection - 88 * noExercise
     case 'systolic':

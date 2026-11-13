@@ -419,7 +419,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMax: 16,
     inputStep: 0.1,
     hazard: 'isolation',
-    nasaRisk: 'Risk of Inadequate Sleep and Irregular Schedules',
+    nasaRisk: 'Risk from Inadequate Sleep and Irregular Schedules',
     whyInSpace:
       'ISS crews average about 6 hours of sleep a night. Sixteen sunrises a day, noise and workload disturb the body clock, and lost sleep slows reactions and lowers mood.',
     howToMeasure:
@@ -541,6 +541,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     inputMax: 20,
     inputStep: 0.1,
     hazard: 'environment',
+    nasaRisk: 'Risk of Acute and Chronic Carbon Dioxide Exposure',
     whyInSpace:
       'CO₂ on a spacecraft runs roughly ten times higher than on Earth, and without convection it can pool around your head. Crews report headaches and poor concentration when it rises.',
     howToMeasure:
