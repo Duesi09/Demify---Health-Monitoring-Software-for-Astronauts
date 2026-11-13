@@ -34,6 +34,13 @@ export const TRIAGE: Record<Status, { headline: string; guidance: string }> = {
   },
 }
 
+/** Replaces `TRIAGE.nominal` when nothing is flagged but some readings are out of date. */
+export const INCOMPLETE = {
+  headline: 'Measurements due',
+  guidance:
+    "Nothing is flagged in the readings you have, but some are out of date. Measure them now to complete today's check.",
+}
+
 /**
  * Each level has its own shape as well as its own colour, so the status is
  * readable without colour vision.
