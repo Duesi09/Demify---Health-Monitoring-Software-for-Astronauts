@@ -4,6 +4,7 @@ import { modelStatus } from "@onboard/model.mjs";
 import { getGroundLink } from "../onboard/ground-link";
 import type { OnboardStatus } from "../onboard/types";
 import { libraryStatus } from "./library-source";
+import { warmModel } from "./warm";
 
 /** How long GET /api/onboard/status waits for the model server's model list. */
 const MODEL_STATUS_TIMEOUT_MS = 2500;
@@ -14,6 +15,7 @@ export async function modelState(cfg: OnboardConfig = onboardConfig()): Promise<
   if (!cfg.modelUrl) return { state: "not-configured", ...base, available: [] };
   const s = await modelStatus(cfg, MODEL_STATUS_TIMEOUT_MS);
   if (!s.reachable) return { state: "unreachable", ...base, available: [] };
+  if (s.llmReady) warmModel(cfg);
   return { state: s.llmReady && s.embedReady ? "ready" : "missing-models", ...base, available: s.available };
 }
 

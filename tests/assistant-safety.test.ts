@@ -645,7 +645,7 @@ describe("prompt", () => {
     expect(SYSTEM_PROMPT).toMatch(/Never name a medicine, a dose, an amount or a schedule/);
     expect(SYSTEM_PROMPT).toMatch(/Never diagnose/);
     expect(SYSTEM_PROMPT).toMatch(/the crew and the flight surgeon decide/);
-    expect(SYSTEM_PROMPT).toMatch(/at most 6 sentences/);
+    expect(SYSTEM_PROMPT).toMatch(/at most 4 short sentences/);
     expect(SYSTEM_PROMPT).toMatch(/language of the question/);
     expect(SYSTEM_PROMPT).toMatch(/out of date/);
     expect(SYSTEM_PROMPT).toContain(DISCLAIMER_SHORT);

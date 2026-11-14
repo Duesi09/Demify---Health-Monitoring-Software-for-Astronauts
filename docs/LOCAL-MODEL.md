@@ -357,3 +357,16 @@ from the Ollama registry onto this machine; their licences apply there.
 | `gpt-oss:20b`, `gpt-oss:120b` (OpenAI) | Apache-2.0 | Used on the onboard server ([`SPARK.md`](SPARK.md)) |
 | `nomic-embed-text` (Nomic) | Apache-2.0 | `ollama show nomic-embed-text --license` |
 | Ollama | MIT | The model server on this machine |
+
+## Speed
+
+On a laptop CPU most of the answer time is the model writing (about 0.1 s per
+word-piece); reading the passages adds a few seconds for a new question.
+Demify therefore asks for short answers (at most 4 sentences or 5 items, under
+80 words), caps them at 350 tokens, sends only the 3 best passages
+(`DEMIFY_ASSISTANT_TOP_K`, default 3) and keeps the model loaded while Demify
+is open (`DEMIFY_MODEL_KEEP_WARM`, default true: a one-token request at most
+every 4 minutes, so there is no reload delay after a pause). Measured with
+gemma3:4b on 4 shared CPU cores: 9 to 25 s per answer; a normal laptop is
+faster, a GPU much faster. Faster still: `gemma3:1b` (shorter, less precise
+answers).

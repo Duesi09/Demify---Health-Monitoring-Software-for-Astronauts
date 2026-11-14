@@ -77,6 +77,7 @@ x-demify-env: &demify-env
   DEMIFY_EMBED_MODEL: ${DEMIFY_EMBED_MODEL:-}
   DEMIFY_LLM_TIMEOUT_MS: ${DEMIFY_LLM_TIMEOUT_MS:-}
   DEMIFY_ASSISTANT_MIN_SCORE: ${DEMIFY_ASSISTANT_MIN_SCORE:-}
+  DEMIFY_MODEL_KEEP_WARM: ${DEMIFY_MODEL_KEEP_WARM:-}
 
 x-demify-common: &demify-common
   image: ${DEMIFY_IMAGE:-demify:latest}

@@ -52,7 +52,8 @@ export { EXCERPT_MAX, excerpt };
 export const QUESTION_MIN = 3;
 export const QUESTION_MAX = 500;
 /** Token budget of one answer; reasoning models spend part of it thinking. */
-const MAX_TOKENS = 1500;
+/** Hard cap; the prompt asks for under 80 words (~110 tokens). On a laptop CPU every token costs ~0.1 s. */
+const MAX_TOKENS = 350;
 const TEMPERATURE = 0.1;
 /** Model readiness (GET /models) is reused this long; an unreachable model server is remembered longer. */
 const MODEL_STATUS_TTL_MS = 10_000;
