@@ -275,6 +275,7 @@ export const SCENARIO_LABEL: Record<ScenarioType, string> = {
 
 /** Instantaneous physiological state; null = not measurable (no pulse). */
 export interface PhysioState {
+  activity: "rest" | "exercise" | "sleep";
   hr: number | null;
   rhythm: Rhythm;
   stMm: number;
@@ -310,6 +311,7 @@ export function baseState(crew: CrewMember, t: number): PhysioState {
   const val = (id: IndicatorId) => SIGNALS.find((s) => s.indicator === id)!.value(ctx);
   const hr = val("heartRate") + 2 * jitter(seed, t, 1);
   return {
+    activity: ctx.exercising ? "exercise" : ctx.sleeping ? "sleep" : "rest",
     hr,
     rhythm: hr > 100 ? "sinus-tachycardia" : hr < 50 ? "sinus-bradycardia" : "sinus",
     stMm: 0.05 * jitter(seed, t, 7),
@@ -329,7 +331,7 @@ export function baseState(crew: CrewMember, t: number): PhysioState {
  */
 export function applyScenario(base: PhysioState, scenario: Scenario, t: number, seed = 0): PhysioState {
   const e = Math.max(0, (t - Date.parse(scenario.startedAt)) / 1000);
-  const s = { ...base };
+  const s: PhysioState = { ...base, activity: "rest" };
   switch (scenario.type) {
     case "stemi": {
       // Onset (0-20 s): ST rises, sympathetic surge. Established (20-120 s):

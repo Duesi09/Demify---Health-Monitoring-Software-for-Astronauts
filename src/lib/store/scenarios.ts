@@ -16,26 +16,52 @@ export const MAX_SCENARIO_MS = 30 * 60_000;
 
 const file = () => path.join(config.dataDir, "demify-scenarios.json");
 
-let state: Map<string, Scenario> | null = null;
-let loading: Promise<Map<string, Scenario>> | null = null;
+/*
+ * State lives on globalThis (one copy per server process, shared by every
+ * bundle: in dev, pages and route handlers are separate module instances)
+ * and is re-read whenever the file's mtime changes, so a drill started
+ * through the API is visible to server-rendered pages immediately.
+ */
+interface StoreState {
+  map: Map<string, Scenario>;
+  mtimeMs: number;
+}
+const G = globalThis as typeof globalThis & { __demifyScenarios?: StoreState };
 let writeChain: Promise<void> = Promise.resolve();
 
+function parse(raw: string): Map<string, Scenario> {
+  try {
+    const arr = JSON.parse(raw) as Scenario[];
+    return new Map(
+      (Array.isArray(arr) ? arr : [])
+        .filter((s) => s && typeof s.crewId === "string" && SCENARIO_TYPES.includes(s.type) && !Number.isNaN(Date.parse(s.startedAt)))
+        .map((s) => [s.crewId, s]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
 async function load(): Promise<Map<string, Scenario>> {
-  if (state) return state;
-  loading ??= (async () => {
+  let mtimeMs = -1;
+  try {
+    mtimeMs = (await fs.stat(file())).mtimeMs;
+  } catch {
+    /* no file yet */
+  }
+  const st = G.__demifyScenarios;
+  if (st && (mtimeMs === -1 || st.mtimeMs === mtimeMs)) return st.map;
+  let map = new Map<string, Scenario>();
+  if (mtimeMs !== -1) {
     try {
-      const raw = JSON.parse(await fs.readFile(file(), "utf8")) as Scenario[];
-      state = new Map(
-        (Array.isArray(raw) ? raw : [])
-          .filter((s) => s && typeof s.crewId === "string" && SCENARIO_TYPES.includes(s.type) && !Number.isNaN(Date.parse(s.startedAt)))
-          .map((s) => [s.crewId, s]),
-      );
+      map = parse(await fs.readFile(file(), "utf8"));
     } catch {
-      state = new Map();
+      /* unreadable: start empty */
     }
-    return state;
-  })();
-  return loading;
+  }
+  if (st && mtimeMs === -1) return st.map;
+  G.__demifyScenarios = { map, mtimeMs };
+  return map;
 }
 
 function persist(map: Map<string, Scenario>) {
@@ -45,6 +71,8 @@ function persist(map: Map<string, Scenario>) {
       const tmp = file() + ".tmp";
       await fs.writeFile(tmp, JSON.stringify([...map.values()]));
       await fs.rename(tmp, file());
+      const st = await fs.stat(file());
+      G.__demifyScenarios = { map, mtimeMs: st.mtimeMs };
     } catch (e) {
       console.error("[demify] could not persist scenarios:", e);
     }

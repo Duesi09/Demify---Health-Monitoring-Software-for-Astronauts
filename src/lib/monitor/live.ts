@@ -60,6 +60,7 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
     resp: round(vals.resp),
     temp: round(vals.temp, 1),
     source: sensorCount === 0 ? "simulated" : sensorCount === SENSOR_FIELDS.length ? "sensor" : "mixed",
+    activity: sim?.activity ?? "rest",
     scenario: scenario
       ? {
           ...scenario,

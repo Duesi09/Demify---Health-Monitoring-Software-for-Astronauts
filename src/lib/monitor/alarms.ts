@@ -9,9 +9,14 @@ import type { IndicatorId, LiveVitals, MonitorAlarm } from "../types";
  */
 export const ALARM_LIMITS = {
   hr: { highHigh: 150, high: 120, low: 45, lowLow: 40 },
+  /** During scheduled exercise (ARED / treadmill / cycle) higher rates are expected. */
+  hrExercise: { highHigh: 185, high: 170 },
+  /** During sleep lower rates are expected. */
+  hrSleep: { low: 40, lowLow: 35 },
   sys: { highHigh: 180, high: 160, low: 90, lowLow: 80 },
   spo2: { low: 92, lowLow: 88 },
   resp: { high: 28, low: 8, apnea: 4 },
+  respExercise: { high: 45 },
   stMm: { high: 1 },
 } as const;
 
@@ -28,10 +33,12 @@ export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
 
   if (v.hr != null && v.rhythm !== "vf" && v.rhythm !== "vt") {
     const hr = Math.round(v.hr);
-    if (hr > L.hr.highHigh) add("hr", "high", `HR ${hr} > ${L.hr.highHigh}`, "heartRate");
-    else if (hr > L.hr.high) add("hr", "medium", `HR HIGH ${hr} > ${L.hr.high}`, "heartRate");
-    else if (hr < L.hr.lowLow) add("hr", "high", `HR ${hr} < ${L.hr.lowLow}`, "heartRate");
-    else if (hr < L.hr.low) add("hr", "medium", `HR LOW ${hr} < ${L.hr.low}`, "heartRate");
+    const hi = v.activity === "exercise" ? L.hrExercise : L.hr;
+    const lo = v.activity === "sleep" ? L.hrSleep : L.hr;
+    if (hr > hi.highHigh) add("hr", "high", `HR ${hr} > ${hi.highHigh}`, "heartRate");
+    else if (hr > hi.high) add("hr", "medium", `HR HIGH ${hr} > ${hi.high}`, "heartRate");
+    else if (hr < lo.lowLow) add("hr", "high", `HR ${hr} < ${lo.lowLow}`, "heartRate");
+    else if (hr < lo.low) add("hr", "medium", `HR LOW ${hr} < ${lo.low}`, "heartRate");
   }
   if (v.stMm >= L.stMm.high) add("st", "high", `ST ELEVATION ${v.stMm.toFixed(1)} mm`, "stDeviation");
   if (v.pvcPerMin >= 6) add("pvc", "medium", `PVCs ${v.pvcPerMin}/min`, "heartRate");
@@ -51,7 +58,8 @@ export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
   if (v.resp != null) {
     const r = Math.round(v.resp);
     if (r <= L.resp.apnea) add("resp", "high", r === 0 ? "APNEA" : `RESP ${r} ≤ ${L.resp.apnea}`, "respRate");
-    else if (r > L.resp.high) add("resp", "medium", `RESP HIGH ${r} > ${L.resp.high}`, "respRate");
+    else if (r > (v.activity === "exercise" ? L.respExercise.high : L.resp.high))
+      add("resp", "medium", `RESP HIGH ${r} > ${v.activity === "exercise" ? L.respExercise.high : L.resp.high}`, "respRate");
     else if (r < L.resp.low) add("resp", "medium", `RESP LOW ${r} < ${L.resp.low}`, "respRate");
   }
 

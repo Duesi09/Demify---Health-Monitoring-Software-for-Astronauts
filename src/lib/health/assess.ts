@@ -1,6 +1,6 @@
 import "server-only";
 import { config, currentMission } from "../config";
-import { simulateDaily, simulateLive, simulateSeries } from "../sources/simulator";
+import { SCENARIO_LABEL, simulateDaily, simulateLive, simulateSeries } from "../sources/simulator";
 import { getScenario } from "../store/scenarios";
 import { estimateDoseRate, getSpaceWeather } from "../sources/swpc";
 import { getCrew, listCrew, listReadings } from "../store/readings";
@@ -10,6 +10,7 @@ import type {
   CrewMember,
   IndicatorId,
   Reading,
+  Scenario,
   Status,
 } from "../types";
 import { BODY_REGIONS, INDICATORS, evaluateValue, type ValueEvaluation } from "./knowledge";
@@ -71,7 +72,7 @@ export function currentValue(
   id: IndicatorId,
   rs: Reading[],
   now: number = Date.now(),
-): { value: number; takenAt: string; source: Reading["source"] } | null {
+): { value: number; takenAt: string; source: Reading["source"]; note?: string } | null {
   // A future-dated reading (bad device clock, bad input) would otherwise sort
   // last and override every later real reading until that date.
   const all = rs.filter((r) => r.indicator === id && notInFuture(r, now));
@@ -91,7 +92,7 @@ export function currentValue(
   // Acute event (training scenario): judge the current sample, not the
   // 60-minute median, which would hide a heart attack for half an hour.
   if (last.note?.startsWith("scenario:")) {
-    return { value: last.value, takenAt: last.takenAt, source: last.source };
+    return { value: last.value, takenAt: last.takenAt, source: last.source, note: last.note };
   }
   if (!def.continuous || pool === real) {
     return { value: last.value, takenAt: last.takenAt, source: last.source };
@@ -235,11 +236,14 @@ export interface CrewAssessment {
   escalations: Assessment[];
   /** Source of each assessed value, for UI provenance labels. */
   sources: Partial<Record<IndicatorId, Reading["source"]>>;
+  /** Active training scenario for this crew member, if any (label it as a DRILL). */
+  scenario: (Scenario & { label: string }) | null;
 }
 
 export async function assessCrewMember(crewId: string): Promise<CrewAssessment | null> {
   const crew = await getCrew(crewId);
   if (!crew) return null;
+  const scenario = await getScenario(crew.id);
   // Readings for discrete check-ins can be older; look back 7 days.
   const rs = await readingsFor(crew, 24 * 7);
 
@@ -309,6 +313,7 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
       finding: finding(id, ev, crew, detail) + note,
       actions: ev.status === "nominal" ? [] : def.actions,
       escalate: ev.escalate,
+      ...(cur.note?.startsWith("scenario:") ? { drill: true } : {}),
     });
   }
 
@@ -324,6 +329,7 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
     regions,
     escalations: assessments.filter((a) => a.escalate),
     sources,
+    scenario: scenario ? { ...scenario, label: SCENARIO_LABEL[scenario.type] } : null,
   };
 }
 

@@ -96,6 +96,8 @@ export interface Assessment {
   actions: string[];
   /** True if the result warrants contacting flight surgeons on the ground. */
   escalate: boolean;
+  /** True when the value comes from an active training scenario (drill). */
+  drill?: boolean;
 }
 
 export type MissionProfileId = "iss" | "artemis-lunar" | "mars-transit";
@@ -186,6 +188,11 @@ export interface LiveVitals {
   temp: number | null;
   /** Where the numbers come from. Waveforms are always synthesised from them. */
   source: "simulated" | "sensor" | "mixed";
+  /**
+   * Current activity (from the schedule / accelerometer). Wearable alarms are
+   * activity-aware: a heart rate of 140 is expected on the treadmill.
+   */
+  activity: "rest" | "exercise" | "sleep";
   scenario: (Scenario & { elapsedS: number; label: string }) | null;
   alarms: MonitorAlarm[];
 }
