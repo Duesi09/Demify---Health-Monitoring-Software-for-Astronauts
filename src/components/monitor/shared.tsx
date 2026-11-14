@@ -1,0 +1,149 @@
+"use client";
+
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import type { IndicatorId, LiveVitals, MonitorAlarm } from "@/lib/types";
+import { mmss } from "./waveform";
+
+/** Clinical parameter colours, in refined keynote tones. */
+export const MONITOR_COLOR = {
+  ecg: "#5ee3a1",
+  abp: "#ff6b64",
+  pleth: "#64d2ff",
+  resp: "#f5d565",
+  temp: "#e5e5ea",
+} as const;
+
+/** System font stack (SF Pro on Apple devices; nothing is bundled). */
+export const KEYNOTE_FONT =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif';
+
+const SOURCE_LABEL: Record<LiveVitals["source"], string> = {
+  simulated: "Simulated telemetry",
+  sensor: "Sensor",
+  mixed: "Mixed · sensor + simulated",
+};
+
+/* ------------------------------------------------------------------------- */
+/* Hooks                                                                      */
+/* ------------------------------------------------------------------------- */
+
+const RM_QUERY = "(prefers-reduced-motion: reduce)";
+function subscribeRm(cb: () => void) {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(RM_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(
+    subscribeRm,
+    () => (window.matchMedia ? window.matchMedia(RM_QUERY).matches : false),
+    () => false,
+  );
+}
+
+function subscribeSecond(cb: () => void) {
+  const id = setInterval(cb, 1000);
+  return () => clearInterval(id);
+}
+/** Current UTC time as "HH:MM:SS", client-only (null during SSR/hydration). */
+export function useUtcClock(): string | null {
+  return useSyncExternalStore(
+    subscribeSecond,
+    () => new Date().toISOString().slice(11, 19),
+    () => null,
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+/* Alarm helpers                                                              */
+/* ------------------------------------------------------------------------- */
+
+export function topAlarm(alarms: MonitorAlarm[]): MonitorAlarm | null {
+  return alarms.find((a) => a.priority === "high") ?? alarms[0] ?? null;
+}
+
+/** Highest-priority alarm for a set of indicators (numeric block inversion). */
+export function alarmFor(alarms: MonitorAlarm[], ...ids: IndicatorId[]): MonitorAlarm | null {
+  const hits = alarms.filter((a) => a.indicator && ids.includes(a.indicator));
+  return hits.find((a) => a.priority === "high") ?? hits[0] ?? null;
+}
+
+/** Philips-style alarm prefix: *** high, ** medium. */
+export function alarmPrefix(a: MonitorAlarm): string {
+  return a.priority === "high" ? "***" : "**";
+}
+
+/* ------------------------------------------------------------------------- */
+/* Tags (squared, uppercase; never rounded pills)                             */
+/* ------------------------------------------------------------------------- */
+
+const TAG = "inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 text-[9.5px] font-semibold uppercase leading-none tracking-[0.14em]";
+
+/** Solid, permanent DEMO tag (like a bedside monitor in demo mode). */
+export function DemoTag({ className = "" }: { className?: string }) {
+  return (
+    <span className={`${TAG} bg-white text-black ${className}`} title="Demo monitor: not a medical device">
+      Demo
+    </span>
+  );
+}
+
+export function SourceTag({ source, className = "" }: { source: LiveVitals["source"]; className?: string }) {
+  return <span className={`${TAG} text-white/60 ring-1 ring-inset ring-white/15 ${className}`}>{SOURCE_LABEL[source]}</span>;
+}
+
+/** Amber training-scenario tag: drills must never look like a real emergency. */
+export function DrillTag({
+  scenario,
+  compact = false,
+  className = "",
+}: {
+  scenario: NonNullable<LiveVitals["scenario"]>;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`${TAG} ${compact ? "" : "!h-auto min-h-[18px] py-[3px] leading-[1.25]"} min-w-0 bg-[#ffcc00] text-[#1c1400] ${className}`}
+    >
+      <span className={compact ? "truncate" : ""}>
+        {compact ? "Drill" : "Training scenario"} · {mmss(scenario.elapsedS)}
+        {!compact && <> · {scenario.label}</>}
+      </span>
+    </span>
+  );
+}
+
+export function fmt(v: number | null, digits = 0): string {
+  return v == null ? "---" : v.toFixed(digits);
+}
+
+/**
+ * Numeric text that eases (cross-fades) when its value changes, but not on
+ * first mount, so numbers never jump yet never start dimmed. Uses the Web
+ * Animations API and is skipped under prefers-reduced-motion.
+ */
+export function Val({ children }: { children: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const prev = useRef(children);
+  useEffect(() => {
+    if (prev.current === children) return;
+    prev.current = children;
+    const el = ref.current;
+    if (!el || typeof el.animate !== "function") return;
+    if (window.matchMedia?.(RM_QUERY).matches) return;
+    el.animate(
+      [
+        { opacity: 0.4, filter: "blur(1.5px)" },
+        { opacity: 1, filter: "blur(0px)" },
+      ],
+      { duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+    );
+  }, [children]);
+  return (
+    <span ref={ref} className="inline-block whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
