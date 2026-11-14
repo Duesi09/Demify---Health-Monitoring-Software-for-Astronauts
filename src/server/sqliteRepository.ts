@@ -7,9 +7,12 @@ import type { Reading } from '@/domain/types'
 import {
   assertActor,
   assertCrewMember,
+  byDayThenMetric,
   checkedAuditQuery,
   checkedReadings,
+  isDeviceReading,
   isManualReading,
+  isStoredReading,
   toReading,
   type Actor,
   type AuditEntry,
@@ -100,18 +103,18 @@ function seedCrew(db: DatabaseSync, crew: readonly CrewMember[], at: string): vo
 
 /** Stores readings and their audit entries. The caller holds the transaction. */
 function writeReadings(db: DatabaseSync, crewId: string, readings: readonly Reading[], actor: Actor, at: string): void {
-  const find = db.prepare('SELECT value FROM readings WHERE crew_id = ? AND day = ? AND metric = ?')
+  const find = db.prepare('SELECT value FROM readings WHERE crew_id = ? AND day = ? AND metric = ? AND source = ?')
   const upsert = db.prepare(`
     INSERT INTO readings (crew_id, day, metric, value, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (crew_id, day, metric)
-    DO UPDATE SET value = excluded.value, source = excluded.source, updated_at = excluded.updated_at
+    ON CONFLICT (crew_id, day, metric, source)
+    DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `)
   const audit = db.prepare(`
     INSERT INTO audit_log (at, actor, crew_id, action, day, metric, value_before, value_after)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `)
   for (const reading of readings) {
-    const earlier = find.get(crewId, reading.day, reading.metric)
+    const earlier = find.get(crewId, reading.day, reading.metric, reading.source)
     const before = earlier ? Number(earlier.value) : null
     upsert.run(crewId, reading.day, reading.metric, reading.value, reading.source, at, at)
     audit.run(at, actor, crewId, earlier ? 'replace' : 'create', reading.day, reading.metric, before, reading.value)
@@ -144,7 +147,10 @@ function importLegacyJson(db: DatabaseSync, dataDir: string, crew: readonly Crew
   if (text !== null) {
     try {
       const parsed: unknown = JSON.parse(text)
-      readings = Array.isArray(parsed) ? checkedReadings(parsed.filter(isManualReading)) : []
+      // The file holds the manual readings and, since the HTTP API, the device readings too.
+      readings = Array.isArray(parsed)
+        ? [...checkedReadings(parsed.filter(isManualReading)), ...checkedReadings(parsed.filter(isDeviceReading), 'device')]
+        : []
     } catch {
       damaged = true
     }
@@ -247,6 +253,15 @@ class SqliteRepository implements ReadingRepository {
     }
   }
 
+  async listReadings(crewId: string): Promise<Reading[]> {
+    assertCrewMember(crewId, this.crew)
+    return this.use((db) => {
+      const rows: unknown[] = db.prepare('SELECT day, metric, value, source FROM readings WHERE crew_id = ?').all(crewId)
+      // A row this version cannot read (unknown indicator or source, a value that is not a number) is skipped, not served.
+      return rows.filter(isStoredReading).map(toReading).sort(byDayThenMetric)
+    })
+  }
+
   async listManualReadings(crewId: string): Promise<Reading[]> {
     assertCrewMember(crewId, this.crew)
     return this.use((db) => {
@@ -262,6 +277,14 @@ class SqliteRepository implements ReadingRepository {
     assertCrewMember(crewId, this.crew)
     assertActor(actor)
     const checked = checkedReadings(readings)
+    if (checked.length === 0) return
+    this.use((db) => transaction(db, () => writeReadings(db, crewId, checked, actor, this.now().toISOString())))
+  }
+
+  async saveDeviceReadings(crewId: string, readings: readonly Reading[], actor: Actor): Promise<void> {
+    assertCrewMember(crewId, this.crew)
+    assertActor(actor)
+    const checked = checkedReadings(readings, 'device')
     if (checked.length === 0) return
     this.use((db) => transaction(db, () => writeReadings(db, crewId, checked, actor, this.now().toISOString())))
   }

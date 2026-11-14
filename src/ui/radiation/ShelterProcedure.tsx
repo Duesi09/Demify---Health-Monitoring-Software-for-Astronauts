@@ -17,7 +17,7 @@ import {
   type Clock,
   type DoseEvent,
 } from '@/domain/radiation'
-import type { MetricAssessment } from '@/domain/types'
+import type { MetricAssessment, ReadingSource } from '@/domain/types'
 import { StatusIcon, TONE } from '../status'
 import { SourceLink, Tag, button } from './parts'
 import { ShelterClocks } from './ShelterClocks'
@@ -34,8 +34,8 @@ interface Props {
   event: DoseEvent | null
   /** The typical daily dose without an event. */
   typical: number
-  /** True when today's reading was entered by hand and is not from the simulation. */
-  manual: boolean
+  /** Where today's reading came from: the simulation, a device, or entered by hand. */
+  source: ReadingSource
   run: ProcedureRun
   /** True once ticks and clocks of an earlier visit have been read back. */
   restored: boolean
@@ -104,7 +104,7 @@ export function ShelterProcedure({
   assessment,
   event,
   typical,
-  manual,
+  source,
   run,
   restored,
   speed,
@@ -216,7 +216,7 @@ export function ShelterProcedure({
           <div className="rounded-2xl bg-white/[0.06] px-5 py-3 ring-1 ring-edge">
             <dt className="flex items-center gap-2 text-sm text-ink-2">
               {drill ? 'Example dose rate' : 'Dose rate today'}
-              <Tag>{drill ? 'Drill example' : manual ? 'Entered by hand' : 'Simulated'}</Tag>
+              <Tag>{drill ? 'Drill example' : source === 'manual' ? 'Entered by hand' : source === 'device' ? 'From device' : 'Simulated'}</Tag>
             </dt>
             <dd className="mt-1">
               <span className="text-4xl font-semibold tracking-tight">{formatDose(dose)}</span>

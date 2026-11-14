@@ -15,6 +15,10 @@ export function manual(day: number, metric: MetricId, value: number): Reading {
   return { day, metric, value, source: 'manual' }
 }
 
+export function device(day: number, metric: MetricId, value: number): Reading {
+  return { day, metric, value, source: 'device' }
+}
+
 /** A clock that moves one second forward every time it is read, so the order of events shows in the timestamps. */
 export function tickingClock(start = '2031-03-01T08:00:00.000Z'): () => Date {
   let time = Date.parse(start)

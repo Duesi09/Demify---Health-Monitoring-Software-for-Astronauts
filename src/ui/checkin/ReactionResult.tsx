@@ -5,7 +5,7 @@ import { logReadings } from '@/app/actions'
 import { formatAverage, formatDay, formatDelta, formatValue } from '@/domain/format'
 import { METRICS } from '@/domain/metrics'
 import type { Protocol, Score } from '@/domain/reactionTest'
-import type { Evaluation, MetricAssessment, Reading } from '@/domain/types'
+import type { Evaluation, MetricAssessment, Reading, ReadingSource } from '@/domain/types'
 import { validateReading } from '@/domain/validate'
 import { RangeBar } from '../RangeBar'
 import { StatusIcon } from '../status'
@@ -17,8 +17,8 @@ interface Props {
   day: number
   /** The reaction time indicator as it stood before this run. */
   before: MetricAssessment
-  /** Whether the latest reading before this run was typed in or saved from a test. */
-  beforeManual: boolean
+  /** Where the latest reading before this run came from. */
+  beforeSource: ReadingSource
   /** Today's evaluation; after saving it holds the status of the new reading. */
   evaluation: Evaluation
   onSaved: (readings: Reading[]) => void
@@ -30,7 +30,7 @@ interface Props {
 const times = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The numbers of one run in plain words, set against the crew member's own values, with the way to save it. */
-export function ReactionResult({ score, protocol, day, before, beforeManual, evaluation, onSaved, onAgain, onDiscard, onContinue }: Props) {
+export function ReactionResult({ score, protocol, day, before, beforeSource, evaluation, onSaved, onAgain, onDiscard, onContinue }: Props) {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -154,7 +154,7 @@ export function ReactionResult({ score, protocol, day, before, beforeManual, eva
                   <>
                     {formatValue('reactionMs', before.value)} ms
                     <span className="block text-xs text-ink-2">
-                      {formatDay(before.latestDay)} | {sourceText(beforeManual)}
+                      {formatDay(before.latestDay)} | {sourceText(beforeSource)}
                     </span>
                   </>
                 )}

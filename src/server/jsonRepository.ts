@@ -11,12 +11,14 @@ import {
   checkedAuditQuery,
   checkedReadings,
   isManualReading,
+  isStoredReading,
   toReading,
   type Actor,
   type AuditEntry,
   type AuditQuery,
   type ReadingRepository,
   type RepositoryOptions,
+  type StoredSource,
   type StoreHealth,
 } from './repository'
 
@@ -26,7 +28,9 @@ import {
  * anything more, use the SQLite driver.
  *
  * - `manual-readings.json` holds the default crew member's readings, in the
- *   format this project has always used: a list of readings.
+ *   format this project has always used: a list of readings. Since the HTTP
+ *   API it also holds the readings devices sent (`"source": "device"`), so the
+ *   name says less than the file holds.
  * - `manual-readings.<crew id>.json` holds any other crew member's readings.
  * - `audit-log.jsonl` is the audit trail, one JSON object per line, only ever
  *   appended to. It is written after the readings file, not together with it,
@@ -36,8 +40,12 @@ import {
 
 export const JSON_FILE = 'manual-readings.json'
 export const AUDIT_FILE = 'audit-log.jsonl'
-/** Version of the file format, reported as the schema version. */
-export const JSON_FORMAT_VERSION = 1
+/**
+ * Version of the file format, reported as the schema version. Version 2: the
+ * list may hold device readings beside the manual ones, one entry per day,
+ * indicator and source.
+ */
+export const JSON_FORMAT_VERSION = 2
 
 type StoredAuditEntry = Omit<AuditEntry, 'id'>
 
@@ -105,7 +113,7 @@ class JsonRepository implements ReadingRepository {
       console.error('The manual readings file could not be read and was set aside.')
       return []
     }
-    return Array.isArray(parsed) ? parsed.filter(isManualReading).map(toReading) : []
+    return Array.isArray(parsed) ? parsed.filter(isStoredReading).map(toReading) : []
   }
 
   private async write(crewId: string, readings: Reading[]): Promise<void> {
@@ -145,25 +153,39 @@ class JsonRepository implements ReadingRepository {
     return entries
   }
 
-  async listManualReadings(crewId: string): Promise<Reading[]> {
+  async listReadings(crewId: string): Promise<Reading[]> {
     assertCrewMember(crewId, this.crew)
     return (await this.load(crewId)).sort(byDayThenMetric)
   }
 
+  async listManualReadings(crewId: string): Promise<Reading[]> {
+    return (await this.listReadings(crewId)).filter(isManualReading)
+  }
+
   saveManualReadings(crewId: string, readings: readonly Reading[], actor: Actor): Promise<void> {
+    return this.save(crewId, readings, actor, 'manual')
+  }
+
+  saveDeviceReadings(crewId: string, readings: readonly Reading[], actor: Actor): Promise<void> {
+    return this.save(crewId, readings, actor, 'device')
+  }
+
+  private save(crewId: string, readings: readonly Reading[], actor: Actor, source: StoredSource): Promise<void> {
     return this.enqueue(async () => {
       assertCrewMember(crewId, this.crew)
       assertActor(actor)
-      const added = checkedReadings(readings)
+      const added = checkedReadings(readings, source)
       if (added.length === 0) return
       const existing = await this.load(crewId)
-      const kept = existing.filter((e) => !added.some((a) => a.day === e.day && a.metric === e.metric))
+      // A reading replaces the earlier one of its own source only; the other source keeps its reading for that day.
+      const same = (e: Reading, a: Reading) => e.day === a.day && e.metric === a.metric && e.source === a.source
+      const kept = existing.filter((e) => !added.some((a) => same(e, a)))
       await this.write(crewId, [...kept, ...added])
 
       const at = this.now().toISOString()
       await this.appendAudit(
         added.map((a) => {
-          const earlier = existing.find((e) => e.day === a.day && e.metric === a.metric)
+          const earlier = existing.find((e) => same(e, a))
           return {
             at,
             actor,
@@ -183,8 +205,9 @@ class JsonRepository implements ReadingRepository {
     return this.enqueue(async () => {
       assertCrewMember(crewId, this.crew)
       assertActor(actor)
-      const existing = (await this.load(crewId)).sort(byDayThenMetric)
-      await this.write(crewId, [])
+      const stored = await this.load(crewId)
+      const existing = stored.filter(isManualReading).sort(byDayThenMetric)
+      await this.write(crewId, stored.filter((e) => !isManualReading(e)))
       const at = this.now().toISOString()
       // One entry per reading, so the trail keeps every value that was removed.
       await this.appendAudit(

@@ -3,9 +3,9 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReadingRepository } from './repository'
-import { MIGRATIONS, SchemaTooNewError, type Migration } from './sqliteMigrations'
+import { migrate, MIGRATIONS, SchemaTooNewError, type Migration } from './sqliteMigrations'
 import { createSqliteRepository, IMPORT_ACTOR, LEGACY_JSON_FILE, SQLITE_FILE, type SqliteOptions } from './sqliteRepository'
-import { manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
+import { device, manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
 
 let dataDir: string
 let now: () => Date
@@ -73,6 +73,50 @@ describe('sqlite driver: migrations', () => {
     expect((await upgraded.health()).schemaVersion).toBe(MIGRATIONS.length + 1)
     expect(await upgraded.listManualReadings('morgan')).toEqual([manual(5, 'spo2', 96)])
     expect(inspect((db) => db.prepare('SELECT note FROM readings').all())).toEqual([{ note: null }])
+  })
+
+  it('upgrades a version 1 database to one reading per source, and keeps its rows as they were', async () => {
+    // Version 1 allowed one reading per day and indicator, whatever its source.
+    // Built by hand: the driver itself only writes to the latest schema.
+    inspect((db) => {
+      migrate(db, MIGRATIONS.slice(0, 1), now)
+      db.exec(`
+        INSERT INTO crew_members (id, name, role, created_at, updated_at) VALUES ('morgan', 'A. Morgan', 'Flight Engineer', 'x', 'x');
+        INSERT INTO readings (id, crew_id, day, metric, value, source, created_at, updated_at)
+        VALUES (7, 'morgan', 5, 'spo2', 96, 'manual', '2031-02-01T08:00:00.000Z', '2031-02-02T08:00:00.000Z');
+        INSERT INTO audit_log (at, actor, crew_id, action, day, metric, value_before, value_after)
+        VALUES ('2031-02-01T08:00:00.000Z', 'crew:morgan', 'morgan', 'create', 5, 'spo2', NULL, 96);
+      `)
+    })
+
+    const upgraded = open()
+    expect((await upgraded.health()).schemaVersion).toBe(MIGRATIONS.length)
+    expect(inspect((db) => db.prepare('SELECT * FROM readings').all())).toEqual([
+      {
+        id: 7,
+        crew_id: 'morgan',
+        day: 5,
+        metric: 'spo2',
+        value: 96,
+        source: 'manual',
+        created_at: '2031-02-01T08:00:00.000Z',
+        updated_at: '2031-02-02T08:00:00.000Z',
+      },
+    ])
+
+    expect(await upgraded.listAuditTrail()).toHaveLength(1)
+
+    await upgraded.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+    expect(await upgraded.listReadings('morgan')).toEqual([device(5, 'spo2', 93), manual(5, 'spo2', 96)])
+    // Still one reading per source: the database itself refuses a second one.
+    expect(() =>
+      inspect((db) =>
+        db.exec(
+          "INSERT INTO readings (crew_id, day, metric, value, source, created_at, updated_at) VALUES ('morgan', 5, 'spo2', 90, 'device', 'x', 'x')",
+        ),
+      ),
+    ).toThrow(/UNIQUE/)
+    expect(inspect((db) => db.prepare("SELECT name FROM sqlite_schema WHERE name = 'readings_v2'").all())).toEqual([])
   })
 
   it('rolls a failing migration back and leaves the database at the last complete version', async () => {
@@ -192,6 +236,14 @@ describe('sqlite driver: import of the JSON file', () => {
     expect(await again.listManualReadings('morgan')).toHaveLength(2)
     expect(await again.listAuditTrail()).toHaveLength(2)
     expect(await readdir(dataDir)).toContain(LEGACY_JSON_FILE)
+  })
+
+  it('imports the device readings the JSON driver kept in the same file', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    await writeFile(legacy(), JSON.stringify([manual(5, 'spo2', 96), device(5, 'spo2', 93), { ...device(6, 'mood', 4), source: 'made-up' }]))
+    const repository = open()
+    expect(await repository.listReadings('morgan')).toEqual([device(5, 'spo2', 93), manual(5, 'spo2', 96)])
+    expect(await repository.listAuditTrail()).toHaveLength(2)
   })
 
   it('starts without the readings when the JSON file is damaged, and sets it aside', async () => {

@@ -74,6 +74,34 @@ export const MIGRATIONS: readonly Migration[] = [
       END;
     `,
   },
+  {
+    version: 2,
+    name: 'one reading per source for a day and indicator',
+    // A device and the crew member can both record the same indicator on one
+    // day, and neither may overwrite the other. SQLite cannot change a UNIQUE
+    // constraint in place, so the table is rebuilt.
+    up: `
+      PRAGMA defer_foreign_keys = ON;
+
+      CREATE TABLE readings_v2 (
+        id INTEGER PRIMARY KEY,
+        crew_id TEXT NOT NULL REFERENCES crew_members (id),
+        day INTEGER NOT NULL,
+        metric TEXT NOT NULL CHECK (length(metric) BETWEEN 1 AND 64),
+        value REAL NOT NULL,
+        source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 32),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (crew_id, day, metric, source)
+      ) STRICT;
+
+      INSERT INTO readings_v2 (id, crew_id, day, metric, value, source, created_at, updated_at)
+      SELECT id, crew_id, day, metric, value, source, created_at, updated_at FROM readings;
+
+      DROP TABLE readings;
+      ALTER TABLE readings_v2 RENAME TO readings;
+    `,
+  },
 ]
 
 /** The database was written by a newer release. Opening it with older code could damage it. */

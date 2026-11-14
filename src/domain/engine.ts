@@ -1,6 +1,7 @@
 import { METRICS, METRIC_IDS, classify } from './metrics'
 import { changeUnit, formatAverage, formatDelta, formatValue } from './format'
 import {
+  READING_SOURCES,
   STATUS_ORDER,
   worst,
   type Evaluation,
@@ -30,16 +31,19 @@ const MAX_DRIFT_LOOKBACK = 90
 type Series = Map<number, number>
 
 /**
- * Indexes readings by metric and day. When a day has both a simulated and a
- * manual reading, the manual one wins.
+ * Indexes readings by metric and day. When a day has readings from several
+ * sources, a device reading wins over a simulated one and a manual reading
+ * wins over both.
  */
 export function indexReadings(readings: Reading[]): Record<MetricId, Series> {
   const index = Object.fromEntries(METRIC_IDS.map((id) => [id, new Map()])) as Record<
     MetricId,
     Series
   >
-  for (const r of readings) if (r.source === 'simulated') index[r.metric].set(r.day, r.value)
-  for (const r of readings) if (r.source === 'manual') index[r.metric].set(r.day, r.value)
+  // One pass per source, lowest precedence first, so a later source overwrites an earlier one.
+  for (const source of READING_SOURCES) {
+    for (const r of readings) if (r.source === source) index[r.metric].set(r.day, r.value)
+  }
   return index
 }
 

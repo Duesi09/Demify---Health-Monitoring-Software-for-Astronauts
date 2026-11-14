@@ -3,7 +3,7 @@ import path from 'node:path'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUDIT_FILE, createJsonRepository, JSON_FILE } from './jsonRepository'
 import type { ReadingRepository } from './repository'
-import { manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
+import { device, manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
 
 let dataDir: string
 let repository: ReadingRepository
@@ -28,6 +28,15 @@ describe('json driver', () => {
 
     await repository.saveManualReadings('morgan', [manual(6, 'bodyTemp', 36.9)], 'crew:morgan')
     expect(JSON.parse(await readFile(file(), 'utf8'))).toEqual([manual(5, 'spo2', 96), manual(6, 'bodyTemp', 36.9)])
+  })
+
+  it('keeps device readings in the same file, marked by their source', async () => {
+    await repository.saveManualReadings('morgan', [manual(5, 'spo2', 96)], 'crew:morgan')
+    await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+    expect(JSON.parse(await readFile(file(), 'utf8'))).toEqual([manual(5, 'spo2', 96), device(5, 'spo2', 93)])
+
+    await repository.clearManualReadings('morgan', 'crew:morgan')
+    expect(JSON.parse(await readFile(file(), 'utf8'))).toEqual([device(5, 'spo2', 93)])
   })
 
   it('keeps every other crew member in a file of their own', async () => {

@@ -1,13 +1,16 @@
 # Data layer
 
-How Demify stores the readings a crew member enters by hand: the boundary, the
-two drivers, the schema, and how to run it (settings, backup, restore,
-migrations). The simulated sensor log is computed, not stored.
+How Demify stores readings: those a crew member enters by hand (source
+`manual`) and those a device or a ground system sends through the HTTP API
+(source `device`, see [api.md](api.md)). This page covers the boundary, the two
+drivers, the schema, and how to run it (settings, backup, restore, migrations).
+The simulated sensor log is computed, not stored.
 
 ## The boundary
 
 ```
-pages, server actions      src/app
+pages, server actions,     src/app
+HTTP API (src/server/api)
         |
 mission.ts, store.ts       src/server   getMissionReadings(crewId), getRepository()
         |
@@ -26,9 +29,11 @@ The port, in short (`src/server/repository.ts` has the full types):
 
 | Method | What it does |
 | --- | --- |
-| `listManualReadings(crewId)` | A crew member's manual readings, by mission day. Rows that are not valid readings are skipped. |
-| `saveManualReadings(crewId, readings, actor)` | Saves all of the readings or none. Replaces an earlier reading for the same day and indicator. |
-| `clearManualReadings(crewId, actor)` | Removes a crew member's manual readings and returns how many there were. |
+| `listReadings(crewId)` | Every stored reading of a crew member, `device` and `manual`, by mission day. Rows that are not valid readings are skipped. |
+| `listManualReadings(crewId)` | Only the manual readings. |
+| `saveManualReadings(crewId, readings, actor)` | Saves all of the readings or none. Replaces an earlier manual reading for the same day and indicator. |
+| `saveDeviceReadings(crewId, readings, actor)` | The same for readings a device sent. Replaces an earlier device reading for the same day and indicator. |
+| `clearManualReadings(crewId, actor)` | Removes a crew member's manual readings and returns how many there were. Device readings stay. |
 | `listAuditTrail({ crewId?, limit?, beforeId? })` | The audit trail, newest first. `beforeId` pages backwards. |
 | `health()` | Driver, schema version, whether a write would go through, how the audit trail is kept, and counts. |
 | `close()` | Releases files and locks. |
@@ -38,6 +43,13 @@ the server itself, `api:<name>` for a client of the HTTP API. An actor is a
 label that is stored and shown, never a secret. Bad input (unknown crew member,
 missing actor, a reading that is not valid) is refused with a `StoreInputError`
 and nothing is written.
+
+A day can hold one reading per source for an indicator: a device reading and a
+manual reading stand side by side, and neither overwrites the other. Which one
+counts is decided when the readings are evaluated (`src/domain/engine.ts`):
+`manual` before `device`, `device` before the simulated log. An audit entry
+does not name the source; the actor tells it, since `api:` actors only write
+device readings and `crew:` actors only manual ones.
 
 The crew is defined in `src/domain/crew.ts`. Today it has one member, `morgan`,
 who is also the default. Everything in storage is keyed by crew member id.
@@ -51,14 +63,14 @@ with a message that names the variable. An empty value counts as not set.
 | --- | --- | --- | --- |
 | `DEMIFY_DATA_DIR` | a directory path | `./.data` | Where the data files are kept. Created when missing. `/data` in the container image. |
 | `DEMIFY_STORE` | `sqlite`, `json` | `sqlite` | The storage driver. |
-| `DEMIFY_API_TOKEN` | 16 to 512 printable characters, no spaces | not set | Shared secret for the HTTP API. It is never logged or stored by the data layer. |
+| `DEMIFY_API_TOKEN` | 16 to 512 printable characters, no spaces | not set | Shared secret for the HTTP API ([api.md](api.md)). Without it the API serves no crew data. It is never logged or stored by the data layer. |
 
 ## Drivers
 
 | | `sqlite` (default) | `json` |
 | --- | --- | --- |
 | Files in the data directory | `demify.db`, plus `demify.db-wal` and `demify.db-shm` while open | `manual-readings.json`, `manual-readings.<crew id>.json`, `audit-log.jsonl` |
-| Schema and migrations | yes | no; the file format has version 1 |
+| Schema and migrations | yes | no; the file format has version 2 |
 | Audit trail | written in the same transaction as the change | appended to a file after the change (`audit: 'best-effort'` in the health report) |
 | Several server processes | yes, on one machine | no, one process only |
 | Meant for | every real deployment | first look, debugging, a Node.js without `node:sqlite` |
@@ -70,16 +82,19 @@ the `DRIVERS` list of that test file and gets a branch in `src/server/store.ts`.
 The JSON driver keeps the default crew member in `manual-readings.json`, the
 file and format the project has always used: a list of
 `{ "day": 90, "metric": "systolic", "value": 118, "source": "manual" }`.
+Since format version 2 the same list also holds the readings devices sent,
+with `"source": "device"`, so the file name says less than the file holds. A
+file written before that is read as it is.
 
 Switching from `json` to `sqlite` is automatic: when a database that has not
 looked for it yet finds `manual-readings.json` in the data directory, it imports
-the valid rows for the default crew member (actor `system:json-import`) and
+the valid rows, manual and device, for the default crew member (actor `system:json-import`) and
 renames the file to `manual-readings.json.imported-<time>`. This happens once
 per database. There is no automatic way back from `sqlite` to `json`.
 
 ## SQLite schema
 
-Schema version 1. Timestamps are ISO 8601 in UTC, for example
+Schema version 2. Timestamps are ISO 8601 in UTC, for example
 `2031-03-01T08:00:00.000Z`. The code calls an indicator a `metric`, and so do
 the columns.
 
@@ -88,8 +103,13 @@ the columns.
 | `schema_migrations` | `version` (key), `name`, `applied_at` | One row per applied migration. |
 | `store_meta` | `key` (key), `value` | Facts about the database itself. `json_import_at`: when it looked for the JSON file. |
 | `crew_members` | `id` (key), `name`, `role`, `created_at`, `updated_at` | Kept in step with `src/domain/crew.ts` at every start. |
-| `readings` | `id` (key), `crew_id`, `day`, `metric`, `value`, `source`, `created_at`, `updated_at` | Unique per `crew_id`, `day` and `metric`; that index serves every read. `crew_id` refers to `crew_members`. |
+| `readings` | `id` (key), `crew_id`, `day`, `metric`, `value`, `source`, `created_at`, `updated_at` | Unique per `crew_id`, `day`, `metric` and `source`; that index serves every read. `source` is `manual` or `device`. `crew_id` refers to `crew_members`. |
 | `audit_log` | `id` (key), `at`, `actor`, `crew_id`, `action`, `day`, `metric`, `value_before`, `value_after` | `action` is `create`, `replace` or `clear`. Index on `crew_id, id`. |
+
+| Version | What it changed |
+| --- | --- |
+| 1 | Crew members, readings and the audit log. One reading per crew member, day and indicator. |
+| 2 | One reading per crew member, day, indicator and source, so a device reading and a manual reading for the same day are both kept. The `readings` table is rebuilt; its rows are carried over unchanged. |
 
 The audit log is append-only, and the database enforces it: two triggers refuse
 every `UPDATE` and `DELETE` on `audit_log`. A save writes one entry per reading
@@ -133,7 +153,7 @@ Append one entry to `MIGRATIONS` in `src/server/sqliteMigrations.ts`:
 
 ```ts
 {
-  version: 2,
+  version: 3,
   name: 'note on a reading',
   up: 'ALTER TABLE readings ADD COLUMN note TEXT',
 },
@@ -147,7 +167,9 @@ Append one entry to `MIGRATIONS` in `src/server/sqliteMigrations.ts`:
 - A migration runs inside a transaction, and `PRAGMA foreign_keys` cannot be
   switched inside one. A migration that rebuilds a table should start with
   `PRAGMA defer_foreign_keys = ON`.
-- Update the schema table above, and take a backup before rolling out.
+- Update the schema table and the list of versions above, and take a backup
+  before rolling out.
+- Migration 2 is an example of a table rebuild.
 
 `src/server/sqliteRepository.test.ts` shows how to test an upgrade: open a
 database with the old list, then with the new one.
@@ -198,4 +220,8 @@ JSON driver: stop the server and copy the data directory.
   Several machines writing the same data need a database server behind the
   same port.
 - The crew is defined in code. There are no accounts yet, so the server
-  actions record every change as `crew:morgan`.
+  actions record every change as `crew:morgan`, and the HTTP API has one
+  shared token for all its clients.
+- A release older than schema version 2 cannot open a database this release
+  has migrated; it stops with a message. To go back, restore a backup taken
+  before the upgrade.

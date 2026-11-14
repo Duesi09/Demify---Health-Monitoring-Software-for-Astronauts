@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createJsonRepository, JSON_FILE } from './jsonRepository'
 import { StoreInputError, type ReadingRepository, type RepositoryOptions } from './repository'
 import { createSqliteRepository, SQLITE_FILE } from './sqliteRepository'
-import { manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
+import { device, manual, removeTempDataDirs, tempDataDir, TEST_CREW, tickingClock } from './testing'
 
 /**
  * The contract every storage driver has to keep. Each test runs once per
@@ -129,6 +129,7 @@ describe.each(DRIVERS)('reading repository contract: $name driver', (driver) => 
     await repository.saveManualReadings('chen', [manual(1, 'mood', 3)], 'crew:chen')
     await driver.plantRows(dataDir)
     expect(await repository.listManualReadings('morgan')).toEqual([manual(5, 'spo2', 96)])
+    expect(await repository.listReadings('morgan')).toEqual([manual(5, 'spo2', 96)])
   })
 
   it('reports its health', async () => {
@@ -150,6 +151,65 @@ describe.each(DRIVERS)('reading repository contract: $name driver', (driver) => 
     repository = open()
     expect(await repository.listManualReadings('morgan')).toEqual([manual(5, 'spo2', 96)])
     expect(await repository.listAuditTrail()).toHaveLength(1)
+  })
+
+  describe('device readings', () => {
+    it('keeps a device reading and a manual reading for the same day and indicator side by side', async () => {
+      await repository.saveManualReadings('morgan', [manual(5, 'spo2', 96)], 'crew:morgan')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93), device(4, 'restingHr', 61)], 'api:oximeter')
+      // Saved again by hand after the device: neither source overwrites the other.
+      await repository.saveManualReadings('morgan', [manual(5, 'spo2', 95)], 'crew:morgan')
+
+      expect(await repository.listReadings('morgan')).toEqual([device(4, 'restingHr', 61), device(5, 'spo2', 93), manual(5, 'spo2', 95)])
+      expect(await repository.listManualReadings('morgan')).toEqual([manual(5, 'spo2', 95)])
+      expect(await repository.listReadings('chen')).toEqual([])
+    })
+
+    it('replaces an earlier device reading for the same day and indicator, so sending twice is harmless', async () => {
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 91), device(5, 'spo2', 90)], 'api:oximeter')
+      expect(await repository.listReadings('morgan')).toEqual([device(5, 'spo2', 90)])
+    })
+
+    it('records each device reading in the audit trail against the earlier reading of its own source', async () => {
+      await repository.saveManualReadings('morgan', [manual(5, 'spo2', 96)], 'crew:morgan')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 91)], 'api:oximeter')
+
+      const trail = await repository.listAuditTrail()
+      expect(trail.map(({ id: _id, at: _at, ...entry }) => entry)).toEqual([
+        { actor: 'api:oximeter', crewId: 'morgan', action: 'replace', day: 5, metric: 'spo2', before: 93, after: 91 },
+        { actor: 'api:oximeter', crewId: 'morgan', action: 'create', day: 5, metric: 'spo2', before: null, after: 93 },
+        { actor: 'crew:morgan', crewId: 'morgan', action: 'create', day: 5, metric: 'spo2', before: null, after: 96 },
+      ])
+    })
+
+    it('stay when the manual readings are cleared', async () => {
+      await repository.saveManualReadings('morgan', [manual(5, 'spo2', 96)], 'crew:morgan')
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+      expect(await repository.clearManualReadings('morgan', 'crew:morgan')).toBe(1)
+      expect(await repository.listReadings('morgan')).toEqual([device(5, 'spo2', 93)])
+      expect((await repository.health()).counts.readings).toBe(1)
+    })
+
+    it('are kept after the server restarts', async () => {
+      await repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], 'api:oximeter')
+      await repository.close()
+      repository = open()
+      expect(await repository.listReadings('morgan')).toEqual([device(5, 'spo2', 93)])
+    })
+
+    it('saves none of a batch when one reading is not a valid device reading', async () => {
+      await expect(repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93), manual(6, 'mood', 4)], 'api:oximeter')).rejects.toThrow(
+        StoreInputError,
+      )
+      await expect(repository.saveManualReadings('morgan', [device(5, 'spo2', 93)], 'crew:morgan')).rejects.toThrow(StoreInputError)
+      await expect(repository.saveDeviceReadings('morgan', [device(5, 'spo2', 93)], '')).rejects.toThrow(StoreInputError)
+      await expect(repository.saveDeviceReadings('nobody', [device(5, 'spo2', 93)], 'api:oximeter')).rejects.toThrow(StoreInputError)
+      expect(await repository.listReadings('morgan')).toEqual([])
+      expect(await repository.listAuditTrail()).toEqual([])
+    })
   })
 
   describe('what it refuses', () => {

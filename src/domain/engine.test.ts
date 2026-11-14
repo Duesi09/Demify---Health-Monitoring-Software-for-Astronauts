@@ -122,6 +122,25 @@ describe('evaluate', () => {
     expect(result.status).toBe('critical')
   })
 
+  it('lets a device reading override the simulated one, and a manual reading override both', () => {
+    const readings = log('bodyTemp', 36.7, days(5, 36.7))
+    // Listed before the simulated log on purpose: precedence comes from the source, not from the order.
+    readings.unshift({ day: 5, metric: 'bodyTemp', value: 38.2, source: 'device' })
+    expect(evaluate(readings, 5).assessments.bodyTemp.value).toBe(38.2)
+
+    readings.unshift({ day: 5, metric: 'bodyTemp', value: 39.6, source: 'manual' })
+    expect(evaluate(readings, 5).assessments.bodyTemp.value).toBe(39.6)
+    expect(evaluate([...readings].reverse(), 5).assessments.bodyTemp.value).toBe(39.6)
+  })
+
+  it('uses a device reading on a day the simulated log has none', () => {
+    const readings = log('spo2', 98, days(4, 98))
+    readings.push({ day: 5, metric: 'spo2', value: 85, source: 'device' })
+    const result = evaluate(readings, 5)
+    expect(result.assessments.spo2.value).toBe(85)
+    expect(result.status).toBe('critical')
+  })
+
   it('only sees readings up to the evaluated day', () => {
     const result = evaluate(log('bodyTemp', 36.7, [...days(5, 36.7), 39.6]), 5)
     expect(result.assessments.bodyTemp.value).toBe(36.7)

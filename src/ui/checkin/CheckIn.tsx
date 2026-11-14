@@ -12,7 +12,7 @@ import { MeasureForm } from './MeasureForm'
 import { ReactionTest } from './ReactionTest'
 import { RoutineEnd } from './RoutineEnd'
 import { RoutineSummary } from './RoutineSummary'
-import { MeaningLines, REACTION_STEP, enteredByHand, quietButton, stepValue } from './shared'
+import { MeaningLines, REACTION_STEP, latestSource, quietButton, stepValue } from './shared'
 import { StepFrame } from './StepFrame'
 import { StepList } from './StepList'
 import { StreakCard } from './StreakCard'
@@ -35,6 +35,11 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
   const streak = useMemo(() => streakOf(complete), [complete])
   const manualKeys = useMemo(
     () => new Set(readings.filter((r) => r.source === 'manual').map((r) => `${r.day}:${r.metric}`)),
+    [readings],
+  )
+  // Readings a device sent through the HTTP API, so they are not named as entered by the crew member.
+  const deviceKeys = useMemo(
+    () => new Set(readings.filter((r) => r.source === 'device').map((r) => `${r.day}:${r.metric}`)),
     [readings],
   )
 
@@ -149,7 +154,7 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 @4xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] @4xl:items-start">
-        <StepList steps={steps} activeId={activeId} evaluation={evaluation} manualKeys={manualKeys} onSelect={(id) => open(id)} />
+        <StepList steps={steps} activeId={activeId} evaluation={evaluation} manualKeys={manualKeys} deviceKeys={deviceKeys} onSelect={(id) => open(id)} />
 
         <div ref={panel} className="min-w-0 scroll-mt-4">
           {/* Always in the page, so a screen reader announces what was saved when it arrives. */}
@@ -176,6 +181,7 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
               total={steps.length}
               evaluation={evaluation}
               manualKeys={manualKeys}
+              deviceKeys={deviceKeys}
               howTo={
                 <p className="mt-1 text-ink-2">
                   Run the Reaction Self-Test below. Take it at about the same time each day and always on the same
@@ -186,7 +192,7 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
               <ReactionTest
                 day={day}
                 evaluation={evaluation}
-                latestManual={enteredByHand(active, evaluation, manualKeys)}
+                latestSource={latestSource(active, evaluation, manualKeys, deviceKeys)}
                 onSaved={(added) => {
                   addReadings(added)
                   setSavedId(active.id)
@@ -207,6 +213,7 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
               total={steps.length}
               evaluation={evaluation}
               manualKeys={manualKeys}
+              deviceKeys={deviceKeys}
             >
               <MeasureForm
                 step={active}

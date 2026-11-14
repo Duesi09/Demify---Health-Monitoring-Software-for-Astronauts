@@ -1,7 +1,7 @@
 import { meaningOf, type RoutineStep, type StepGroup } from '@/domain/checkin'
 import { formatValue } from '@/domain/format'
 import { METRICS } from '@/domain/metrics'
-import type { Evaluation, MetricId } from '@/domain/types'
+import type { Evaluation, MetricId, ReadingSource } from '@/domain/types'
 import { StatusIcon, TONE, type Tone } from '../status'
 import { tileTone } from '../tiles'
 
@@ -35,13 +35,22 @@ export function stepValue(step: StepGroup, evaluation: Evaluation): string | nul
   return `${step.metrics.map((m, i) => formatValue(m, values[i]!)).join('/')} ${unitText(step.metrics[0])}`
 }
 
-/** Whether the latest reading of a step was typed in by the crew member. */
-export function enteredByHand(step: StepGroup, evaluation: Evaluation, manualKeys: ReadonlySet<string>): boolean {
-  return step.metrics.some((m) => manualKeys.has(`${evaluation.assessments[m].latestDay}:${m}`))
+/**
+ * Where the latest reading of a step came from. A reading typed in by the
+ * crew member counts before one a device sent, as it does in the rule engine.
+ */
+export function latestSource(
+  step: StepGroup,
+  evaluation: Evaluation,
+  manualKeys: ReadonlySet<string>,
+  deviceKeys: ReadonlySet<string>,
+): ReadingSource {
+  const latestIn = (keys: ReadonlySet<string>) => step.metrics.some((m) => keys.has(`${evaluation.assessments[m].latestDay}:${m}`))
+  return latestIn(manualKeys) ? 'manual' : latestIn(deviceKeys) ? 'device' : 'simulated'
 }
 
-export function sourceText(manual: boolean): string {
-  return manual ? 'entered by you' : 'from sensor'
+export function sourceText(source: ReadingSource): string {
+  return source === 'manual' ? 'entered by you' : source === 'device' ? 'from device' : 'from sensor'
 }
 
 /**

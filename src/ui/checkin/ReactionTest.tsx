@@ -10,7 +10,7 @@ import {
   type TestLength,
   type Trial,
 } from '@/domain/reactionTest'
-import type { Evaluation, MetricAssessment, Reading } from '@/domain/types'
+import type { Evaluation, MetricAssessment, Reading, ReadingSource } from '@/domain/types'
 import { StatusIcon } from '../status'
 import { ReactionResult } from './ReactionResult'
 import { ReactionRun, type StopReason } from './ReactionRun'
@@ -21,13 +21,13 @@ type Phase =
   | { name: 'ready' }
   | { name: 'running' }
   | { name: 'stopped'; reason: StopReason }
-  | { name: 'result'; result: ScoreResult; before: MetricAssessment; beforeManual: boolean }
+  | { name: 'result'; result: ScoreResult; before: MetricAssessment; beforeSource: ReadingSource }
 
 interface Props {
   day: number
   evaluation: Evaluation
-  /** Whether the latest reaction time reading was typed in or saved from a test. */
-  latestManual: boolean
+  /** Where the latest reaction time reading came from: typed in or saved from a test, a device, or the sensor log. */
+  latestSource: ReadingSource
   onSaved: (readings: Reading[]) => void
   onContinue: () => void
 }
@@ -56,7 +56,7 @@ const STEPS = [
  * The Reaction Self-Test from instructions to result. Starting takes two
  * deliberate steps (get ready, then begin), so a stray key press cannot start it.
  */
-export function ReactionTest({ day, evaluation, latestManual, onSaved, onContinue }: Props) {
+export function ReactionTest({ day, evaluation, latestSource, onSaved, onContinue }: Props) {
   const [phase, setPhase] = useState<Phase>({ name: 'intro' })
   const [length, setLength] = useState<TestLength>('standard')
   const protocol = PROTOCOLS[length]
@@ -82,10 +82,10 @@ export function ReactionTest({ day, evaluation, latestManual, onSaved, onContinu
         result: scoreTrials(trials, protocol),
         // The comparison must not move when the new reading is saved.
         before: evaluation.assessments.reactionMs,
-        beforeManual: latestManual,
+        beforeSource: latestSource,
       })
     },
-    [protocol, evaluation, latestManual],
+    [protocol, evaluation, latestSource],
   )
   const stop = useCallback((reason: StopReason) => {
     moved.current = true
@@ -317,7 +317,7 @@ export function ReactionTest({ day, evaluation, latestManual, onSaved, onContinu
             protocol={protocol}
             day={day}
             before={phase.before}
-            beforeManual={phase.beforeManual}
+            beforeSource={phase.beforeSource}
             evaluation={evaluation}
             onSaved={onSaved}
             onAgain={() => go({ name: 'ready' })}

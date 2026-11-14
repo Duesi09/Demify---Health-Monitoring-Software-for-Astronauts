@@ -24,10 +24,11 @@ interface Props {
   evaluation: Evaluation
   index: Record<MetricId, Map<number, number>>
   manualKeys: Set<string>
+  deviceKeys: Set<string>
   onLogged: (readings: Reading[]) => void
 }
 
-export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: Props) {
+export function MetricDetail({ tile, evaluation, index, manualKeys, deviceKeys, onLogged }: Props) {
   const [periodDays, setPeriodDays] = useState(30)
   const day = evaluation.day
   const primary = evaluation.assessments[tile.metrics[0]]
@@ -133,7 +134,11 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
                     )
                   })}
                   <td className="py-1 text-ink-2">
-                    {tile.metrics.some((m) => manualKeys.has(`${d}:${m}`)) ? 'Entered by you' : 'Sensor'}
+                    {tile.metrics.some((m) => manualKeys.has(`${d}:${m}`))
+                      ? 'Entered by you'
+                      : tile.metrics.some((m) => deviceKeys.has(`${d}:${m}`))
+                        ? 'From device'
+                        : 'Sensor'}
                   </td>
                 </tr>
               ))}

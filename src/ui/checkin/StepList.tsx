@@ -4,19 +4,20 @@ import { useEffect, useRef } from 'react'
 import { describeAge, type RoutineStep } from '@/domain/checkin'
 import type { Evaluation } from '@/domain/types'
 import { StatusIcon } from '../status'
-import { enteredByHand, sourceText, stepTone, stepValue } from './shared'
+import { latestSource, sourceText, stepTone, stepValue } from './shared'
 
 interface Props {
   steps: RoutineStep[]
   activeId: string | null
   evaluation: Evaluation
   manualKeys: ReadonlySet<string>
+  deviceKeys: ReadonlySet<string>
   onSelect: (id: string) => void
 }
 
-function detail(step: RoutineStep, evaluation: Evaluation, manualKeys: ReadonlySet<string>): string {
+function detail(step: RoutineStep, evaluation: Evaluation, manualKeys: ReadonlySet<string>, deviceKeys: ReadonlySet<string>): string {
   if (step.state === 'done') {
-    return `${stepValue(step, evaluation)} | ${sourceText(enteredByHand(step, evaluation, manualKeys))}`
+    return `${stepValue(step, evaluation)} | ${sourceText(latestSource(step, evaluation, manualKeys, deviceKeys))}`
   }
   const age = describeAge(step.daysSinceReading)
   return step.daysSinceReading === null ? age : `last measured ${age}`
@@ -27,7 +28,7 @@ function detail(step: RoutineStep, evaluation: Evaluation, manualKeys: ReadonlyS
  * can be opened at any time. A column beside the open step on wide screens, a
  * row to swipe through on narrow ones.
  */
-export function StepList({ steps, activeId, evaluation, manualKeys, onSelect }: Props) {
+export function StepList({ steps, activeId, evaluation, manualKeys, deviceKeys, onSelect }: Props) {
   const list = useRef<HTMLOListElement>(null)
 
   // On narrow screens the list is a row: bring the open step into it. Only the
@@ -74,7 +75,7 @@ export function StepList({ steps, activeId, evaluation, manualKeys, onSelect }: 
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-ink">{step.label}</span>
-                  <span className="block truncate text-xs text-ink-2">{detail(step, evaluation, manualKeys)}</span>
+                  <span className="block truncate text-xs text-ink-2">{detail(step, evaluation, manualKeys, deviceKeys)}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-2">
                   <StatusIcon tone={tone} />

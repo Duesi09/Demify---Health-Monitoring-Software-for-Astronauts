@@ -15,7 +15,7 @@ import {
   type DoseEvent,
 } from '@/domain/radiation'
 import { MISSION_DAYS } from '@/domain/simulator'
-import type { MetricAssessment, Reading } from '@/domain/types'
+import type { MetricAssessment, Reading, ReadingSource } from '@/domain/types'
 import { PageShell } from '../PageShell'
 import { RangeBar } from '../RangeBar'
 import { StatusBadge } from '../status'
@@ -93,7 +93,7 @@ function DayBar({
 }
 
 /** Today's reading of the indicator: the dose rate, its range and what it asks for. */
-function DoseRateToday({ assessment, day, manual }: { assessment: MetricAssessment; day: number; manual: boolean }) {
+function DoseRateToday({ assessment, day, source }: { assessment: MetricAssessment; day: number; source: ReadingSource }) {
   const def = METRICS.radiationDose
   const { value, band, stale, latestDay } = assessment
   const tone = value === null ? 'unmonitored' : stale ? 'stale' : assessment.status
@@ -116,9 +116,11 @@ function DoseRateToday({ assessment, day, manual }: { assessment: MetricAssessme
           <p className="mt-1 text-sm text-ink-2">
             {latestDay !== day
               ? `Latest reading, from mission day ${latestDay}.`
-              : manual
+              : source === 'manual'
                 ? 'Reading for today, entered by hand.'
-                : 'Simulated dosimeter reading for today.'}
+                : source === 'device'
+                  ? 'Reading for today, from device.'
+                  : 'Simulated dosimeter reading for today.'}
           </p>
           <div className="mt-4">
             <RangeBar metric="radiationDose" value={stale ? null : value} detailed />
@@ -179,15 +181,31 @@ export function RadiationView({ readings, initialDay }: Props) {
   const projection = useMemo(() => projectDose(log), [log])
   const typical = useMemo(() => typicalDailyDose(series, day), [series, day])
   const assessment = useMemo(() => evaluateIndexed(index, day).assessments.radiationDose, [index, day])
-  // Readings the crew member entered under Today replace the simulated ones and are named as such.
+  // Readings the crew member entered under Today, or a device sent, replace the simulated ones and are named as such.
   const manualDays = useMemo(
     () => new Set(readings.filter((r) => r.source === 'manual' && r.metric === 'radiationDose').map((r) => r.day)),
     [readings],
   )
+  const deviceDays = useMemo(
+    () => new Set(readings.filter((r) => r.source === 'device' && r.metric === 'radiationDose').map((r) => r.day)),
+    [readings],
+  )
   const manualSoFar = [...manualDays].filter((d) => d >= 1 && d <= day).length
-  const origin =
-    manualSoFar === 0 ? 'Simulated readings' : `Simulated readings | ${manualSoFar} entered by hand`
-  const manualToday = assessment.latestDay !== null && manualDays.has(assessment.latestDay)
+  // A day the crew member also entered by hand counts as entered by hand: that reading is the one in use.
+  const deviceSoFar = [...deviceDays].filter((d) => d >= 1 && d <= day && !manualDays.has(d)).length
+  const origin = [
+    'Simulated readings',
+    ...(deviceSoFar === 0 ? [] : [`${deviceSoFar} from device`]),
+    ...(manualSoFar === 0 ? [] : [`${manualSoFar} entered by hand`]),
+  ].join(' | ')
+  const sourceToday: ReadingSource =
+    assessment.latestDay === null
+      ? 'simulated'
+      : manualDays.has(assessment.latestDay)
+        ? 'manual'
+        : deviceDays.has(assessment.latestDay)
+          ? 'device'
+          : 'simulated'
   // Only for the shortcut in the day control: where the simulated event lies.
   const firstEvent = useMemo(() => solarEvents(doseLog(series, MISSION_DAYS))[0] ?? null, [series])
 
@@ -243,7 +261,7 @@ export function RadiationView({ readings, initialDay }: Props) {
           assessment={assessment}
           event={event}
           typical={typical}
-          manual={manualToday}
+          source={sourceToday}
           run={run}
           restored={ready}
           speed={session.speed}
@@ -264,7 +282,7 @@ export function RadiationView({ readings, initialDay }: Props) {
           <MissionDose day={day} log={log} events={events} projection={projection} typical={typical} origin={origin} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
-          <DoseRateToday assessment={assessment} day={day} manual={manualToday} />
+          <DoseRateToday assessment={assessment} day={day} source={sourceToday} />
           {!showProcedure && (
             <DrillInvite
               ref={invite}

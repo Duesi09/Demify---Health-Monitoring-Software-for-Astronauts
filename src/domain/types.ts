@@ -24,6 +24,16 @@ export function worst(a: Status, b: Status): Status {
 }
 
 /**
+ * Where a reading came from, in rising order of precedence: `simulated` is the
+ * built-in mission log, `device` arrived through the HTTP API from a device or
+ * a ground system, `manual` was typed in by the crew member. When one day has
+ * several readings of an indicator, the source listed last wins.
+ */
+export const READING_SOURCES = ['simulated', 'device', 'manual'] as const
+
+export type ReadingSource = (typeof READING_SOURCES)[number]
+
+/**
  * One measurement. `day` is the mission day: 1 is the first day in flight,
  * 0 and below are pre-flight days used to build the personal baseline.
  */
@@ -31,7 +41,7 @@ export interface Reading {
   day: number
   metric: MetricId
   value: number
-  source: 'simulated' | 'manual'
+  source: ReadingSource
 }
 
 /** A value range and what it means. Bands are listed from lowest to highest. */

@@ -1,7 +1,7 @@
 import 'server-only'
 import { isCrewId, type CrewMember } from '@/domain/crew'
 import { isMetricId } from '@/domain/validate'
-import type { Reading } from '@/domain/types'
+import { READING_SOURCES, type Reading } from '@/domain/types'
 import type { StoreDriver } from './config'
 
 /**
@@ -13,8 +13,21 @@ import type { StoreDriver } from './config'
 export interface ReadingRepository {
   readonly driver: StoreDriver
 
+  /**
+   * Every stored reading of a crew member, sent by a device or entered by
+   * hand, oldest mission day first. One day can hold both for an indicator.
+   */
+  listReadings(crewId: string): Promise<Reading[]>
+
   /** The readings a crew member entered by hand, oldest mission day first. */
   listManualReadings(crewId: string): Promise<Reading[]>
+
+  /**
+   * Saves readings a device or a ground system sent, replacing an earlier
+   * device reading for the same day and indicator. A reading entered by hand
+   * for that day is left alone. All of them are saved, or none.
+   */
+  saveDeviceReadings(crewId: string, readings: readonly Reading[], actor: Actor): Promise<void>
 
   /**
    * Saves readings for a crew member, replacing an earlier reading for the
@@ -105,8 +118,13 @@ export interface RepositoryOptions {
 export const DEFAULT_AUDIT_LIMIT = 100
 export const MAX_AUDIT_LIMIT = 1000
 
-/** A manual reading as it may be stored. Used on the way in and on the way out. */
-export function isManualReading(value: unknown): value is Reading {
+/** The sources that are stored. Simulated readings are computed, never stored. */
+export type StoredSource = 'device' | 'manual'
+
+export const STORED_SOURCES: readonly StoredSource[] = ['device', 'manual']
+
+/** A reading as it may be stored. Used on the way in and on the way out. */
+export function isStoredReading(value: unknown): value is Reading {
   if (typeof value !== 'object' || value === null) return false
   const r = value as Record<string, unknown>
   return (
@@ -114,18 +132,33 @@ export function isManualReading(value: unknown): value is Reading {
     isMetricId(r.metric) &&
     typeof r.value === 'number' &&
     Number.isFinite(r.value) &&
-    r.source === 'manual'
+    STORED_SOURCES.includes(r.source as StoredSource)
   )
+}
+
+export function isManualReading(value: unknown): value is Reading {
+  return isStoredReading(value) && value.source === 'manual'
+}
+
+export function isDeviceReading(value: unknown): value is Reading {
+  return isStoredReading(value) && value.source === 'device'
 }
 
 /** A stored reading stripped to the four fields of a Reading. */
 export function toReading(r: Reading): Reading {
-  return { day: r.day, metric: r.metric, value: r.value, source: 'manual' }
+  return { day: r.day, metric: r.metric, value: r.value, source: r.source }
 }
 
-/** Mission day first, then indicator: the same order from every driver. */
+/**
+ * Mission day first, then indicator, then source in rising precedence: the
+ * same order from every driver.
+ */
 export function byDayThenMetric(a: Reading, b: Reading): number {
-  return a.day - b.day || (a.metric < b.metric ? -1 : a.metric > b.metric ? 1 : 0)
+  return (
+    a.day - b.day ||
+    (a.metric < b.metric ? -1 : a.metric > b.metric ? 1 : 0) ||
+    READING_SOURCES.indexOf(a.source) - READING_SOURCES.indexOf(b.source)
+  )
 }
 
 export function assertCrewMember(crewId: unknown, crew: readonly CrewMember[]): asserts crewId is string {
@@ -144,14 +177,15 @@ export function assertActor(actor: unknown): asserts actor is Actor {
 }
 
 /**
- * Checks readings on the way in and returns them with one entry per day and
- * indicator; when a batch names the same one twice, the last entry wins.
+ * Checks readings of one source on the way in and returns them with one entry
+ * per day and indicator; when a batch names the same one twice, the last
+ * entry wins.
  */
-export function checkedReadings(readings: unknown): Reading[] {
+export function checkedReadings(readings: unknown, source: StoredSource = 'manual'): Reading[] {
   if (!Array.isArray(readings)) throw new StoreInputError('Readings must be a list.')
   const unique = new Map<string, Reading>()
   for (const reading of readings) {
-    if (!isManualReading(reading)) throw new StoreInputError('Not a valid manual reading.')
+    if (!isStoredReading(reading) || reading.source !== source) throw new StoreInputError(`Not a valid ${source} reading.`)
     unique.set(`${reading.day}:${reading.metric}`, toReading(reading))
   }
   return [...unique.values()]

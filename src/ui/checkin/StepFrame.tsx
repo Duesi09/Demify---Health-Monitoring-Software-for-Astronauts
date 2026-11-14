@@ -3,7 +3,7 @@ import { formatDay } from '@/domain/format'
 import { METRICS } from '@/domain/metrics'
 import type { Evaluation } from '@/domain/types'
 import { StatusBadge, StatusIcon } from '../status'
-import { MeaningLines, enteredByHand, quietFocus, sourceText, stepTone, stepValue } from './shared'
+import { MeaningLines, latestSource, quietFocus, sourceText, stepTone, stepValue } from './shared'
 
 interface Props {
   step: RoutineStep
@@ -12,6 +12,7 @@ interface Props {
   total: number
   evaluation: Evaluation
   manualKeys: ReadonlySet<string>
+  deviceKeys: ReadonlySet<string>
   /** How to measure, when the catalogue text is not the right one for this step. */
   howTo?: React.ReactNode
   children: React.ReactNode
@@ -22,7 +23,7 @@ interface Props {
  * to measure it and the last reading. The way to enter today's reading goes
  * below, as children.
  */
-export function StepFrame({ step, position, total, evaluation, manualKeys, howTo, children }: Props) {
+export function StepFrame({ step, position, total, evaluation, manualKeys, deviceKeys, howTo, children }: Props) {
   const def = METRICS[step.metrics[0]]
   const assessment = evaluation.assessments[step.metrics[0]]
   const value = stepValue(step, evaluation)
@@ -90,7 +91,7 @@ export function StepFrame({ step, position, total, evaluation, manualKeys, howTo
               <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">{value}</p>
               <p className="mt-1 text-sm text-ink-2">
                 {formatDay(assessment.latestDay)} | {describeAge(step.daysSinceReading)} |{' '}
-                {sourceText(enteredByHand(step, evaluation, manualKeys))}
+                {sourceText(latestSource(step, evaluation, manualKeys, deviceKeys))}
               </p>
             </>
           )}

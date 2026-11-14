@@ -46,6 +46,11 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
     () => new Set(readings.filter((r) => r.source === 'manual').map((r) => `${r.day}:${r.metric}`)),
     [readings],
   )
+  // Readings a device sent through the HTTP API, so the table does not name them as entered by the crew member.
+  const deviceKeys = useMemo(
+    () => new Set(readings.filter((r) => r.source === 'device').map((r) => `${r.day}:${r.metric}`)),
+    [readings],
+  )
 
   // Open on the indicator behind the most urgent finding.
   const [selectedId, setSelectedId] = useState(
@@ -180,6 +185,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
             evaluation={evaluation}
             index={index}
             manualKeys={manualKeys}
+            deviceKeys={deviceKeys}
             onLogged={addReadings}
           />
         </aside>

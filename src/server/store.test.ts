@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { simulateMission } from '@/domain/simulator'
-import { manual, removeTempDataDirs, tempDataDir } from './testing'
+import { device, manual, removeTempDataDirs, tempDataDir } from './testing'
 
 let dataDir: string
 
@@ -80,6 +80,14 @@ describe('mission readings', () => {
     expect(readings).toHaveLength(simulateMission().length + 1)
     expect(readings.at(-1)).toEqual(manual(90, 'systolic', 118))
     expect(await getMissionReadings('morgan')).toEqual(readings)
+  })
+
+  it('include the readings devices sent, between the simulated and the manual ones', async () => {
+    const { getRepository, getMissionReadings } = await load()
+    const repository = await getRepository()
+    await repository.saveManualReadings('morgan', [manual(90, 'systolic', 118)], 'crew:morgan')
+    await repository.saveDeviceReadings('morgan', [device(90, 'systolic', 121)], 'api:cuff')
+    expect((await getMissionReadings()).slice(simulateMission().length)).toEqual([device(90, 'systolic', 121), manual(90, 'systolic', 118)])
   })
 
   it('are refused for someone who is not on the crew', async () => {
