@@ -1,0 +1,104 @@
+/*
+ * Body map motion and hotspot states. Plain global CSS with a "bm-" prefix:
+ * the turbopack *.css rule in next.config.ts currently disables CSS Modules.
+ * Every animation is opt-out via prefers-reduced-motion.
+ */
+
+.bm-hotspot {
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bm-shape {
+  fill: currentColor;
+  fill-opacity: 0.26;
+  stroke: currentColor;
+  stroke-opacity: 0.85;
+  stroke-width: 1;
+  transition:
+    fill-opacity 0.25s ease,
+    stroke-width 0.25s ease,
+    filter 0.25s ease;
+}
+
+.bm-detail {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  stroke-opacity: 0.75;
+  pointer-events: none;
+}
+
+.bm-hotspot:hover .bm-shape,
+.bm-hotspot[data-hover="true"] .bm-shape {
+  fill-opacity: 0.5;
+  stroke-width: 1.4;
+}
+
+.bm-hotspot[aria-pressed="true"] .bm-shape {
+  fill-opacity: 0.68;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+.bm-hotspot[aria-pressed="true"] .bm-detail {
+  stroke: var(--bg);
+  stroke-opacity: 0.55;
+}
+
+.bm-hotspot:focus-visible .bm-shape {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-opacity: 1;
+  stroke-dasharray: 3 2;
+}
+
+/* Heartbeat: duration is set inline from the crew member's current heart rate. */
+@keyframes bm-heartbeat {
+  0% { transform: scale(1); }
+  12% { transform: scale(1.14); }
+  24% { transform: scale(1); }
+  36% { transform: scale(1.08); }
+  52% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+.bm-beat {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bm-heartbeat 1s ease-in-out infinite;
+}
+
+/* Slow scanner sweep across the silhouette. */
+@keyframes bm-scan {
+  0% { transform: translateY(-60px); opacity: 0; }
+  10% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(540px); opacity: 0; }
+}
+.bm-scan {
+  animation: bm-scan 7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes bm-panel-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.bm-panel-in {
+  animation: bm-panel-in 0.32s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-beat,
+  .bm-scan,
+  .bm-panel-in {
+    animation: none;
+  }
+  .bm-scan {
+    display: none;
+  }
+  .bm-shape {
+    transition: none;
+  }
+}
