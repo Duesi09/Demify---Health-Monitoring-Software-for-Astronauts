@@ -182,17 +182,14 @@
   border-top-color: rgb(0 0 0 / 0.14);
 }
 
-/* Phones: the list collapses to a one-line summary (bar stays well under a
-   quarter of the viewport) and expands on demand with its own scroll. */
-@media (max-width: 639.98px) {
-  .ac-bar:not(.ac-expanded) .ac-groups {
-    display: none;
-  }
-  .ac-expanded .ac-groups {
-    max-height: 40vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* Collapsed by default at every width: one slim bar, details on demand. */
+.ac-bar:not(.ac-expanded) .ac-groups {
+  display: none;
+}
+.ac-expanded .ac-groups {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .ac-chevron {
   transition: transform 160ms ease;

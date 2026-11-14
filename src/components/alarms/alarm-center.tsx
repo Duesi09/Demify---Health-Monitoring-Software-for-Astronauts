@@ -321,9 +321,7 @@ export function AlarmCenter() {
   }, []);
 
   const groups = groupByCrew(alarms);
-  const highCount = alarms.filter((a) => a.priority === "high").length;
   const anyDrill = alarms.some((a) => a.drill);
-  const anySimulated = groups.some((g) => !g.drill && telemetryLabel(sources[g.crewId]) != null);
   const top = groups[0]?.alarms[0];
   const more = alarms.length - 1;
 
@@ -338,25 +336,64 @@ export function AlarmCenter() {
           aria-label={`Active alarms: ${alarms.length}${anyDrill ? ", training scenario" : ""}`}
           className={`ac-bar ${level === "high" ? "ac-high" : "ac-medium"}${expanded ? " ac-expanded" : ""}`}
         >
-          <div className="px-4 py-2 md:px-8 md:py-3">
-            {/* Summary + audio controls */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-                <BellRing size={18} strokeWidth={2.25} aria-hidden />
-                <span className="text-[17px] font-semibold tracking-[-0.015em]">
-                  {level === "high" ? "Alarm" : "Warning"}
+          <div className="px-4 py-1.5 md:px-8">
+            {/* One slim bar: the most urgent alarm, its crew member, then controls. Details on demand. */}
+            <div className="flex min-h-9 items-center gap-x-2.5 gap-y-1">
+              <BellRing size={16} strokeWidth={2.25} aria-hidden className="shrink-0" />
+              <span className="shrink-0 text-[15px] font-semibold tracking-[-0.01em]">
+                {level === "high" ? "Alarm" : "Warning"}
+                <span className="ml-1.5 font-light tabular-nums opacity-80">{alarms.length}</span>
+              </span>
+              <span className="ac-tag ac-demo shrink-0" title="Demo monitor alarms, not a medical device">
+                Demo
+              </span>
+              {top && (
+                <p className="ac-line min-w-0 flex-1 truncate text-[13px] leading-snug md:text-[14px]">
+                  <span className="sr-only">{top.priority === "high" ? "High priority: " : "Medium priority: "}</span>
+                  {alarmLine(top)}
+                </p>
+              )}
+              {top && (
+                // Wrapper carries the responsive visibility: .ac-tag sets its own display.
+                <span className="hidden shrink-0 sm:inline-flex">
+                  {groups[0].drill ? (
+                    <span className="ac-tag ac-drill" title="Training scenario: simulated drill, not a real emergency">
+                      Training scenario
+                    </span>
+                  ) : (
+                    telemetryLabel(sources[groups[0].crewId]) && (
+                      <span className="ac-tag ac-sim">{telemetryLabel(sources[groups[0].crewId])}</span>
+                    )
+                  )}
                 </span>
-                <span className="text-[17px] font-light tabular-nums opacity-80">{alarms.length}</span>
-                <span className="ac-tag ac-demo" title="Demo monitor alarms, not a medical device">
-                  Demo
+              )}
+              {top && groups[0].drill && (
+                <span className="ac-tag ac-drill shrink-0 sm:!hidden" title="Training scenario: simulated drill, not a real emergency">
+                  Drill
                 </span>
-                <span className="hidden text-xs font-medium opacity-80 sm:inline">
-                  {highCount ? `${highCount} high priority` : "medium priority"}
-                  {anyDrill ? " · training scenario" : ""}
-                  {anySimulated ? " · simulated telemetry" : ""}
+              )}
+              {alarms.length > 1 && (
+                <button
+                  type="button"
+                  className="ac-btn ac-toggle shrink-0"
+                  aria-expanded={expanded}
+                  aria-controls="ac-groups"
+                  onClick={() => setExpanded((e) => !e)}
+                >
+                  {expanded ? "Less" : `+${more}`}
+                  <span className="sr-only"> alarm details</span>
+                  <ChevronDown size={14} aria-hidden className="ac-chevron" />
+                </button>
+              )}
+              {top && !isCrewPage(pathname, groups[0].crewId) && (
+                <span className="hidden shrink-0 md:inline-flex">
+                  <Link href={`/crew/${groups[0].crewId}`} className="ac-btn ac-primary">
+                    Open monitor<span className="sr-only"> for {groups[0].crewName}</span>
+                    <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
+                  </Link>
                 </span>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
+              )}
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 {soundOn && audioStatus === "locked" && (
                   <button
                     type="button"
@@ -364,7 +401,7 @@ export function AlarmCenter() {
                     aria-label="Enable alarm sound"
                     onClick={() => void unlockAudio()}
                   >
-                    <Volume2 size={14} aria-hidden /> Enable<span className="hidden sm:inline"> alarm</span> sound
+                    <Volume2 size={14} aria-hidden /> <span className="hidden lg:inline">Enable sound</span>
                   </button>
                 )}
                 {silenced ? (
@@ -375,10 +412,7 @@ export function AlarmCenter() {
                     onClick={() => setSilencedUntil(null)}
                   >
                     <BellOff size={14} aria-hidden />
-                    <span className="tabular-nums">
-                      <span className="hidden sm:inline">Silenced </span>
-                      {now ? formatCountdown(silencedUntil - now) : "2:00"}
-                    </span>
+                    <span className="tabular-nums">{now ? formatCountdown(silencedUntil - now) : "2:00"}</span>
                   </button>
                 ) : (
                   <button
@@ -394,7 +428,7 @@ export function AlarmCenter() {
                     disabled={!soundOn}
                   >
                     <BellOff size={14} aria-hidden />
-                    <span className="hidden sm:inline">Silence 2 min</span>
+                    <span className="hidden lg:inline">Silence 2 min</span>
                   </button>
                 )}
                 <button
@@ -403,44 +437,15 @@ export function AlarmCenter() {
                   aria-pressed={soundOn}
                   aria-label="Alarm sound"
                   onClick={() => writeSoundPref(!soundOn)}
-                  title={audioStatus === "unsupported" ? "Audio is not available in this browser" : undefined}
+                  title={audioStatus === "unsupported" ? "Audio is not available in this browser" : soundOn ? "Sound on" : "Sound off"}
                 >
                   {soundOn ? <Volume2 size={14} aria-hidden /> : <VolumeX size={14} aria-hidden />}
-                  <span className="hidden sm:inline">{soundOn ? "Sound on" : "Sound off"}</span>
                 </button>
               </div>
             </div>
 
-            {/* Phone: one-line summary of the most urgent alarm, list on demand. */}
-            {top && (
-              <div className="ac-summary mt-1.5 flex items-center gap-2 sm:hidden">
-                <p className="ac-line min-w-0 flex-1 truncate text-[13px] leading-snug">
-                  <span className="sr-only">{top.priority === "high" ? "High priority: " : "Medium priority: "}</span>
-                  {alarmLine(top)}
-                </p>
-                {groups[0].drill ? (
-                  <span className="ac-tag ac-drill">Drill</span>
-                ) : (
-                  telemetryLabel(sources[groups[0].crewId]) && (
-                    <span className="ac-tag ac-sim">{telemetryLabel(sources[groups[0].crewId])}</span>
-                  )
-                )}
-                <button
-                  type="button"
-                  className="ac-btn ac-toggle"
-                  aria-expanded={expanded}
-                  aria-controls="ac-groups"
-                  onClick={() => setExpanded((e) => !e)}
-                >
-                  {expanded ? "Less" : more > 0 ? `+${more}` : "More"}
-                  <span className="sr-only"> alarm details</span>
-                  <ChevronDown size={14} aria-hidden className="ac-chevron" />
-                </button>
-              </div>
-            )}
-
             {/* Alarms per crew member */}
-            <ul id="ac-groups" className="ac-groups mt-2 pt-1 sm:mt-2.5" aria-label="Alarms by crew member">
+            <ul id="ac-groups" className="ac-groups mt-1.5 pt-1" aria-label="Alarms by crew member">
               {groups.map((g) => {
                 const sim = g.drill ? null : telemetryLabel(sources[g.crewId]);
                 const here = isCrewPage(pathname, g.crewId);

@@ -3,6 +3,7 @@ import { ArrowUpRight, ClipboardPlus, PersonStanding } from "lucide-react";
 import { MiniMonitor } from "@/components/monitor/mini-monitor";
 import { StatusBadge, STATUS_LABEL } from "@/components/ui";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
+import { REGION_ICON } from "@/components/body/regions";
 import type { BodyRegionId, LiveVitals, ReadingSource, Status } from "@/lib/types";
 import { DrillTag, StatusIcon } from "./status-icon";
 
@@ -31,12 +32,6 @@ export interface CrewCardProps {
 
 const RANK: Record<Status, number> = { unknown: 0, nominal: 1, caution: 2, critical: 3 };
 
-const TELEMETRY: Record<LiveVitals["source"], string> = {
-  simulated: "simulated telemetry",
-  sensor: "sensor telemetry",
-  mixed: "sensor + simulated telemetry",
-};
-
 /** Short region label for the status row: "Heart & vessels" -> "Heart". */
 function regionShort(id: BodyRegionId): string {
   return BODY_REGIONS[id].name.split(/[ &]/)[0];
@@ -48,6 +43,37 @@ function regionShort(id: BodyRegionId): string {
  * alarm turns the card red (glowing border, flashing status); drills carry a
  * "Training scenario" tag. Presentational: data comes from props.
  */
+const CHIP: Record<Status, string> = {
+  nominal: "border-border bg-surface text-fg",
+  caution: "border-transparent bg-caution-fill text-on-caution",
+  critical: "border-transparent bg-critical-fill text-on-critical",
+  unknown: "border-dashed border-border bg-transparent text-muted",
+};
+
+/**
+ * Body-region chip: the organ's own icon plus its name. Regions that need
+ * attention switch to a solid alarm fill (amber / red); nominal regions stay
+ * quiet with the icon tinted green. The status is also spelled out for
+ * screen readers and in the tooltip.
+ */
+function RegionChip({ region, status }: { region: BodyRegionId; status: Status }) {
+  const Icon = REGION_ICON[region];
+  return (
+    <span
+      className={`inline-flex h-6 items-center gap-1 rounded-[5px] border px-1.5 text-[11.5px] font-medium leading-none ${CHIP[status]}`}
+    >
+      <Icon
+        size={13}
+        strokeWidth={2.2}
+        aria-hidden
+        className={status === "nominal" ? "text-nominal" : status === "unknown" ? "text-muted" : ""}
+      />
+      {regionShort(region)}
+      <span className="sr-only">: {STATUS_LABEL[status]}</span>
+    </span>
+  );
+}
+
 export function CrewCard({ id, name, role, overall, regions, findings, vitals }: CrewCardProps) {
   const alarms = vitals?.alarms ?? [];
   const alarmLevel = alarms.some((a) => a.priority === "high") ? "high" : alarms.length ? "medium" : null;
@@ -83,19 +109,6 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
       {vitals && (
         <div className="mt-4">
           <MiniMonitor vitals={vitals} />
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
-            <span className="font-medium text-fg/80">Demo monitor</span>
-            <span aria-hidden>·</span>
-            <span>{TELEMETRY[vitals.source]}</span>
-            <span aria-hidden>·</span>
-            <span>waveforms synthesised from telemetry</span>
-            {drill && (
-              <>
-                <span aria-hidden>·</span>
-                <span className="font-medium text-caution">drill: {drill.label}</span>
-              </>
-            )}
-          </p>
         </div>
       )}
 
@@ -106,8 +119,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
             const s = regions[r] ?? "unknown";
             return (
               <li key={r} title={`${BODY_REGIONS[r].name}: ${STATUS_LABEL[s]}`}>
-                <StatusBadge status={s} size="xs" label={regionShort(r)} />
-                <span className="sr-only">: {STATUS_LABEL[s]}</span>
+                <RegionChip region={r} status={s} />
               </li>
             );
           })}

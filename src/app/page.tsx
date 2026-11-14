@@ -140,6 +140,19 @@ export default async function OverviewPage() {
         </div>
       </header>
 
+      {/* Crew grid */}
+      <section aria-labelledby="crew-heading">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
+              Heart and blood pressure, live.
+            </h2>
+            <p className="mt-1 text-sm text-muted">Demo monitors with simulated telemetry unless a sensor is connected.</p>
+          </div>
+        </div>
+        <CrewGrid crew={crew} initialVitals={initialVitals} />
+      </section>
+
       <EscalationBanner items={escalations} commDelaySeconds={mission.commDelaySeconds} />
 
       {/* Mission context */}
@@ -184,18 +197,6 @@ export default async function OverviewPage() {
           </div>
         </Stat>
       </div>
-
-      {/* Crew grid */}
-      <section aria-labelledby="crew-heading">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
-              Every crew member, beat by beat.
-            </h2>
-          </div>
-        </div>
-        <CrewGrid crew={crew} initialVitals={initialVitals} />
-      </section>
 
       {/* Crew trends: small multiples, one chart per indicator, one line per crew member */}
       <section aria-labelledby="trends-heading">

@@ -82,16 +82,16 @@ export function MiniMonitor({ vitals: v }: { vitals: LiveVitals }) {
         </div>
 
         {/* numerics */}
-        <div className="flex shrink-0 items-center gap-3 pl-1 pr-3.5 pt-1 tabular-nums">
+        <div className="flex shrink-0 items-center gap-2 pl-1 pr-3 pt-1 tabular-nums @[17rem]:gap-3 @[17rem]:pr-3.5">
           <div style={{ color: MONITOR_COLOR.ecg }}>
             <div className="text-[8.5px] font-medium text-white/50">HR</div>
-            <div className="text-[36px] font-extralight leading-[0.95] tracking-[-0.045em]">
+            <div className="text-[30px] font-extralight leading-[0.95] tracking-[-0.045em] @[17rem]:text-[36px]">
               <Val>{fmt(v.hr)}</Val>
             </div>
           </div>
-          <div className="hidden @[17rem]:block" style={{ color: MONITOR_COLOR.abp }}>
+          <div style={{ color: MONITOR_COLOR.abp }}>
             <div className="text-[8.5px] font-medium text-white/50">ABP</div>
-            <div className="text-[17px] font-light leading-none tracking-[-0.02em]">
+            <div className="text-[15px] font-light leading-none tracking-[-0.02em] @[17rem]:text-[17px]">
               <Val>{`${fmt(v.sys)}/${fmt(v.dia)}`}</Val>
             </div>
           </div>
