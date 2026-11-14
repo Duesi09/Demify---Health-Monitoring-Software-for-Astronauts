@@ -34,3 +34,15 @@ describe("demo telemetry", () => {
     }
   });
 });
+
+describe("exercise tagging", () => {
+  it("tags readings taken during the exercise block", () => {
+    const from = Date.UTC(2026, 0, 1);
+    const rs = simulateSeries(crew, from, from + 24 * 3_600_000);
+    const ex = rs.filter((r) => r.note === "exercise" && r.indicator === "heartRate");
+    const rest = rs.filter((r) => r.note !== "exercise" && r.indicator === "heartRate");
+    expect(ex.length).toBeGreaterThan(0);
+    const avg = (xs: typeof rs) => xs.reduce((a, r) => a + r.value, 0) / xs.length;
+    expect(avg(ex)).toBeGreaterThan(avg(rest) + 30);
+  });
+});

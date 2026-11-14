@@ -71,7 +71,10 @@ function currentValue(id: IndicatorId, rs: Reading[]): { value: number; takenAt:
   }
   const cutoff = Date.parse(last.takenAt) - 60 * 60_000;
   const window = pool.filter((r) => Date.parse(r.takenAt) >= cutoff && r.note !== "exercise");
-  const use = window.length ? window : pool.slice(-6);
+  // During an exercise block the whole window may be exercise: fall back to
+  // the latest resting readings rather than judging exercise values as rest.
+  const resting = pool.filter((r) => r.note !== "exercise");
+  const use = window.length ? window : resting.length ? resting.slice(-6) : pool.slice(-6);
   return {
     value: Number(median(use.map((r) => r.value)).toFixed(def.decimals)),
     takenAt: last.takenAt,
