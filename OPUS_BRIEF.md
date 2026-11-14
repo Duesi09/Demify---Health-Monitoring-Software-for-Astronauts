@@ -1,6 +1,6 @@
 # OPUS BRIEF: Demify, NASA Space Apps 2026, the final 30 hours
 
-> **How to use:** paste this whole file as the first message of a fresh Claude Opus 5.5 session on the Demify repository and add the word **ultracode**. It is self-contained and was reviewed by three independent critics (facts, code, prompt quality); 56 findings were fixed.
+> **How to use:** paste this whole file as the first message of a fresh Claude Opus 5.5 session on the Demify repository and add the word **ultracode**. It is self-contained and went through two review rounds by independent critics (facts, code, prompt quality); every valid finding was fixed.
 >
 > **Deep detail** lives on branch `test` (do not commit there): `RESEARCH.md` (964 lines, every fact with its fact-check verdict: FIX = corrected fact, REC = recommendation, OBJ = fact-checker objection, DNC = do not claim), `BUSINESS_MODEL.md`, `COMPETITORS.md`. Never read RESEARCH.md whole; read a section with `git show origin/test:RESEARCH.md | sed -n 'A,Bp'`:
 >
@@ -14,6 +14,8 @@
 > | 584-693 | Swiss next steps and funding |
 > | 694-825 | Competitor fact-check |
 > | 826-964 | Project-2 code map |
+>
+> `BUSINESS_MODEL.md` and `COMPETITORS.md` were corrected to match this brief (v2.1) but are public and long: check any line against section 13 before copying it.
 >
 > Facts were checked on **Sat 14 Nov 2026, about 14:00 CET** against `origin/Project-2-Phase-1` at **80a24e8**. Another agent was committing to that branch then: re-check line numbers before editing.
 
@@ -110,8 +112,9 @@ Keep each workflow under about 10 agents unless a phase truly needs more.
 - The wording rules in section 10 apply to code, README, UI text, commit messages and slides.
 
 ### Freeze and rollback
-- **Sun 11:00 CET: feature freeze.** Anything not merged and green stays on its worktree branch and is never merged afterwards. Merged but unrehearsed features stay behind their flag (off), and the demo uses the "if not built" path.
-- After freeze: only text fixes and demo-blocking bugs. If the head is red, `pitch-final` = the last green `pitch-safe-N`.
+- **Sun 11:00 CET: feature freeze, tag `pitch-rc`.** Anything not merged and green stays on its worktree branch and is never merged afterwards.
+- A flag is a runtime setting, not code. Features stay merged with their flag off; after the team's first fully green rehearsal they set the flag to `true` in `.env` and run the `up` command again (section 7). If a later rehearsal fails, they set it back to `false` and the demo uses the "if not built" path.
+- After freeze: only text fixes and demo-blocking bugs. **By Sun 13:00 tag `pitch-final` once** (green section-7 run) and never move it; if the head is red, tag the last green `pitch-safe-N` instead. The stage image is built from `pitch-final`. Deck, project-page text and later slide refinements are docs-only commits after the tag.
 - **After Sun 14:00: no code changes** except reverting to a tag.
 - Keep `docs/pitch/PROGRESS.md` (done, verified with what, open decisions, current tag) updated at the end of every phase; re-read it after any context compaction.
 
@@ -131,7 +134,8 @@ Re-checked on 80a24e8. Run `git grep` for new copies before editing.
 | P0.6 | Judges must always know what is real | every data panel | Labels: **REAL** (live fetch), **SNAPSHOT <date>** (offline cache), **SIMULATED**, **DEVICE** (posted by a sensor or gateway). Never "live" for a snapshot. Tab "NASA Data" → "Open data (NASA OSDR)". The NASA source-tag tooltip names the indicator's own first source (e.g. "NASA OCHMO-TB-041"), never a blanket "NASA-STD-3001" (sleep and hydration cite only OCHMO briefs) |
 | P0.7 | Attribution and non-endorsement | footer | "Built for the NASA International Space Apps Challenge 2026. Uses public data from NASA OSDR and NOAA SWPC. Not affiliated with or endorsed by NASA or NOAA." No NASA logos anywhere |
 | P0.8 | README drift and wording | README.md:5, :7, :20, :25, :46/:48, tables | :5 says it "tells the crew what to do and when to call the flight surgeon": rewrite in training framing (section 10). :7 disclaimer. :20 "19 indicators" → 20, add stDeviation to the table. :25 "≥ 25 %" baseline text must match the code after P1. Remove the duplicated Docker line (:46/:48). Add Crew Monitor and drills, the APIs `/api/vitals/live`, `/api/alarms`, `/api/scenarios`, `/api/crew`, `/api/osdr/mission`, and the intended-purpose statement. "Up to 20 minutes" → "about 3 to 22 minutes one way" |
-| P0.9 | Small accuracy fixes | src/lib/types.ts:110; src/app/radiation/page.tsx:15; knowledge.ts cabinCO2 | types.ts: the ISS 0.5 s is relay latency, not light time (about 1.3 ms from 400 km): call the field "one-way signal delay" with a basis per profile. radiation page: cite "NASA-STD-3001 Vol. 1 Rev C" (it says Rev B). cabinCO2: source entry "NASA-STD-3001 Vol. 2, V2 6004" (no revision letter) plus OCHMO-TB-004; 1-hour average limit 3 mmHg; 7-day target below 2.5 mmHg (OCHMO-TB-004); delete "headaches start around 2.8 mmHg" and "emergency > 4.5 mmHg"; add "headache odds roughly double per +1 mmHg (Law 2014)" |
+| P0.9 | Small accuracy fixes | src/lib/types.ts:110; src/app/radiation/page.tsx:15; knowledge.ts cabinCO2 | types.ts: the ISS 0.5 s is relay and network latency, not straight-line light time (1.3 ms from 400 km): call the field "one-way signal delay" with a basis per profile. radiation page: cite "NASA-STD-3001 Vol. 1 Rev C" (it says Rev B). cabinCO2: source entry "NASA-STD-3001 Vol. 2, V2 6004" (no revision letter) plus OCHMO-TB-004; 1-hour average limit 3 mmHg; 7-day target below 2.5 mmHg (OCHMO-TB-004); delete "headaches start around 2.8 mmHg" and "emergency > 4.5 mmHg"; add "headache odds roughly double per +1 mmHg (Law 2014)" |
+| P0.10 | Offline, any OSDR study search except the default returns 502 "Search failed" in front of judges | src/app/api/osdr/search/route.ts, src/lib/sources/osdr.ts:743, the search UI on /research | Required: when offline, hide the search box or show "Search needs a connection; showing the cached default list". Optional: snapshot 3-4 likely queries (bone, radiation, Inspiration4) |
 | ✓ | Exercise samples judged as resting vitals | fixed in 80a24e8 | Confirm a test freezes the clock inside ms1's exercise slot (11:00 to 12:30 UTC) and asserts heart rate is not flagged; add it if missing |
 
 Commit P0 as 3 to 5 focused commits, run section 7, tag `pitch-safe-1`, push.
@@ -146,11 +150,13 @@ Commit P0 as 3 to 5 focused commits, run section 7, tag `pitch-safe-1`, push.
 | 2 | **P1.0 Pitch-time safety net**: a Vitest test at `2026-11-15T15:30:00Z` (section 7) plus a demo smoke script with Playwright installed in a scratch directory | 1 h | Mandatory, do right after P0 while the network is good |
 | 3 | **P1.1 Over-triage fix** (6.1) | 1.5 h | Mandatory |
 | 4 | **P1.2 Link model and `?link=` switch** (6.2a) | 2 h | Strongly wanted; fallback is two containers |
-| 5 | **P1.3 Light-time contracts, minimal** (6.2b to 6.2e): one plan (P-CHEST), no new API, behind `DEMIFY_CONTRACTS` | 3 to 4 h | **Hard stop Sat 23:00 CET.** Not green by Sun 08:00 → flag off, slide instead |
+| 5 | **P1.3 Light-time contracts, minimal** (6.2b to 6.2e): one plan (P-CHEST), no new route (one PATCH on the existing `/api/scenarios`), behind `DEMIFY_CONTRACTS` | 3 to 4 h | **Hard stop Sat 23:00 CET.** Not green by Sun 08:00 → flag off, slide instead |
 | 6 | **P1.4 Temperature: NEWS2 bands + Expected Self** (6.3) | 1.5 h | Only if time remains Sun morning; all of 6.3 lands in one commit or none of it |
 | post-pitch | Flight recorder (6.4), cause lines (6.5), other plans, ports from test (reaction check renamed "Reaction check: modelled on the PVT-B used in NASA's Reaction Self Test", task go/no-go, storm-shelter procedure, cross-indicator patterns, SQLite audit, `/api/v1`) | n/a | Roadmap slide only. Never show a test-branch feature as if it were in the pitched build |
 
-**Schedule (CET):** Sat 14:00-17:00 P0 and P1.0 · Sat 17:00-23:00 P1.1, P1.2, P1.3 · Sat 23:00-24:00 review workflow and fixes · Sun 08:00-11:00 fixes from the review, P1.4 if time, pitch kit drafts · **Sun 11:00 freeze**, tag `pitch-final`, hand the team checklist over · Sun 11:00-14:00 deck v1 PDF, project-page text, demo script final; the team rehearses · Sun 14:00 no more code · pitch · until 23:59 refine the project page and the 7 global slides.
+**Schedule (CET):** Sat 14:00-17:00 P0 and P1.0 · Sat 17:00-23:00 P1.1, P1.2, P1.3 · Sat 23:00-24:00 review workflow and fixes · Sun 08:00-11:00 fixes from the review, P1.4 if time, pitch kit drafts · **Sun 11:00 freeze**, tag `pitch-rc`, hand the team checklist over · Sun 11:00-13:00 text fixes, green run, tag `pitch-final` by 13:00; the team rehearses and builds the stage image from it · Sun 11:00-14:00 deck v1 PDF, project-page text, demo script final · Sun 14:00 no more code · pitch · until 23:59 refine the project page and the 7 global slides.
+
+**Checkpoints:** if P0 and P1.0 are not tagged by 17:30, start P1.1 anyway and drop P1.2 (use the two-container fallback). Start P1.3 only if P1.1 (and P1.2, if attempted) are merged and green by 19:30; otherwise P1.3 becomes the "our next build" slide and the evening goes to the review workflow and pitch-kit drafts. At about 22:00 send the team, one step at a time, a dry-run Docker build on their laptop (Wi-Fi on) to prove the image builds there.
 
 ---
 
@@ -168,18 +174,18 @@ Commit P0 as 3 to 5 focused commits, run section 7, tag `pitch-safe-1`, push.
 - Re-run the pitch-time test: the banner must still tell one honest story, ms2's single short night must not say "act now", and the STEMI drill must still escalate.
 
 ### 6.2 Light-time contracts (P1.2 + P1.3)
-**Idea in one line:** care plans are approved before an emergency; emergency steps run at once; non-urgent steps carry an Earth veto window computed from the signal delay; replies written for an older situation are flagged as stale.
+**Idea in one line:** care plans are written and approved before an emergency; emergency steps are due at once and the crew does them; non-urgent steps carry an Earth veto window computed from the signal delay; replies written for an older situation are flagged as stale.
 
 **Honest framing:** this makes existing practice explicit, computed and checkable: ISS medical checklists and flight rules, weekly private medical conferences, standing orders, the Navy's UNODIR convention ("unless otherwise directed"), and JPL loading about two weeks of commands before each Mars solar conjunction. Computable guidelines already exist (HL7 CPG-on-FHIR, WHO SMART). We found no public 2026 entry with pre-approved plans plus a veto deadline computed from the delay plus stale-reply detection. That is the whole claim.
 
 **Safety rules (non-negotiable):** emergency and clinical steps are always ACT_NOW; only operational, non-urgent steps carry a veto window. Nothing runs automatically: a step "becomes due", the **crew** executes and ticks it, and the actor is recorded. Example plans are labelled "example training plan, written by the Demify team, not reviewed by a flight surgeon". No drug names, doses or amounts.
 
 #### 6.2a Link model and switch (P1.2)
-Do **not** port `missionContext.ts` as it is (its iss is 400 km, its transit is a day-dependent curve, its mars-far is the 2.67 AU conjunction geometry, it has no Mars-nearest, its type names clash). Write a new `src/lib/link.ts` with an explicit table and copy only `lightTimeS`, the constants, and `ShipClock` / `startClock` / `shipNow` / `withRate` from `origin/test:src/domain/consult.ts` (about lines 250-270). Type name `LinkProfileId`. Keep the existing `DEMIFY_MISSION` values valid.
+Do **not** port `missionContext.ts` as it is (its iss is 400 km, its transit is a day-dependent curve, its mars-far is the 2.67 AU conjunction geometry, it has no Mars-nearest, its type names clash). Write a new `src/lib/link.ts` with an explicit table. Copy only `lightTimeS` and the distance constants (speed of light, Moon distance, Mars nearest AU; not `MARS_FARTHEST_AU`, not the transit curve) from `origin/test:src/domain/missionContext.ts` (about lines 15-24 and 94), and `LIVE_HANDLING_S`, `MESSAGE_HANDLING_S`, `FAST_FORWARD_RATE`, `ShipClock`, `startClock`, `shipNow`, `withRate` from `origin/test:src/domain/consult.ts` (lines 12-16 and about 250-270). Type name `LinkProfileId`. Keep the existing `DEMIFY_MISSION` values valid.
 
 | `LinkProfileId` | Basis | One way |
 |---|---|---|
-| `iss` (existing) | relay and network latency; light time is about 1.3 ms | 0.5 s (illustrative) |
+| `iss` (existing) | relay through geostationary TDRS satellites plus network latency (roughly 0.25 s of it is light time) | 0.5 s (illustrative) |
 | `artemis-lunar` (existing) | about 384,400 km | about 1.3 s |
 | `mars-nearest` | 0.37 AU | about 3.1 min |
 | `mars-transit` (existing) | fixed 750 s | 12.5 min |
@@ -192,7 +198,7 @@ One `linkPolicy(oneWayS) → { mode, roundTripS, earliestAnswerS }` replaces the
 
 **Switch on stage:** a `?link=<LinkProfileId>` search param read on the server (pages are force-dynamic; check how Next 16 passes `searchParams`, it may be a Promise), so every server-rendered delay string changes together. The selector is plain links that keep the param. Unknown values fall back to the `DEMIFY_MISSION` profile. Avoid client-only state for the profile: EscalationBanner and the page headers are server components and would show a different delay.
 
-**Fallback if `?link=` is not done:** a second container, `docker run -d --name demify-iss -e DEMIFY_MISSION=iss -e DEMIFY_OFFLINE=true -p 127.0.0.1:3002:3000 demify:latest`, opened in a second tab (3001 is taken by the offline gateway).
+**Fallback if `?link=` is not done:** a second container, `docker rm -fv demify-iss 2>/dev/null; docker run -d --rm --name demify-iss -e DEMIFY_MISSION=iss -e DEMIFY_OFFLINE=true -p 127.0.0.1:3002:3000 demify:latest`, opened in a second tab (3001 is taken by the offline gateway). It has its own data: start any drill you need in that tab too. The reset also runs `docker rm -fv demify-iss`.
 
 #### 6.2b Types (new pure module `src/lib/health/contracts.ts`, Zod-validated, no `node:` imports)
 ```ts
@@ -211,13 +217,14 @@ interface Activation { planId: string; planVersion: string; crewId: string;
 interface Reply { inReplyTo: string; basedOnStateSeq: number; planVersion: string;
   sentAtEarth: number; kind: 'veto'|'confirm'|'amend'; text: string; simulated: true; }
 ```
-Field names mirror FHIR R4 PlanDefinition/ActivityDefinition: say "FHIR-aligned field names", never "FHIR-compliant". No CQL engine, no CDS Hooks. Plans are immutable; an edit is a new version. The plan fingerprint (SHA-256 of canonical JSON, 8 hex shown, called a "version fingerprint", never a signature) is computed in a server-only file (e.g. `src/lib/health/fingerprint.ts`) and passed as a prop. Derive `activatedAt` from the active drill's start time in the scenarios store, so a `?link=` switch keeps the countdown consistent without new persistence.
+Field names mirror FHIR R4 PlanDefinition/ActivityDefinition: say "FHIR-aligned field names", never "FHIR-compliant". No CQL engine, no CDS Hooks. Plans are immutable; an edit is a new version. The plan fingerprint (SHA-256 of canonical JSON, 8 hex shown, called a "version fingerprint", never a signature) is computed in a server-only file (e.g. `src/lib/health/fingerprint.ts`) and passed as a prop. Derive `activatedAt` from the active drill's start time in the scenarios store, so a `?link=` switch keeps the countdown consistent. **The only new persistence:** extend the existing scenarios store (src/lib/store/scenarios.ts) with `ticks: { stepId, at, actor }[]`, saved through one new PATCH method on the existing `/api/scenarios` route with the P0.5 protection (today ticks live only in React state in response-checklist.tsx and would be lost on a `?link=` navigation). `stateSeq` is computed on the server as 1 + findings + ticks.
 
 #### 6.2c The math (unit-tested)
 - τ = one-way delay. Ground handling H = **600 s by message**, or **5 s by live voice** when τ ≤ 5 s. Margin M = max(60 s, 0.05 × round trip). All three are **labelled assumptions** on screen, not NASA figures.
 - **T_veto = activatedAt + 2τ + H + M** (continuous contact; contact-window terms default to 0 so the model also fits Antarctic or maritime windows later).
 - Worked values (illustrative): ISS ≈ 66 s; Moon ≈ 68 s; Mars nearest ≈ 17.2 min; Mars transit ≈ 36.3 min; Mars far ≈ 53.7 min.
-- **Effective class is computed:** an ACT_UNLESS_VETOED step whose T_veto is later than its deadline D_clin becomes ACT_NOW if `allowEscalateToActNow`, otherwise GROUND_APPROVAL with fallback. With no contact, ACT_UNLESS_VETOED follows the same rule and GROUND_APPROVAL goes straight to fallback. Show both labels: "Authored: act unless vetoed. Today: act now (Earth cannot answer before the 30-min deadline)."
+- **Effective class is computed:** an ACT_UNLESS_VETOED step whose T_veto is later than its deadline D_clin becomes ACT_NOW if `allowEscalateToActNow`, otherwise GROUND_APPROVAL with fallback. With no contact, ACT_UNLESS_VETOED follows the same rule and GROUND_APPROVAL goes straight to fallback. Show both labels: "Authored: act unless vetoed. Today: act now (Earth's veto window, about 36 min with our handling assumption, closes after the 30-min deadline)."
+- **Ship time** (fast-forward) is used only inside the contract card. The scenarios store always uses the real `Date.now()` (drills auto-end after 30 real minutes, src/lib/store/scenarios.ts:15). A unit test fast-forwards 60 min of ship time and asserts the drill is still active.
 - **Stale reply:** `stateSeq` increments on activation, each new finding and each ticked step. A reply is STALE if `basedOnStateSeq < stateSeq` or its planVersion differs; show the diff ("written on data up to 14:35; since then 2 steps done"). A veto after a step is done shows **LATE VETO**; never dropped, never auto-reversed.
 - **Receipt:** expect an automatic Earth receipt by send + 2τ + 60 s; without one show "receipt unconfirmed", and a step done without receipt is labelled "done under pre-approval; Earth had no opportunity to veto". Silence counts as consent only after a confirmed receipt.
 
@@ -234,7 +241,7 @@ The AED and treatment live inside the onboard checklist; Demify does not list th
 #### 6.2e UI (behind `DEMIFY_CONTRACTS`)
 - **Contract header** on the existing checklist (src/components/crew/response-checklist.tsx and emergency-console.tsx, opened through `activeProtocol()` in protocols.ts): "P-CHEST v1 · #a3f9c2e1 · example training plan, not reviewed by a flight surgeon · Earth can veto step 4 until 14:52 ship time (round trip 6.2 min + 10 min handling + 1 min margin; assumptions)". Per-step chips: authored class and today's class.
 - Profile links (6.2a) visible in the header.
-- Fast-forward ×60 ship clock so a Mars window plays out in under a minute; a **SIMULATED** Earth reply arrives with a red STALE badge.
+- Fast-forward ship clock (rate as a parameter; ×120 for the demo) so the Mars-nearest window plays out in about 9 s; a **SIMULATED** Earth reply arrives with a red STALE badge.
 - Patient-is-the-medic (CMO is the patient → steps addressed to a helper; second crew member confirms non-ACT_NOW steps) and the pre-blackout plan review (the medical twin of JPL's pre-conjunction command load) are roadmap slides.
 
 ### 6.3 Temperature and Expected Self (P1.4, only if time)
@@ -243,11 +250,12 @@ The AED and treatment live inside the onboard checklist; Demify does not list th
 **Fix (one commit, all or nothing, behind `DEMIFY_EXPECTED_SELF`):**
 1. Bands use NEWS2 cut-offs (confirmed): ≤ 35.0 critical (NEWS2 3 points); 35.1-36.0 caution (1); **36.1-38.0 nominal (0)**; 38.1-39.0 caution (1); ≥ 39.1 critical (NEWS2 2 points, mapped to critical by us, labelled). Temperature escalates at ≥ 39.1 or at ≥ 38.1 persisting 24 h, not at 38.5.
 2. Replace the 25 % rule with per-indicator absolute deltas (tagged App, our own): HR ±15 bpm, SBP ±20 mmHg, temperature ±0.5 °C, SpO₂ −3 points. Update the "≥ 25 %" text in check-in-form.tsx:61 and README.md:25.
-3. Expected Self for temperature: expected = pre-flight baseline + w × Δ(day), Δ = +1.0 °C × min(day/75, 1), w = 0.5 (one study, Stahn 2017), plateau +0.5 °C. **Only for resting readings tagged as core or heat-flux sensor** (Stahn used a forehead heat-flux sensor); any other thermometer shows "curve not applicable" and uses baseline mode. Within expected ± 0.5 °C → "nominal: typical in-flight warming for day N (early evidence: 1 study)".
-4. **Safety invariants (unit-tested):** Expected Self may only reclassify a caution raised by the App baseline rule, never a NASA- or CLIN-tagged threshold; the "typical in-flight warming" label never appears at ≥ 37.8 °C (test that 38.0 °C never shows it).
-5. `evaluateValue` gets an optional context `{ missionDay, microgravity }`, passed from the server to the check-in form as props and used identically in actions.ts and assess.ts, so the preview and the saved result never disagree.
-6. simulator.ts follows the same curve (its comment says 0.5-1 °C, the code adds 0.2). If 6.3 is cut, keep the simulator at 0.2 and leave the temperature baseline rule off; otherwise readings at pitch time straddle the 0.5 °C limit and flicker.
+3. Expected Self for temperature: expected = pre-flight baseline + w × Δ(day), Δ = +1.0 °C × min(day/75, 1), w = 0.5 (one study, Stahn 2017), plateau +0.5 °C. **Only for resting readings tagged as core or heat-flux sensor** (Stahn used a forehead heat-flux sensor); any other thermometer shows "curve not applicable" and uses baseline mode. Within expected ± 0.5 °C → "nominal: typical in-flight warming for day N (early evidence: 1 study)". Readings have no sensor type today: add an optional `sensorKind: 'core' | 'heat-flux' | 'oral' | 'tympanic' | 'skin'` (types.ts and the POST `/api/readings` Zod schema); simulated bodyTemp readings are tagged `heat-flux` (still labelled SIMULATED); a reading without `sensorKind` shows "curve not applicable" and uses baseline mode.
+4. **Safety invariants (unit-tested):** Expected Self may only reclassify a caution raised by the App baseline rule, never a NASA- or CLIN-tagged threshold; the "typical in-flight warming" label never appears at ≥ 37.8 °C (test that 38.0 °C never shows it); readings in an exercise slot are never reclassified by the curve and get a heat-strain caution instead (RESEARCH.md around line 182).
+5. `evaluateValue` gets an optional context `{ missionDay, microgravity, expectedSelf: boolean }`. The server reads `DEMIFY_EXPECTED_SELF` once and passes the whole context to the check-in form as props (a client component cannot read server env vars); actions.ts and assess.ts use the same context; knowledge.ts never reads `process.env`. The preview and the saved result never disagree.
+6. simulator.ts follows the same curve (its comment says 0.5-1 °C, the code adds 0.2). If 6.3 is cut, keep the simulator at 0.2 and leave the temperature baseline rule off; otherwise readings at pitch time straddle the 0.5 °C limit and flicker. Unit-test at 2026-11-15T15:30:00Z that no crew member's simulated temperature status changes between consecutive samples.
 7. Curves apply only to microgravity profiles (ISS, transit). Analog and surface profiles run with curves off: the first real users (analog crews at 1 g) use baseline mode. Say so.
+8. Update tests/knowledge.test.ts ("bodyTemp = 37.5 is caution", "38.4 is critical") and tests/review-health.test.ts:139-143 (37.95); add boundary tests 35.0 critical, 35.1 caution, 36.1 nominal, 38.0 nominal, 38.1 caution, 39.0 caution, 39.1 critical, with the flag on and off.
 
 Roadmap slide: **SHIFT** (band moves: body mass −3 % × min(day/30, 1) ± 2 %, same device only; core temperature), **CONTEXT** (shown as "typical in spaceflight", threshold unchanged: sleep about 6.1 h on ISS, glucose, reaction time, exercise capacity), **BASELINE** (no curve: resting HR, HRV, SpO₂, mood, stress, hydration, vision/SANS, radiation). "Expected" never means "acceptable".
 
@@ -258,7 +266,7 @@ Append-only JSONL `<dataDir>/demify-recorder.jsonl` with a SHA-256 hash chain (`
 "Possible contributors" (at most 3) under a finding, each with presence in the time window, evidence tier (observed in spaceflight / ground or analog / clinical / NASA standard / App assumption), source and "what would rule it out", ending with "Other causes Demify does not measure: illness, medication, personal events." Wording "coincides with" or "possibly related", never "caused by". Rules: R-ACT-1 (high HR/BP/RR in the exercise slot → expected), R-CO2-1 (1-h > 3 mmHg or 7-day > 2.5 mmHg; always list "fluid shift to the head" as the competing explanation), R-SLEEP-1 (sleep ≤ 6 h → reaction lapses, mood, stress; Jones 2022; the 2-hour timing-shift trigger is an App assumption), R-SEP-1 (≥ 10 MeV ≥ 10 pfu → dose directly; sleep and stress only through the shelter procedure).
 
 ### 6.6 Radiation page corrections (P0 if quick, else post-pitch)
-Tag `estimateDoseRate` coefficients "App (illustrative)" (the ×0.05 factor applies only when `mission.id === 'iss'`) and add "Estimate from GOES flux at geosynchronous orbit, not a measurement at your location. Your dosimeter is the reference." Flares are an early warning, not a dose ("protons, if any, may follow, sometimes within minutes"). Never add mSv and mGy; the OSDR EDA cross-check reads "0.31 mGy/day absorbed dose, ISS area dosimetry (OSDR, Rodent Research missions), not crew dose". Lunar surface 1.4 mSv/day (Chang'e-4, 1,369 µSv/day dose equivalent); config.ts's 1.3 has no source. Never ship `DEMO_KEY` (30 requests per hour per IP); on HTTP 429 fall back to the snapshot. Offline, OSDR search works only for the default query: snapshot 3 to 4 likely queries or hide the search box offline.
+Tag `estimateDoseRate` coefficients "App (illustrative)" (the ×0.05 factor applies only when `mission.id === 'iss'`) and add "Estimate from GOES flux at geosynchronous orbit, not a measurement at your location. Your dosimeter is the reference." Flares are a warning sign, not a dose ("protons, if any, may follow, sometimes within minutes"). Never add mSv and mGy; the OSDR EDA cross-check reads "0.31 mGy/day absorbed dose, ISS area dosimetry (OSDR, Rodent Research missions), not crew dose". Lunar surface 1.4 mSv/day (Chang'e-4, 1,369 µSv/day dose equivalent); config.ts's 1.3 has no source. Never ship `DEMO_KEY` (30 requests per hour per IP); on HTTP 429 fall back to the snapshot. The offline OSDR search fix is P0.10.
 
 ---
 
@@ -275,20 +283,28 @@ DEMIFY_OFFLINE=true DEMIFY_DATA_DIR=$(mktemp -d) PORT=3000 HOSTNAME=127.0.0.1 no
 Smoke: `/`, `/crew/plt`, `/body`, `/body?crew=ms2`, `/check-in`, `/radiation`, `/research`, `/guidance` → 200; `/crew` → 307; `/crew/xyz` → 404; `/api/space-weather`, `/api/osdr/inspiration4?summary=1`, `/api/osdr/eda` → freshness `snapshot`; a POST to `/api/readings` updates the board (label DEVICE); a STEMI drill raises an alarm within 30 s and opens the checklist; with `DEMIFY_ADMIN_TOKEN=smoke` set, drill and readings POSTs without the token get 401.
 
 ### Pitch-time state (P1.0)
-The server computes every simulated value and assessment from the real `Date.now()`; Playwright's clock only fakes the browser. So: a Vitest test with `vi.setSystemTime(new Date('2026-11-15T15:30:00Z'))` that asserts on `assessAllCrew()`: which crew escalate, the banner count, that the STEMI drill escalates, that no single-night or single-value finding says "act now". Take Playwright screenshots during a real 15:00-16:00 UTC window (Sat 16:00-17:00 CET is the best one) or run the container under libfaketime. Never put exact vital values in the script: they move with the clock.
+The server computes every simulated value and assessment from the real `Date.now()`; Playwright's clock only fakes the browser. So: a Vitest test with `vi.setSystemTime(new Date('2026-11-15T15:30:00Z'))` that asserts on `assessAllCrew()`: which crew escalate, the banner count, that the STEMI drill escalates, that no single-night or single-value finding says "act now". Saturday's real 16:00-17:00 CET window (= 15:00-16:00 UTC) is only an early sanity check. Take the deck screenshots Sun 09:00-11:00 against the frozen build with the server clock faked by libfaketime on the host (install it in your container, not in the project): `FAKETIME='@2026-11-15 15:30:00' LD_PRELOAD=<path>/libfaketime.so.1 DEMIFY_OFFLINE=true DEMIFY_DATA_DIR=$(mktemp -d) PORT=3000 HOSTNAME=127.0.0.1 node .next/standalone/server.js`. If that fails, use any time and mark the screenshots "illustrative". The P1.0 test also asserts that at least one crew member escalates at 15:30Z (beat 3 needs the banner); if none does, the demo starts the drill before beat 3. Never put exact vital values in the script: they move with the clock.
 
 ### Docker (the build that goes on stage)
+Stage settings live in `.env` next to `docker-compose.yml`, so every later `up` keeps them (otherwise compose falls back to `iss` and `0.0.0.0`):
 ```bash
-docker compose --profile offline build            # Sat night, Wi-Fi ON (needs the npm registry)
-docker compose --profile offline down -v           # fresh volumes = the reset
-DEMIFY_BIND=127.0.0.1 DEMIFY_MISSION=mars-transit docker compose --profile offline up -d demify-offline demify-offline-gateway
+DEMIFY_BIND=127.0.0.1
+DEMIFY_MISSION=mars-transit
+DEMIFY_CONTRACTS=false        # the team sets true after a green rehearsal
+```
+Right after `pitch-final` is tagged, on the team's laptop, Wi-Fi ON (the build needs the npm registry):
+```bash
+git fetch --tags && git checkout pitch-final
+docker compose --profile offline build
+docker compose --profile offline down -v            # fresh volumes = the reset
+docker compose --profile offline up -d demify-offline demify-offline-gateway
 docker compose --profile offline ps                 # demify-offline healthy; "demify" (port 3000) NOT running
 ```
-Then open http://127.0.0.1:3001 only. Run the smoke against it with Wi-Fi off before tagging `pitch-final`.
+Then Wi-Fi OFF, open http://127.0.0.1:3001 only and run the smoke. The team pastes the output back to you; you never claim it ran. The stage image is always built from `pitch-final`.
 
 ### Done
-- **Agent done:** checks green; `pitch-final` tagged and pushed; `docs/pitch/` contains PROGRESS.md, DEMO_SCRIPT.md (speaker, driver, cues), PROJECT_PAGE.md (paste-ready), DECK.pdf (7 slides) or its source, TEAM_CHECKLIST.md; the pitch-time test passes.
-- **Team does (hand over TEAM_CHECKLIST.md at 11:00):** build the image on the laptop Sat night; charger and display adapter; Do Not Disturb on, sleep off; decide alarm sound volume; browser zoom 125-150 %; bookmarks for every demo URL (with `?link=`); slides as a local PDF plus a USB copy; a 60-90 s screen recording of the whole demo saved as a local file; three timed rehearsals; submit the project page on the Space Apps site before 16:00. **Plan B:** Docker fails → play the recording; laptop fails → PDF from the USB stick on any machine.
+- **Agent done:** checks green; `pitch-rc` and `pitch-final` tagged and pushed; `docs/pitch/` contains PROGRESS.md, DEMO_SCRIPT.md (speaker, driver, cues), PROJECT_PAGE.md (paste-ready), DECK.pdf (7 slides) or its source, TEAM_CHECKLIST.md; the pitch-time test passes.
+- **Team does** (Saturday ~22:00 message: the dry-run build; TEAM_CHECKLIST.md at 11:00 for the rest): the stage build from `pitch-final` (above); charger and display adapter; Do Not Disturb on, sleep off; decide alarm sound volume; browser zoom 125-150 %; bookmarks for every demo URL (with `?link=`); slides as a local PDF plus a USB copy; a 60-90 s screen recording of the whole demo saved as a local file; three timed rehearsals; submit the project page on the Space Apps site before 16:00. **Plan B:** Docker fails → play the recording; laptop fails → PDF from the USB stick on any machine.
 
 ---
 
@@ -300,8 +316,8 @@ Then open http://127.0.0.1:3001 only. Run the smoke against it with Wi-Fi off be
 |---|---|---|
 | 1 Overview | Opens `/` | Mission day, crew status, signal delay 12.5 min. "Vital signs are simulated and labelled; space weather is a NOAA snapshot from <date>; blood data are real Inspiration4 crew data." |
 | 2 Check-in | Types one out-of-range value | It is rated as you type, with its source tag (NASA / Clinical / App) |
-| 3 Delay changes the advice | Clicks `?link=iss`, then back to Mars (or switches to the 3002 tab) | ISS: "request a private medical conference now"; Mars: "act first, then report" |
-| 4 Light-time contract (if built and rehearsed) | `?link=mars-nearest`, starts the STEMI drill, then switches to `mars-transit`, then fast-forwards | Steps 1-3 run at once. Step 4 waits for a possible veto, 17 min at Mars nearest; at 12.5 min one way it becomes act now because Earth cannot answer within 30 min. A simulated Earth reply arrives marked STALE. "Emergency steps never wait; Earth keeps a veto over what can wait." If not built: show the delay-aware checklist and say "our next build", then the slide |
+| 3 Delay changes the advice | Clicks `?link=iss`, then back to Mars (or switches to the 3002 tab) | The delay tile and the banner change: ISS "request a private medical conference now"; Mars "act first, then report" |
+| 4 Light-time contract (if built, flag on), 45 s | At `?link=mars-nearest` starts the STEMI drill and fast-forwards ×120, then switches to `?link=mars-transit` | Steps 1-3 are due at once; the crew does them. Step 4 can wait: Earth may veto it for 17 min, and a simulated Earth reply arrives marked STALE because two steps were done since. At 12.5 min one way the round trip is 25 min; with our assumed 10 min for the ground to decide, the veto window closes after about 36 min, past the 30-min deadline, so step 4 becomes act now. "Emergency steps never wait; Earth keeps a veto over what can wait." If not built: the delay-aware checklist, "our next build", then the slide |
 | 5 Real data | Opens Inspiration4 biomarkers and the radiation dose budget | Real crew biomarkers (OSDR OSD-569, OSD-575); dose budget against NASA's 600 mSv career limit |
 
 Optional proof for "any device or gateway that can POST our JSON": one rehearsed `curl` to `/api/readings` (on the laptop itself, since the app binds to 127.0.0.1), and the board updates.
@@ -313,25 +329,25 @@ Optional proof for "any device or gateway that can POST our JSON": one rehearsed
 ### Five-minute plan (local judges)
 | Time | Who | Content |
 |---|---|---|
-| 0:00-0:25 | Speaker | Hook: "On the way to Mars, a message to the flight surgeon takes about 3 to 22 minutes to arrive, depending on where the planets are, and as long to come back. Crews already train for that with checklists and flight rules. Demify builds the delay into its escalation advice." |
+| 0:00-0:25 | Speaker | Hook: "At Mars, a message to the flight surgeon takes about 3 to 22 minutes to arrive, depending on where the planets are, and as long to come back. Crews already train for that with checklists and flight rules. Demify builds the delay into its escalation advice." |
 | 0:25-0:45 | Speaker | User and problem: one crew, the Crew Medical Officer may be the patient, five hazards (radiation, isolation, distance, gravity, closed environment) |
 | 0:45-2:45 | Driver + Speaker | Demo, five beats (section 8) |
 | 2:45-3:20 | Speaker | Validity: every threshold carries a visible source tag (NASA, Clinical, or App-derived, our own and labelled); tests and CI; research prototype |
 | 3:20-4:30 | Speaker | **Business, 60-75 s, one canvas slide** (section 11) |
 | 4:30-5:00 | Speaker | Three sentences + the ask: an analog-mission pilot partner and a space-medicine advisor |
 
-3-minute fallback: hook 20 s, problem 15 s, demo 80 s, trust 30 s, business 25 s, close 10 s. Cut any demo beat that runs over 30 s in rehearsal. Q&A split: driver answers technical and data questions, speaker answers business, regulation and science.
+3-minute fallback: hook 20 s, problem 15 s, demo 80 s, trust 30 s, business 25 s, close 10 s. Beat 4 gets 45 s and beat 2 gets 15 s; cut any other demo beat that runs over 30 s in rehearsal. Q&A split: driver answers technical and data questions, speaker answers business, regulation and science.
 
 ### Three sentences
-1. Built: "When Earth is minutes away, Demify's light-time contracts run emergency steps at once and give Earth a veto window, computed from the signal delay, over the steps that can wait. Our example plans are team-written and not yet reviewed by a flight surgeon." Not built: "We designed light-time contracts: plans approved in advance, emergency steps at once, and an Earth veto window computed from the delay for what can wait. It is our next build."
+1. Built: "In our training simulation, when Earth is minutes away, a light-time contract makes the emergency steps due at once for the crew and gives Earth a veto window, computed from the signal delay, over the steps that can wait. The crew does every step; Demify tracks it. Our example plans are written by our team and not reviewed by a flight surgeon." Not built: "We designed light-time contracts: plans written in advance, emergency steps due at once for the crew, and an Earth veto window computed from the delay for what can wait. It is our next build."
 2. "Every rating shows its source: a NASA standard, a clinical guideline or our own rule, labelled as ours." (Add "and every piece of advice is logged with its rule version" only once 6.4 exists.)
-3. "It runs offline with cached snapshots of its outside data, and shows real Inspiration4 crew blood biomarkers from NASA's open science archive next to simulated crew vitals."
+3. "It shows real Inspiration4 crew blood biomarkers from NASA's open science archive next to simulated crew vitals, and today's demo runs with Wi-Fi off from cached snapshots of its outside data."
 
 ### Criteria mapping
-Impact: emergency steps never wait on Earth; first analog users targeted for 2027. Creativity: light-time contracts, Expected Self. Validity: source tags, tests, honest scope. Relevance: show the challenge objectives (indicators, guidance, clickable body figure, charts, colour coding, prompts to measure) within the demo. Presentation: rehearsed hand-off, large font.
+Impact: emergency steps never wait on Earth; first analog users targeted for 2027 if our Asclepios VII proposal is accepted. Creativity: light-time contracts (shown if built, otherwise "our next build"); Expected Self only if 6.3 is merged and its flag is on in the stage build, otherwise a roadmap idea. Validity: source tags, tests, honest scope. Relevance: show the challenge objectives (indicators, guidance, clickable body figure, charts, colour coding, prompts to measure) within the demo. Presentation: rehearsed hand-off, large font.
 
 ### Comparison lines (never name other Space Apps teams)
-- Instead of any "first/only": **"Of the 59 agency, commercial and research systems in our review, we found none that combines a visible source tag on every threshold, escalation that adapts to the signal delay, and offline operation in one open tool."** Use "offline operation" only after the OSDR search is snapshotted or hidden offline (6.6).
+- Instead of any "first/only": **"Of the 59 agency, commercial and research systems in our review, we found none that combines a visible source tag on every threshold, escalation that adapts to the signal delay, and offline operation in one open tool."** Use "offline operation" only after P0.10 is merged.
 - **NASA/Google CMO-DA:** "CMO-DA answers a crew member's question once something already hurts; early tests on simulated cases scored 74 to 88 % (secondary reporting), and since June 2026 it runs offline in ground tests. Demify is built to rate every reading as it arrives (today's vitals are simulated and labelled), and each alert traces to a visible rule and source. A free-text AI answer has no fixed rule you can check line by line; each of these does." Never call CMO-DA cloud-only, flying, peer-reviewed or open source (only its RamaLama runtime is).
 - **Oura + Booz Allen (Ax-4, launched 25 June 2025):** "flew a demo that processed ring data on the station without Oura's cloud; no results published. Demify takes readings from any device or gateway that can POST our JSON, and adds symptoms, radiation and sourced thresholds."
 - **Astroskin (Hexoskin/CSA):** sensor shirt on the ISS since 2019; had a six-month CSA Phase 0 for Gateway crew monitoring (Nov 2024 to May 2025); Gateway paused March 2026. "A garment like this could feed Demify."
@@ -346,14 +362,14 @@ Impact: emergency steps never wait on Earth; first analog users targeted for 202
 - *Are the data real?* "Inspiration4 biomarkers, NOAA space weather and OSDR dosimetry are real; vital signs are simulated and labelled until a device posts readings."
 - *Why not NASA's own tools?* "ISS checklists, flight rules and standing orders are the precedent; we make the delay explicit, computed and checkable. We have not yet compared our design with NASA's 2024 EIMO concept of operations."
 - *Business with about 25 people a year in orbit?* "Astronauts give credibility, not revenue: analog crews first; research pilots and agency contracts pay first."
-- *Does the veto delay care?* "No. Emergency steps run at once; only steps that can wait carry a veto window, and the flight surgeon remains the medical authority."
+- *Does the veto delay care?* "No. The crew does emergency steps at once; only steps that can wait carry a veto window, and the flight surgeon remains the medical authority."
 - *Why trust two students?* "Every rule is open and names its source, and we start in analog missions, not in space."
 
 ### Global 7-slide deck (v1 by Sun 14:00, linked from the project page)
 1. Title + "research prototype, not a certified medical device". 2. Problem: about 3 to 22 min one way to Mars; the CMO may be the patient. 3. Light-time contracts diagram (or "our next build"). 4. Two screenshots (escalation, check-in with source tags). 5. Science and data: 20 indicators with source tags, Inspiration4, real vs simulated. 6. What we add to existing approaches (no team names). 7. Path to crews (analogs 2027 if accepted, agencies, open source). 8 slides is over the limit. Save as `docs/pitch/DECK.pdf` on the pitched branch (public via GitHub); the local deck reuses it plus the canvas slide.
 
 ### Project page checklist (`docs/pitch/PROJECT_PAGE.md`)
-2-3 sentence summary; public link without login pointing to the **`pitch-final` tag or the Project-2-Phase-1 branch**, not the bare repo (main is empty); NASA data with links (OSDR OSD-569, OSD-575, OSDR ISS dosimetry, HRP risks); other data (NOAA SWPC); each AI tool used, what it did, and that the team reviewed the output; LICENSE present; English; no NASA logos; demo link (DECK.pdf or a ≤ 30 s video).
+2-3 sentence summary; public link without login pointing to the **Project-2-Phase-1 branch** (it holds the deck), naming `pitch-final` as the code shown on stage; never the bare repo (main is empty); NASA data with links (OSDR OSD-569, OSD-575, OSDR ISS dosimetry, HRP risks); other data (NOAA SWPC); each AI tool used, what it did, and that the team reviewed the output; LICENSE present; English; no NASA logos; demo link (DECK.pdf or a ≤ 30 s video).
 
 ---
 
@@ -382,25 +398,25 @@ Impact: emergency steps never wait on Earth; first analog users targeted for 202
 
 ## 11. Business model (version 2.1; full text in BUSINESS_MODEL.md on test)
 
-**Line:** "Built to space standards, proven with Earth crews."
+**Line:** "Designed for space crews, to be piloted first with crews on Earth."
 
 | Flipchart question | Answer |
 |---|---|
 | People to orbit per year | 21 to 28 (21 in 2023, 28 in 2024, 28 in 2025, about 21 in 2026); about 10 in orbit at any time (7 ISS, 3 Tiangong); record 19 (Sept 2024) |
-| Demify users 2027 | **0 astronauts.** Target, only if our Asclepios VII proposal is accepted: 10 to 20 analog crew (Swiss lunar analog, summer 2027, crews of 6 to 10). MDRS only through a crew whose institution provides ethics review (about USD 2,000-3,500 per person) |
+| Demify users 2027 | **0 astronauts.** Target, only if our Asclepios VII proposal is accepted: 10 to 20 analog crew (Swiss lunar analog, summer 2027, crews of 6 to 10). MDRS only through a crew whose home institution provides ethics (IRB) review; MDRS itself charges about USD 2,000-3,500 per person (to be checked) |
 | 2028-2029 | Goal: an in-flight research demonstration through a Swiss partner with ISS experience. Not a commitment |
 | 2030-2035 | 4 to 10 astronauts a year if one operator adopts it (estimate) |
 | 2040+ / 2050 | 10 to 30 a year: a vision, not a forecast |
 | Benchmark | Hexoskin: founded 2006, first CSA contract 2011, Astroskin on the ISS since Jan 2019, about 12 years |
 | Earth users | Analog and polar research teams first (grant-funded); 34 national Antarctic programmes (about 1,100 people in winter, 4,400-5,000 in summer); offshore through medical providers (UK about 24,000 FTE offshore workers in 2025; International SOS supports 900+ remote sites) |
-| Market (bottom-up; CHF 40 per person per month and 100 % share are estimates) | All Antarctica about CHF 1.1 M a year; UK offshore about CHF 11.5 M a year. An honest niche of a few million CHF a year |
+| Market (bottom-up; CHF 40 per person per month is an estimate) | All Antarctica about CHF 1.1 M a year (27,000-29,000 person-months × CHF 40); UK offshore about CHF 11.5 M a year (24,000 × 12 × CHF 40). About CHF 12.6 M at 100 % share; at a realistic 10-20 % share (estimate) about CHF 1.3-2.5 M a year: an honest niche |
 | Value for NASA | Image: an open, checkable research and training tool built by students on NASA open data. Value: NASA prices crew time at about USD 130,000 per hour (2021 price list), so any tool must replace parts of existing checks; this is a price, not a saving we claim. Students: open code to learn from. Cost: NASA pays nothing; we seek a no-money collaboration (data, flight-surgeon feedback) |
 | Revenue, most realistic first | (1) agency and research contracts; (2) paid research pilots, CHF 5,000-15,000 per study (estimate); (3) integration and support per programme; (4) site licences, CHF 6,000-15,000 per site per year, only after certification and through remote-medicine providers (estimate). One McMurdo evacuation flight cost about USD 286,000 |
 | Costs, 3 years (estimates) | Y1 81,600 · Y2 228,100 · Y3 299,600 = **CHF 609,300** (founders part-time in Y1, medical advisor 20 % from Y2, regulatory strategy then quality system, pilots, security, insurance, 10 % contingency). Certification comes after year 3 and is the dominant future cost; amount only from notified-body quotes |
-| Money in | Base case: Venture Kick Stage 1 grant CHF 10,000 + pilots and integration CHF 76,000 = **CHF 86,000**, gap **−523,300**. Funded case without any ESA money: + Venture Kick Stages 2-3 CHF 140,000 as **convertible loans** = **CHF 226,000**, gap **−383,300**, which ESA BIC Switzerland (up to EUR 200,000 if selected; never converted to CHF) would largely close. ESA Kick-Start is only "if eligible, being checked with SERI; 75 % funded, we co-fund 25 %". No break-even within 3 years, said openly |
+| Money in | Base case: Venture Kick Stage 1 grant CHF 10,000 + pilots and integration CHF 76,000 = **CHF 86,000**, gap **−523,300**. Funded case without any ESA money: + Venture Kick Stages 2-3 CHF 140,000 as **convertible loans** = **CHF 226,000**, gap **−383,300**. ESA BIC Switzerland (up to EUR 200,000 if selected; needs a Swiss company; never converted to CHF) could cover part of it; the rest needs a small seed round or lower year-3 salaries. Venture Kick Stage 3 also needs a Swiss GmbH (CHF 20,000 paid-in capital + about CHF 2,000-6,000 fees). ESA Kick-Start is only "if eligible, being checked with SERI; 75 % funded, we co-fund 25 %". No break-even within 3 years, said openly |
 | Open source | MIT now; Apache-2.0 later only with every contributor's consent. Ours: the name (trademark), the validated threshold library, the certified build, being the maintainers |
 
-**Canvas (one slide):** Segments: analog and polar research teams → national polar programmes → offshore through medical providers; agencies and commercial operators as research partners. Value: rates each value against sourced thresholds and the person's own baseline, adapts who to call and when to the distance to help, open, checkable, offline, any device or gateway. Channels: Space Apps, Asclepios, MDRS, Swiss space partners, ESA, later remote-medicine providers. Relationships: research partnership, open-source community, support contracts. Revenue: as above. Key activities: software, threshold library, pilots under ethics approval, regulatory path. Key resources: the open engine with sourced thresholds, tests, team, trademark. Partners: space-medicine advisor, Swiss university or hospital, device makers, analog and polar programmes, NASA and NOAA open data. Costs: people, advisor, regulatory, pilots, security, insurance.
+**Canvas (one slide):** Segments: analog and polar research teams → national polar programmes → offshore through medical providers; agencies and commercial operators as research partners. Value: rates each value against tagged thresholds (published or our own) and the person's own baseline; adapts who to call and when to the distance to help; open and checkable; works from cached data offline; any device or gateway that can POST our JSON. Channels: Space Apps, Asclepios, MDRS, Swiss space partners, ESA, later remote-medicine providers. Relationships: research partnership, open-source community, support contracts. Revenue: as above. Key activities: software, threshold library, pilots under ethics approval, regulatory path. Key resources: the open engine with sourced thresholds, tests, team, trademark. Partners: space-medicine advisor, Swiss university or hospital, device makers, analog and polar programmes, NASA and NOAA open data. Costs: people, advisor, regulatory, pilots, security, insurance.
 
 **Funding ladder:** Venture Kick Stage 1 CHF 10,000 grant (no company needed) → Stages 2 and 3 CHF 40,000 and 100,000 as convertible loans (5 %), Stage 3 needs a company → Swiss GmbH (CHF 20,000 paid in + about CHF 2,000-6,000 fees; not before Stage 3 or ESA BIC) → ESA BIC Switzerland, up to EUR 200,000 (Venturelab), Swiss company under 5 years (possibly only by contract signature; ask Venturelab), the 31 Oct 2026 cut-off has passed → SPI Exploratory Grant only with a postdoc or professor as main applicant. Innosuisse Initial Coaching is a voucher up to CHF 10,000 with accredited coaches, not cash.
 
@@ -456,7 +472,7 @@ Nov 2026 Shenzhou-24 · Jan 2027 Ax-5 · early 2027 Haven-1 (Vast) · summer 202
 - "The crew never waits" without "for emergency steps".
 
 **Regulation and branding**
-- "Not a medical device", "decision support", "CE-marked", "MDR/MedDO compliant", "Swissmedic approved", "FDA cleared", "clinically validated", "medical-grade", "diagnoses", "detects heart attack", "early warning", "real patient monitor", "clinical alarms".
+- "Not a medical device", "decision support", "CE-marked", "MDR/MedDO compliant", "Swissmedic approved", "FDA cleared", "clinically validated", "medical-grade", "diagnoses", "detects heart attack", "early warning" as a claim about what Demify does for health (the source name "National Early Warning Score (NEWS2)" in a citation is fine), "real patient monitor", "clinical alarms", "built to space standards".
 - "Outside the MDR because it is free or open source". "MDCG 2025-4 covers our GitHub release".
 - "AI-powered" / "AI triage".
 - "GDPR compliant", "GDPR applies to our Swiss pilot", "CRA applies to our hosted service", "revFADP compliant" before a DPIA. Ethics "category A" as settled; "ethics approval obtained".

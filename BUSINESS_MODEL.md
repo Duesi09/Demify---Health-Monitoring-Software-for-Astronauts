@@ -9,7 +9,7 @@ Draft for the NASA Space Apps pitch, 15 November 2026. Version 1 was checked by 
 | "Decision support, not a medical device" | Under EU and Swiss rules, software that rates vital signs and says when to call a doctor **is** medical device software, likely class IIb | "Research prototype, not a certified medical device." Certification is planned and budgeted (section 5) |
 | 0 to 4 astronauts in 2027 | No realistic path | 0 astronauts; 10 to 20 crew members in Swiss and US analog missions |
 | Remote patient monitoring, a $28 billion market | Different buyers, misleading | Bottom-up count of real buyers: a niche worth a few million CHF a year |
-| "Space proves it, Earth pays" | Order and money are reversed: Earth analogs come first, agencies and grants pay first | "Built to space standards, proven with Earth crews" |
+| "Space proves it, Earth pays" | Order and money are reversed: Earth analogs come first, agencies and grants pay first | "Designed for space crews, to be piloted first with crews on Earth" |
 | CHF 40 per person per month to many small sites | Buyers are a few large organisations; they buy per programme and take about a year to sign | Paid pilots and agency contracts first; per-site licences only after certification |
 | Venture Kick CHF 150,000 as grant | CHF 10,000 grant, then CHF 140,000 as convertible loans | Shown as financing, with a base case and a funded case |
 | (v2.1) ESA money counted in CHF in the funded case | ESA BIC must not be converted to CHF; Swiss participation in ESA Kick-Start is unconfirmed | Funded case shown without ESA money; ESA BIC named separately in EUR |
@@ -25,7 +25,7 @@ Draft for the NASA Space Apps pitch, 15 November 2026. Version 1 was checked by 
 
 So astronauts are our **proving ground and our credibility**, not our revenue. Our line:
 
-> **Built to space standards, proven with Earth crews.**
+> **Designed for space crews, to be piloted first with crews on Earth.**
 > Analog missions and polar stations are where we prove it. Agencies and research grants fund it. Remote-medicine providers take it to paying Earth sites later.
 
 ---
