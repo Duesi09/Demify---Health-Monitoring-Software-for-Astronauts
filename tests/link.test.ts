@@ -235,11 +235,40 @@ describe("/help follows ?link=", () => {
     expect(t).toContain("Signal delay profile Conjunction: no contact (blackout).");
     expect(t).toContain("transmit everything when contact returns");
     expect(t).not.toContain("Call the flight surgeon directly");
+    // Diagram caption: the link named once, no nested parentheses.
+    expect(t).toContain("Contact rule for Conjunction: no contact: act on the onboard procedures; transmit when contact returns.");
+    expect(t).not.toContain("(no contact (blackout))");
   });
 
   it("/help?link=mars-transit acts first; without ?link= the mission's own link applies", async () => {
     expect(await help("mars-transit")).toContain("Act first, then transmit");
     const t = await help();
     expect(t).toMatch(/Current mission .*: signal delay .* one-way\./);
+  });
+});
+
+describe("README: the Signal delay bullet matches the app", () => {
+  it("labels the 60 s threshold as ours and lists every page that reads ?link=", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(import.meta.dirname, "..");
+    const bullet = readFileSync(path.join(root, "README.md"), "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("- **Signal delay.**"));
+    expect(bullet).toBeDefined();
+    expect(bullet).toContain(`Below ${LIVE_LIMIT_S} s one way (project rule)`);
+    expect(bullet).toContain("(Check-in, Body map, Guidance and Help read it too)");
+    const pages: Record<string, string> = {
+      Overview: "src/app/page.tsx",
+      "crew monitor": "src/app/crew/[id]/page.tsx",
+      "Check-in": "src/app/check-in/page.tsx",
+      "Body map": "src/app/body/page.tsx",
+      Guidance: "src/app/guidance/page.tsx",
+      Help: "src/app/help/page.tsx",
+    };
+    for (const [name, file] of Object.entries(pages)) {
+      expect(bullet, name).toContain(name);
+      expect(readFileSync(path.join(root, file), "utf8"), file).toMatch(/currentLink\(sp\.link\)/);
+    }
   });
 });

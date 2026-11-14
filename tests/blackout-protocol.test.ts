@@ -1,12 +1,19 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { actionUnderLink, buildProtocol, type ProtocolId } from "@/components/crew/protocols";
 import { Findings } from "@/components/crew/findings";
 import { EscalationBanner } from "@/components/overview/escalation-banner";
 import { INDICATORS } from "@/lib/health/knowledge";
 import { BLACKOUT_ESCALATION, LINK_PROFILES, findingUnderLink, linkPolicy } from "@/lib/link";
 import type { Assessment, IndicatorId, MonitorAlarm } from "@/lib/types";
+
+// The check-in page reads crew and readings from the store; keep it in memory here.
+vi.mock("@/lib/store/readings", () => ({
+  listCrew: async () => [{ id: "ms2", name: "Mission Specialist 2", role: "Flight Engineer", baseline: { heartRate: 60 } }],
+  listReadings: async () => [],
+}));
+vi.mock("@/app/check-in/actions", () => ({ submitCheckIn: async () => null }));
 
 /**
  * Solar conjunction (blackout): there is no one to contact. No checklist
@@ -184,5 +191,31 @@ describe("blackout findings", () => {
     );
     expect(text(html)).toContain(`Vision 1 /3: ${BLACKOUT_ESCALATION}.`);
     expect(text(html)).not.toMatch(/Vision 1 \/3: contact the flight surgeon/);
+  });
+});
+
+describe("check-in legend follows ?link=", () => {
+  async function checkIn(link?: string) {
+    const { default: CheckInPage } = await import("@/app/check-in/page");
+    const sp = link ? { crew: "ms2", link } : { crew: "ms2" };
+    const props = { params: Promise.resolve({}), searchParams: Promise.resolve(sp) } as Parameters<typeof CheckInPage>[0];
+    return text(renderToStaticMarkup(await CheckInPage(props)));
+  }
+  const legend = (t: string) => t.slice(t.indexOf("In the critical band"), t.indexOf("Ranges come from"));
+
+  it("blackout: an escalation rule met, no contact, onboard procedures (like the field preview)", async () => {
+    const l = legend(await checkIn("conjunction"));
+    expect(l).toBe(
+      "In the critical band: re-check and log. Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns. ",
+    );
+    expect(l).not.toMatch(BANNED);
+  });
+
+  it("live and delayed keep “contact the flight surgeon” with the training framing", async () => {
+    for (const link of ["iss", "mars-transit"]) {
+      expect(legend(await checkIn(link))).toContain(
+        "Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
+      );
+    }
   });
 });

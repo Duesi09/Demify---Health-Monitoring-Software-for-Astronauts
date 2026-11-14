@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
+import type { LinkMode, LinkProfileId } from "@/lib/link";
 import type { Assessment, BodyRegionId, IndicatorId, Reading, Status } from "@/lib/types";
 import { STATUS_ICON, STATUS_LABEL, StatusBadge } from "@/components/ui";
 import "./body-map.css";
@@ -15,6 +16,10 @@ export interface BodyMapProps {
   assessments: Assessment[];
   sources: Partial<Record<IndicatorId, Reading["source"]>>;
   initialRegion?: BodyRegionId;
+  /** linkPolicy mode of the page's signal delay (?link= aware); blackout means no contact with the ground. */
+  linkMode?: LinkMode;
+  /** Signal-delay profile chosen with ?link=, carried into the panel's links (null: none chosen). */
+  link?: LinkProfileId | null;
 }
 
 function worstRegion(regions: Record<BodyRegionId, Status>): BodyRegionId {
@@ -23,7 +28,15 @@ function worstRegion(regions: Record<BodyRegionId, Status>): BodyRegionId {
 
 const LEGEND: Status[] = ["nominal", "caution", "critical", "unknown"];
 
-export function BodyMap({ crewName, regions, assessments, sources, initialRegion }: BodyMapProps) {
+export function BodyMap({
+  crewName,
+  regions,
+  assessments,
+  sources,
+  initialRegion,
+  linkMode = "live",
+  link = null,
+}: BodyMapProps) {
   const [selected, setSelected] = useState<BodyRegionId>(() => initialRegion ?? worstRegion(regions));
   const [hovered, setHovered] = useState<BodyRegionId | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -132,6 +145,8 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
           assessments={byId}
           sources={sources}
           crewName={crewName}
+          linkMode={linkMode}
+          link={link}
         />
       </div>
     </div>

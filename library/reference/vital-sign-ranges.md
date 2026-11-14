@@ -140,7 +140,7 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Caution: 3–4, or a drop of ≥ 2 over 3 days
 - Critical: 1–2, or any hopelessness
 - Automatic escalation flag: ≤ 2 /10 on 2 days in a row
-- Contact the flight surgeon when: Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference now.
+- Contact the flight surgeon when: Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference.
 - Crew actions: Schedule personal time and a call with family. Journal, tend the plant experiment, talk with a crewmate. Discuss workload adjustments with the commander.
 - In spaceflight: Isolation, confinement and distance from Earth raise the risk of anxiety and depression; 2 of 7 Shuttle-Mir astronauts reported depressive symptoms.
 - Measured with: Daily self-report; journaling; monthly WinSCAT cognitive test.
@@ -281,9 +281,9 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Source tag: CLIN (general clinical range)
 - Nominal: −0.5 to +0.9 mm
 - Caution: −0.6 to −2.0 mm depression (possible ischaemia)
-- Critical: ≥ 1 mm elevation (STEMI criterion) or > 2 mm depression
+- Critical: ≥ 1 mm elevation (STEMI criterion) or > 2 mm depression (project rule)
 - Automatic escalation flag: Any value ≥ 1 mm elevation or > 2 mm depression
-- Contact the flight surgeon when: Any ST elevation ≥ 1 mm, ST depression > 2 mm, or chest pain: medical emergency, contact the flight surgeon now.
+- Contact the flight surgeon when: Any ST elevation ≥ 1 mm, ST depression > 2 mm (project rule), or chest pain (medical emergency).
 - Crew actions: Stop all activity; the crew member rests, monitored, with the Crew Medical Officer. Record and transmit a 12-lead ECG to the flight surgeon immediately. Follow the onboard medical checklist for chest pain; contact the flight surgeon.
 - In spaceflight: Spaceflight remodels the heart and radiation adds long-term cardiovascular risk. A heart attack far from Earth must be recognised and treated by the crew itself: there is no emergency room and evacuation takes days. Reference: new ST elevation ≥ 1 mm in two contiguous leads is the STEMI criterion, a medical emergency; crewed vehicles carry a defibrillator (AED) and an advanced cardiac life support kit for the onboard procedures.
 - Measured with: Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG transmitted to the flight surgeon.

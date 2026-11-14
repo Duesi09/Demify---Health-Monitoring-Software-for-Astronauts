@@ -237,8 +237,8 @@ export default async function OverviewPage(props: PageProps<"/">) {
           Heart rate, blood pressure, SpO₂, temperature and respiration come from a deterministic demo telemetry
           generator (marked <SimulatedTag />) because no public real-time astronaut vitals exist. Monitor waveforms are
           synthesised from those numbers. Training scenarios (drills) only change simulated telemetry and are always
-          labelled. Daily check-in values are simulated until the crew enters real ones; crew entries and DEVICE
-          readings posted to /api/readings always override simulated values.
+          labelled. Daily check-in values are simulated until the crew enters its own (labelled Crew entry); crew
+          entries and DEVICE readings replace simulated values (for a vital sign while at most 6 h old, project rule).
         </p>
       </section>
     </div>

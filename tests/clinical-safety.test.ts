@@ -51,7 +51,7 @@ vi.mock("@/lib/sources/swpc", async (orig) => {
   };
 });
 
-const { assessCrewMember } = await import("@/lib/health/assess");
+const { assessCrewMember, currentValue } = await import("@/lib/health/assess");
 const { INDICATORS, classify, evaluateValue, judgement, persistenceLabel } = await import("@/lib/health/knowledge");
 const { buildProtocol } = await import("@/components/crew/protocols");
 const { simulateDaily } = await import("@/lib/sources/simulator");
@@ -414,5 +414,33 @@ describe("guidance and help texts follow the engine", () => {
       expect(src, file).not.toMatch(/act now and contact the flight surgeon/);
       expect(src, file).not.toMatch(/real alarm:|no: real alarm|A real alarm has no such tag/);
     }
+  });
+});
+
+describe("crew entries and DEVICE readings replace simulated values", () => {
+  it("for a vital sign only while at most 6 h old; other indicators always", () => {
+    const now = Date.now();
+    const sim = reading("heartRate", 70, now - 60_000, "simulated");
+    for (const source of ["manual", "sensor"] as const) {
+      expect(currentValue("heartRate", [reading("heartRate", 90, now - 6 * H + 60_000, source), sim], now)?.source).toBe(source);
+      expect(currentValue("heartRate", [reading("heartRate", 90, now - 6 * H - 60_000, source), sim], now)?.source).toBe("simulated");
+    }
+    // A daily check-in indicator: an older crew entry still wins over simulated values.
+    const sleep = [reading("sleepHours", 6.5, now - 3 * DAY, "manual"), reading("sleepHours", 7.5, now - 60_000, "simulated")];
+    expect(currentValue("sleepHours", sleep, now)?.source).toBe("manual");
+  });
+
+  it("the overview and /help say so (no 'always override')", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(import.meta.dirname, "..");
+    const flat = (file: string) => readFileSync(path.join(root, file), "utf8").replace(/\s+/g, " ");
+    const overview = flat("src/app/page.tsx");
+    const help = flat("src/app/help/page.tsx");
+    expect(overview).toContain(
+      "Daily check-in values are simulated until the crew enters its own (labelled Crew entry); crew entries and DEVICE readings replace simulated values (for a vital sign while at most 6 h old, project rule).",
+    );
+    expect(help).toContain("Crew entries and DEVICE readings replace simulated values (for a vital sign while at most 6 h old, project rule).");
+    for (const src of [overview, help]) expect(src).not.toMatch(/always (override|replace)/);
   });
 });

@@ -158,7 +158,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals, l
           <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
         </Link>
         <Link
-          href={`/body?crew=${id}`}
+          href={withLink(`/body?crew=${id}`, link)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 transition-colors hover:bg-surface-2 focus-visible:bg-surface-2"
         >
           <PersonStanding size={14} aria-hidden /> Body map<span className="sr-only"> for {name}</span>

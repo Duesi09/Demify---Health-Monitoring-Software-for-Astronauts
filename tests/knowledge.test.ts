@@ -173,6 +173,22 @@ describe("rule labels (ours vs published)", () => {
     }
   });
 
+  it("labels the > 2 mm ST depression limit as a project rule; elevation stays the UDMI criterion", () => {
+    expect(INDICATORS.stDeviation.escalation).toBe(
+      "Any ST elevation ≥ 1 mm, ST depression > 2 mm (project rule), or chest pain (medical emergency).",
+    );
+    expect(INDICATORS.stDeviation.ranges.critical).toBe("≥ 1 mm elevation (STEMI criterion) or > 2 mm depression (project rule)");
+  });
+
+  it("escalation texts are criteria only, link-neutral (shown under every link, a blackout included)", () => {
+    for (const def of Object.values(INDICATORS)) {
+      expect(def.escalation, def.id).not.toMatch(/\bnow\b|immediately|contact the flight surgeon|flight surgeon direction/i);
+    }
+    expect(INDICATORS.mood.escalation).toBe(
+      "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference.",
+    );
+  });
+
   it("states the Mars delay as the shared range", () => {
     expect(HAZARDS.distance.summary).toContain(MARS_DELAY_RANGE);
     expect(HAZARDS.distance.summary).not.toMatch(/20 minutes/);

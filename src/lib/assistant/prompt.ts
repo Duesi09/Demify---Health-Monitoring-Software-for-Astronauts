@@ -9,7 +9,7 @@ import { NO_ANSWER_TOKEN } from "./wording";
  *
  * The user message layout is fixed (Question / Library passages / Crew data
  * [C] / Library status / Ground link status): scripts/dev/fake-model-server.mjs
- * reads the first passage from it.
+ * reads passage [1] from it.
  */
 
 export interface PromptPassage {

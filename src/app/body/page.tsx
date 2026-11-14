@@ -3,8 +3,10 @@ import { BodyMap } from "@/components/body/body-map";
 import { CrewSwitcher } from "@/components/crew-switcher";
 import { DrillTag } from "@/components/overview/status-icon";
 import { Card, PageHeader } from "@/components/ui";
+import { currentLink } from "@/lib/config";
 import { assessAllCrew } from "@/lib/health/assess";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
+import { linkPolicy, withLink } from "@/lib/link";
 import type { BodyRegionId } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Body map" };
@@ -22,18 +24,27 @@ export default async function BodyPage(props: PageProps<"/body">) {
   const active = all.find((a) => a.crew.id === crewParam) ?? all[0];
   // Own keys only: `in` would also accept inherited names like "constructor" or "__proto__".
   const initialRegion = regionParam && Object.hasOwn(BODY_REGIONS, regionParam) ? (regionParam as BodyRegionId) : undefined;
+  // ?link= swaps the signal delay like on the other pages (/body?link=conjunction shows the blackout wording).
+  const { profile: link, selected } = currentLink(sp.link);
+  const policy = linkPolicy(link.oneWayS);
+  const delayText =
+    policy.mode === "blackout"
+      ? ` Signal delay profile ${link.label}: no contact (blackout); act on the onboard procedures and transmit when contact returns.`
+      : selected
+        ? ` Signal delay profile ${link.label}: ${policy.label} one way.`
+        : "";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Body map"
-        description="Each body system is coloured by the worst of its health indicators. Select a region to see what it does, how spaceflight affects it, the latest readings and what to do about them."
+        description={`Each body system is coloured by the worst of its health indicators. Select a region to see what it does, how spaceflight affects it, the latest readings and what to do about them.${delayText}`}
       >
         {all.length > 0 && (
           <CrewSwitcher
             crew={all.map((a) => a.crew)}
             active={active.crew.id}
-            basePath="/body"
+            hrefFor={(cid) => withLink(`/body?crew=${encodeURIComponent(cid)}`, selected)}
             statuses={Object.fromEntries(all.map((a) => [a.crew.id, a.overall]))}
           />
         )}
@@ -56,6 +67,8 @@ export default async function BodyPage(props: PageProps<"/body">) {
           assessments={active.assessments}
           sources={active.sources}
           initialRegion={initialRegion}
+          linkMode={policy.mode}
+          link={selected}
         />
       ) : (
         <Card>

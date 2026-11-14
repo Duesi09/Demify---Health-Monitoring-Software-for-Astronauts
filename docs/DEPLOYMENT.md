@@ -10,6 +10,7 @@ variables**, so the image stays the same.
 | `Dockerfile` | Multi-stage build (deps → builder → runner) on `node:24-alpine`, using the Next.js `standalone` output |
 | `docker/entrypoint.sh` | Seeds offline snapshots into the data volume, then `exec`s the server |
 | `docker-compose.yml` | `demify` service plus an air-gapped `offline` profile |
+| `docker-compose.spark.yml`, `.env.spark.example` | Optional onboard server on an NVIDIA DGX Spark (PostgreSQL + pgvector, local model, app, sync service); see [`SPARK.md`](SPARK.md) |
 | `.env.example` | Every setting, documented. Copy it to `.env` |
 | `.dockerignore` | Keeps `node_modules`, `.next`, `.git`, secrets and local crew data out of the build context |
 
@@ -68,7 +69,10 @@ running app. The only outbound traffic at runtime is the data APIs below.
 ├── node_modules/         only the traced runtime dependencies
 ├── .next/static/         hashed JS/CSS, served by server.js
 ├── public/
-└── data/snapshots-seed/  offline API snapshots baked in from data/snapshots
+├── data/snapshots-seed/  offline API snapshots baked in from data/snapshots
+├── onboard/              plain-Node modules of the onboard server (PostgreSQL, library, model client)
+├── library/              curated onboard library (DEMIFY_SEED_LIBRARY_DIR)
+└── scripts/              library-ingest.mjs, sync-service.mjs, db-migrate.mjs (onboard server only)
 /data                     VOLUME, owned by uid 1001 (DEMIFY_DATA_DIR)
 ├── demify-db.json        crew readings (JSON store)
 └── snapshots/            DEMIFY_SNAPSHOT_DIR: seeded on start, refreshed when online
@@ -366,6 +370,14 @@ unlock cookie is marked `Secure`.
 ---
 
 ## 9. Scaling and swapping the JSON store for a database
+
+> **Onboard server (optional).** With `DATABASE_URL` set, Demify already
+> stores crew readings in PostgreSQL (and keeps the JSON file as a spool while
+> the database is unreachable). [`docker-compose.spark.yml`](../docker-compose.spark.yml)
+> runs it on an NVIDIA DGX Spark with PostgreSQL 17 + pgvector, a local model
+> server and a sync service for the onboard library; see
+> [`SPARK.md`](SPARK.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md). Without
+> `DATABASE_URL` nothing below changes.
 
 The default store (`src/lib/store/readings.ts`) is one JSON file,
 `$DEMIFY_DATA_DIR/demify-db.json`. Writes are serialised in-process and

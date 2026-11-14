@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { OctagonAlert, PhoneCall } from "lucide-react";
-import { bySeverity } from "@/components/overview/format";
+import { byEscalation } from "@/components/overview/format";
 import { DrillTag, SimulatedTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import { INDICATORS } from "@/lib/health/knowledge";
@@ -32,7 +32,8 @@ export function Findings({
   /** A training scenario is running: findings partly come from drill telemetry. */
   drill: boolean;
 }) {
-  const open = assessments.filter((a) => a.status === "caution" || a.status === "critical").sort(bySeverity);
+  // Met escalation rules first, then most severe: the same order as the overview cards.
+  const open = assessments.filter((a) => a.status === "caution" || a.status === "critical").sort(byEscalation);
   const escalations = open.filter((a) => a.escalate);
   const drillEsc = escalations.filter((a) => a.drill);
   const allDrill = drillEsc.length > 0 && drillEsc.length === escalations.length;

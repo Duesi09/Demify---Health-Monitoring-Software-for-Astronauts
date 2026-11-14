@@ -11,10 +11,13 @@ import {
   ClipboardPlus,
   Database,
   HeartPulse,
+  LibraryBig,
+  MessageSquareText,
   PersonStanding,
   Radiation,
   type LucideIcon,
 } from "lucide-react";
+import { GroundLinkChip } from "@/components/onboard/ground-link-indicators";
 
 interface NavItem {
   href: string;
@@ -24,9 +27,9 @@ interface NavItem {
 
 /**
  * Navigation grouped by task: watch the crew, enter your own values, check
- * the environment, look things up. Group headings show on desktop only; on
- * phones the links stay one horizontally scrolling row with a hairline
- * between groups.
+ * the environment, ask the onboard server, look things up. Group headings
+ * show on desktop only; on phones the links stay one horizontally scrolling
+ * row with a hairline between groups.
  */
 const NAV: { id: string; title: string; items: NavItem[] }[] = [
   {
@@ -47,6 +50,14 @@ const NAV: { id: string; title: string; items: NavItem[] }[] = [
     id: "environment",
     title: "Environment",
     items: [{ href: "/radiation", label: "Radiation", icon: Radiation }],
+  },
+  {
+    id: "onboard",
+    title: "Onboard server",
+    items: [
+      { href: "/assistant", label: "Assistant", icon: MessageSquareText },
+      { href: "/library", label: "Library", icon: LibraryBig },
+    ],
   },
   {
     id: "reference",
@@ -140,6 +151,8 @@ export function AppNav() {
           })}
         </div>
       ))}
+      {/* Ground link up/down (simulated blackout switch); hidden until GET /api/ground-link answers. */}
+      <GroundLinkChip className="ml-1 border-l border-border pl-2 md:mt-auto md:ml-0 md:border-l-0 md:px-3 md:pb-1 md:pl-3 md:pt-4" />
     </nav>
   );
 }

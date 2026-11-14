@@ -81,8 +81,10 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
                 <li className="flex items-start gap-2">
                   <StatusBadge status="critical" size="xs" className="mt-px w-[74px]" />
                   <span>
-                    In the critical band: re-check and log. Escalation only when Demify shows “contact the flight
-                    surgeon”. Training: in a real mission this prompts a call to the flight surgeon.
+                    {/* Same link rule as the field preview in CheckInForm (no one to contact in a blackout). */}
+                    {policy.mode === "blackout"
+                      ? "In the critical band: re-check and log. Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns."
+                      : "In the critical band: re-check and log. Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon."}
                   </span>
                 </li>
                 <li>

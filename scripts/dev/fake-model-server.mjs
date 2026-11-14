@@ -16,14 +16,16 @@
  *                               lower (related passages about 0.3, unrelated below 0.2), so set
  *                               DEMIFY_ASSISTANT_MIN_SCORE=0.25 when the app talks to this server.
  *                               Results come back in reverse order on purpose (clients must order by index).
- *   POST /v1/chat/completions   a templated answer from the FIRST numbered passage ("[1] ...") in the
- *                               last user message: "According to the library, <first sentence> [1]."
+ *   POST /v1/chat/completions   a templated answer from passage [1] (the earliest "[n] ..." block) in the
+ *                               last user message: "According to the library, <sentence> [1].", where
+ *                               <sentence> is the sentence of that passage sharing the most words with
+ *                               the "Question:" line (the earliest on a tie).
  *                               With no passage in the message it answers exactly NO_ANSWER.
  *                               The answer starts with a <think>…</think> block (FAKE_THINK=false turns
  *                               it off), as some reasoning models send, to exercise the client's stripping.
  *
  * Usage:  node scripts/dev/fake-model-server.mjs [--port 11555] [--host 127.0.0.1]
- *         (npm run model:fake). --port 0 picks a free port; the first line on stdout is
+ *         (npm run model:fake). --port 0 picks a free port; stdout starts with the line
  *         "fake model server listening on http://<host>:<port>/v1".
  *
  * Environment:
@@ -150,45 +152,78 @@ function embedText(text) {
 /** Sections of the user message that end a passage (see src/lib/assistant/prompt.ts). */
 const SECTION = /^(question:|crew data \[c\]|library status:|ground link status:)/i;
 
-/** First passage text in the message, or null. @param {string} message */
+/**
+ * Sentences of the earliest passage in the message (each list item or line
+ * is its own sentence, Markdown marks removed), or null without a passage.
+ * @param {string} message
+ * @returns {string[] | null}
+ */
 function firstPassage(message) {
   const lines = message.replace(/\r\n?/g, "\n").split("\n");
   const start = lines.findIndex((l) => /^\[\d+\]\s/.test(l.trim()));
   if (start === -1) return null;
-  const body = [];
+  /** @type {string[]} */
+  const sentences = [];
   for (const raw of lines.slice(start + 1)) {
     const line = raw.trim();
     if (/^\[\d+\]\s/.test(line) || SECTION.test(line)) break;
     if (/^\(?source:/i.test(line) || /^\(.*\)$/.test(line)) continue;
-    body.push(line);
+    const text = line
+      .replace(/^#+\s*/, "")
+      .replace(/^([-*•]|\d+[.)])\s+/, "")
+      .replace(/\*\*/g, "")
+      .replace(/[[\]]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) sentences.push(...text.split(/(?<=[.!?])\s+/).filter(Boolean));
   }
-  const text = body
-    .map((l) => l.replace(/^#+\s*/, "").replace(/^([-*•]|\d+[.)])\s+/, "").replace(/\*\*/g, ""))
-    .filter(Boolean)
-    .join(" ")
-    .replace(/[[\]]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text || null;
+  return sentences.length ? sentences : null;
 }
 
 /** @param {string} text */
-function firstSentence(text) {
-  const parts = text.split(/(?<=[.!?])\s+/);
-  let s = parts[0] ?? "";
-  if (s.length < 40 && parts[1]) s = `${s} ${parts[1]}`;
+function contentWords(text) {
+  return new Set(
+    (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+      .map((w) => (w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)),
+  );
+}
+
+/**
+ * The sentence of the passage that shares the most words with the question
+ * (the earliest on a tie), trimmed for the template.
+ * @param {string[]} sentences
+ * @param {string} question
+ */
+function bestSentence(sentences, question) {
+  const q = contentWords(question);
+  let best = 0;
+  let bestScore = -1;
+  sentences.forEach((sentence, i) => {
+    const words = contentWords(sentence);
+    let score = 0;
+    for (const w of q) if (words.has(w)) score++;
+    if (score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  });
+  let s = sentences[best];
+  if (s.length < 40 && sentences[best + 1]) s = `${s} ${sentences[best + 1]}`;
   if (s.length > 240) s = `${s.slice(0, 240).replace(/\s+\S*$/, "")}…`;
-  s = s.replace(/[.!?]+$/, "");
-  return /^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s;
+  s = s.replace(/[.!?:;,]+$/, "");
+  // "Pulse oximeter: …" / "A blackout …" continue the template in lower case; "SpO₂", "NOAA" stay as they are.
+  return /^[A-Z](?:[a-z]|\s)/.test(s) ? s[0].toLowerCase() + s.slice(1) : s;
 }
 
 /** @param {unknown} messages */
 function answerFor(messages) {
   const list = Array.isArray(messages) ? messages : [];
   const user = [...list].reverse().find((m) => m && m.role === "user" && typeof m.content === "string");
-  const passage = user ? firstPassage(user.content) : null;
-  if (!passage) return "NO_ANSWER";
-  const answer = `According to the library, ${firstSentence(passage)} [1].`;
+  const sentences = user ? firstPassage(user.content) : null;
+  if (!sentences) return "NO_ANSWER";
+  const question = user.content.match(/^question:\s*(.*)$/im)?.[1] ?? "";
+  const answer = `According to the library, ${bestSentence(sentences, question)} [1].`;
   return THINK ? `<think>The question matches passage [1]; answer from it.</think>\n${answer}` : answer;
 }
 

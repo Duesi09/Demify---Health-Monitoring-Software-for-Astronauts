@@ -69,7 +69,12 @@ function simulatedOnly(it: EscalationItem): boolean {
  * ("Training scenario · not a real emergency") and never tells the crew to
  * act now without that label. When the findings come from SIMULATED
  * telemetry (no drill, no crew entry or DEVICE reading), the banner says it
- * is training: in a real mission this prompts a call to the flight surgeon.
+ * is training: in a real mission this prompts a call to the flight surgeon
+ * (in a blackout: the onboard procedures, no contact).
+ *
+ * "Escalate when" shows INDICATORS[...].escalation, the criteria only: those
+ * texts are link-neutral (no "now", no "contact the flight surgeon"), so they
+ * read right under every link (guarded by tests/body-blackout.test.ts).
  */
 export function EscalationBanner({
   items,
@@ -108,9 +113,17 @@ export function EscalationBanner({
           )}
           <h2 id="escalation-heading" className="text-xl font-semibold tracking-tight md:text-2xl">
             {allDrill ? (
-              <>Drill: rehearse contacting the flight surgeon for {crewText}</>
+              policy.mode === "blackout" ? (
+                <>Drill: rehearse the onboard procedures (no contact) for {crewText}</>
+              ) : (
+                <>Drill: rehearse contacting the flight surgeon for {crewText}</>
+              )
             ) : training ? (
-              <>Training: in a real mission this prompts a call to the flight surgeon</>
+              policy.mode === "blackout" ? (
+                <>Training: in a real mission this prompts the onboard procedures (no contact)</>
+              ) : (
+                <>Training: in a real mission this prompts a call to the flight surgeon</>
+              )
             ) : policy.mode === "blackout" ? (
               <>
                 Escalation rule met for {crewText}: no contact (blackout)
@@ -175,7 +188,7 @@ export function EscalationBanner({
                       <ArrowUpRight size={12} aria-hidden />
                     </Link>
                     <Link
-                      href={`/body?crew=${it.crewId}`}
+                      href={withLink(`/body?crew=${it.crewId}`, link)}
                       className="text-accent underline-offset-2 hover:underline focus-visible:underline"
                     >
                       Open actions for {it.crewName}

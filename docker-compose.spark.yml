@@ -22,7 +22,7 @@
 # The .env from .env.spark.example sets COMPOSE_FILE=docker-compose.spark.yml,
 # so plain `docker compose ...` uses this file in this folder.
 #
-# Nothing downloads a model by itself: the model-pull step above is the only
+# Nothing downloads a model by itself: the model-pull step above is the one
 # download, and the team runs it on purpose. Until then the onboard assistant
 # shows matching library passages instead of a model answer.
 #

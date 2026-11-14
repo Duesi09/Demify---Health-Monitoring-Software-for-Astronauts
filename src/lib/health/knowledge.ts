@@ -95,6 +95,11 @@ export interface IndicatorDef {
   spaceflightEffect: string;
   measurement: string;
   actions: string[];
+  /**
+   * When to escalate, as criteria only. Link-neutral: no "now", "immediately"
+   * or "contact the flight surgeon", because pages show it under every
+   * signal-delay link, a blackout included (tests/body-blackout.test.ts).
+   */
   escalation: string;
   sources: SourceRef[];
 }
@@ -387,7 +392,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Journal, tend the plant experiment, talk with a crewmate.",
       "Discuss workload adjustments with the commander.",
     ],
-    escalation: "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference now.",
+    escalation: "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference.",
     sources: [S.behaviorTB, S.bhRisk],
   },
   stress: {
@@ -626,7 +631,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     ranges: {
       nominal: "−0.5 to +0.9 mm",
       caution: "−0.6 to −2.0 mm depression (possible ischaemia)",
-      critical: "≥ 1 mm elevation (STEMI criterion) or > 2 mm depression",
+      critical: "≥ 1 mm elevation (STEMI criterion) or > 2 mm depression (project rule)",
     },
     // Symptom-type: any critical value escalates.
     escalateFromBand: "critical",
@@ -641,7 +646,9 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Record and transmit a 12-lead ECG to the flight surgeon immediately.",
       "Follow the onboard medical checklist for chest pain; contact the flight surgeon.",
     ],
-    escalation: "Any ST elevation ≥ 1 mm, ST depression > 2 mm, or chest pain: medical emergency, contact the flight surgeon now.",
+    // Criteria only, link-neutral like every escalation text: the page adds what
+    // to do under the current link (contact, act first, or onboard procedures).
+    escalation: "Any ST elevation ≥ 1 mm, ST depression > 2 mm (project rule), or chest pain (medical emergency).",
     sources: [S.udmi, S.cardioRisk, S.bioMonitor],
   },
 };

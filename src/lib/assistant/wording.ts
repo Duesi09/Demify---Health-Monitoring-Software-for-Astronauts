@@ -15,7 +15,7 @@ export const BLOCKED_REASON =
 
 /** First line of every reply to a question that names an emergency. */
 export const ACT_NOW_LINE =
-  "If this is happening now, act first: start the emergency checklist and alert the crew. Do not wait for the assistant.";
+  "If this is a real emergency, act now: start the emergency checklist and alert the crew. Do not wait for the assistant.";
 
 /** The library has no good answer (ground link up / down). */
 export const NO_ANSWER_LINK_UP = "The onboard library has no good answer to this. Ask the flight surgeon when the ground link is up.";

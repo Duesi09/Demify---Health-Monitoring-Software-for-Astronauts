@@ -199,7 +199,7 @@ const TAG_ROWS: { tag: ReactNode; name: string; meaning: string; dark?: boolean 
 const FAQ: { q: string; a: ReactNode }[] = [
   {
     q: "Why are some values simulated?",
-    a: "There is no public real-time source of astronaut vital signs, because crew medical data is protected. Until a device is connected or you enter your own values, Demify generates plausible values around each crew member's baseline and labels them SIMULATED everywhere. DEVICE readings and crew entries always replace them.",
+    a: "There is no public real-time source of astronaut vital signs, because crew medical data is protected. Until a device is connected or the crew enters its own (labelled Crew entry), Demify generates plausible values around each crew member's baseline and labels them SIMULATED everywhere. Crew entries and DEVICE readings replace simulated values (for a vital sign while at most 6 h old, project rule).",
   },
   {
     q: "Can I use Demify for medical care?",

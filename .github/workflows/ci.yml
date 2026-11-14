@@ -36,6 +36,15 @@ jobs:
     needs: app
     steps:
       - uses: actions/checkout@v4
+      # Both compose files must stay valid. The onboard server file
+      # (docker-compose.spark.yml) needs POSTGRES_PASSWORD; a dummy is enough
+      # to check it, and nothing is started (no GPU or model in CI).
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.yml --profile offline config -q
+          POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml config -q
+          POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml --profile models config -q
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6

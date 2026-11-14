@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, PhoneCall, Ruler } from "lucide-react";
+import { ArrowUpRight, BookOpen, PhoneCall, PhoneOff, Ruler } from "lucide-react";
 import { BODY_REGIONS, HAZARDS, INDICATORS } from "@/lib/health/knowledge";
 import type { Assessment, BodyRegionId, IndicatorId, Reading, Status } from "@/lib/types";
 import { StatusBadge, STATUS_TEXT, tagClass } from "@/components/ui";
 import { BasisTag } from "@/components/guidance/basis";
 import { SOURCE_LABEL } from "@/components/overview/format";
+import { actionUnderLink } from "@/components/crew/protocols";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { findingUnderLink, withLink, type LinkMode, type LinkProfileId } from "@/lib/link";
 import { REGION_ICON, STATUS_RANK } from "./regions";
 
 function formatValue(a: Assessment): string {
@@ -28,18 +30,32 @@ const STATUS_RING: Record<Status, string> = {
   unknown: "border-border border-dashed",
 };
 
+/**
+ * Details of one body region: escalation callout, space effects, indicators
+ * with findings and crew actions. In a blackout (linkPolicy mode "blackout",
+ * no contact with the ground) the callout says the escalation rule is met but
+ * there is no one to contact, and finding texts and crew actions drop
+ * "contact the flight surgeon" for the onboard procedures (findingUnderLink,
+ * actionUnderLink), like the crew page and the check-in result.
+ */
 export function RegionDetail({
   region,
   status,
   assessments,
   sources,
   crewName,
+  linkMode = "live",
+  link = null,
 }: {
   region: BodyRegionId;
   status: Status;
   assessments: Partial<Record<IndicatorId, Assessment>>;
   sources: Partial<Record<IndicatorId, Reading["source"]>>;
   crewName: string;
+  /** linkPolicy mode of the page's signal delay; blackout means no contact with the ground. */
+  linkMode?: LinkMode;
+  /** Signal-delay profile chosen with ?link=, carried into the links (null: none chosen). */
+  link?: LinkProfileId | null;
 }) {
   const def = BODY_REGIONS[region];
   const Icon = REGION_ICON[region];
@@ -49,6 +65,7 @@ export function RegionDetail({
     .sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status]);
   const escalations = rows.filter((a) => a.escalate);
   const measured = rows.filter((a) => a.status !== "unknown").length;
+  const blackout = linkMode === "blackout";
 
   return (
     <section
@@ -78,8 +95,8 @@ export function RegionDetail({
         {escalations.length > 0 && (
           <div role="alert" className="rounded-lg border border-critical/50 bg-critical/10 p-3.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-critical">
-              <PhoneCall size={16} aria-hidden />
-              Contact the flight surgeon
+              {blackout ? <PhoneOff size={16} aria-hidden /> : <PhoneCall size={16} aria-hidden />}
+              {blackout ? "Escalation rule met: no contact (blackout)" : "Contact the flight surgeon"}
             </p>
             <ul className="mt-2 space-y-1.5 text-sm">
               {escalations.map((a) => (
@@ -90,7 +107,9 @@ export function RegionDetail({
               ))}
             </ul>
             <p className="mt-2 text-xs text-muted">
-              Start the crew actions below now; do not wait for a reply if the comm delay is long.
+              {blackout
+                ? "Act on the onboard procedures; transmit when contact returns."
+                : "Start the crew actions below now; do not wait for a reply if the comm delay is long."}
             </p>
           </div>
         )}
@@ -142,14 +161,14 @@ export function RegionDetail({
                       <StatusBadge status={a.status} />
                     </div>
                   </div>
-                  <p className="mt-1 text-sm text-muted">{a.finding}</p>
+                  <p className="mt-1 text-sm text-muted">{findingUnderLink(a.finding, linkMode)}</p>
 
                   {a.actions.length > 0 && (
                     <div className="mt-2.5">
                       <p className="text-xs font-semibold text-fg">Do now</p>
                       <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm marker:text-muted">
                         {a.actions.map((x) => (
-                          <li key={x}>{x}</li>
+                          <li key={x}>{actionUnderLink(x, linkMode)}</li>
                         ))}
                       </ol>
                     </div>
@@ -186,7 +205,7 @@ export function RegionDetail({
                       </a>
                     ))}
                     <Link
-                      href={`/guidance#ind-${a.indicator}`}
+                      href={withLink(`/guidance#ind-${a.indicator}`, link)}
                       className="ml-auto inline-flex items-center gap-1 text-muted hover:text-fg"
                     >
                       <BookOpen size={12} aria-hidden /> Reference

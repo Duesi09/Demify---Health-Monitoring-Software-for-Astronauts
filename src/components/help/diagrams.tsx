@@ -97,16 +97,19 @@ export function AlarmDecisionDiagram({
         : "near real-time link: call directly";
   // The last node is narrow: a short form of the rule.
   const ruleShort = mode === "blackout" ? "onboard procedures, transmit later" : rule;
+  // In a blackout delayText is "no contact (blackout)" and the rule already says "no contact": name the link once.
+  const contactRule =
+    mode === "blackout" ? `Contact rule for ${missionName}: ${rule}.` : `Contact rule for ${missionName} (${delayText}): ${rule}.`;
   return (
     <DiagramFrame
       minWidth={420}
-      caption={`Decision path for any alarm. Outside a drill, alarms are training alarms from the simulated monitor: practise the same steps. In a real mission (a future certified version) the same alarm would prompt them. Contact rule for ${missionName} (${delayText}): ${rule}.`}
+      caption={`Decision path for any alarm. Outside a drill, alarms are training alarms from the simulated monitor: practise the same steps. In a real mission (a future certified version) the same alarm would prompt them. ${contactRule}`}
     >
       <svg
         viewBox="0 0 500 722"
         width="100%"
         role="img"
-        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a training alarm from the simulated monitor: practise acting first, check the crew member and follow the checklist; in a real mission (a future certified version) the same alarm would prompt these steps. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, ${mode === "blackout" ? "practise preparing the report for the flight surgeon" : "practise the call to the flight surgeon"}. ${missionName}, ${delayText}: ${rule}.`}
+        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a training alarm from the simulated monitor: practise acting first, check the crew member and follow the checklist; in a real mission (a future certified version) the same alarm would prompt these steps. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, ${mode === "blackout" ? "practise preparing the report for the flight surgeon" : "practise the call to the flight surgeon"}. ${contactRule}`}
       >
         <ArrowDefs id={id} />
 

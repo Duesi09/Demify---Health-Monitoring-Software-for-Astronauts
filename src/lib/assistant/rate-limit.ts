@@ -13,7 +13,7 @@ const MAX_CLIENTS = 1000;
 const windows = new Map<string, { start: number; count: number }>();
 
 /**
- * The client a request counts against: the first X-Forwarded-For address,
+ * The client a request counts against: the leftmost X-Forwarded-For address,
  * else X-Real-IP, else "local" (direct requests on the station network
  * share one budget).
  */
