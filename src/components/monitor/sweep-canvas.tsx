@@ -241,9 +241,14 @@ export function SweepCanvas({
       const target = inked[ci] + Math.floor((written - inked[ci]) / INK_CHUNK) * INK_CHUNK;
       if (target === inked[ci]) return;
       // Erase the sweep gap just ahead of the new pen position (wrapping at
-      // the right edge), then ink the new chunks.
-      const x0 = ((target - 1) % n) * pps + 1.5;
-      const end = x0 + gap * pps;
+      // the right edge), then ink the new chunks. Normally the new chunks lie
+      // inside the gap erased on the previous frame. After a long frame
+      // (scroll jank, a busy main thread) the pen jumps further than that gap,
+      // so the erase starts where the previous one ended: otherwise last
+      // sweep's trace stays under the new one (double beats, holes).
+      const from = Math.min(target - 1, inked[ci] - 1 + gap);
+      const x0 = (from % n) * pps + 1.5;
+      const end = Math.min(x0 + (target - 1 + gap - from) * pps, x0 + plotW);
       ictx.clearRect(x0, 0, (end > plotW ? cssW : end) - x0, h);
       if (end > plotW) ictx.clearRect(0, 0, end - plotW, h);
       inked[ci] = strokeChunks(inked[ci], target);
