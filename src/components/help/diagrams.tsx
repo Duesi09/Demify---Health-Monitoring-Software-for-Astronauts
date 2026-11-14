@@ -1,3 +1,4 @@
+import type { LinkMode } from "@/lib/link";
 import { Arrow, ArrowDefs, DiagramFrame, EdgeLabel, Node, SvgStatusChip, chipWidth } from "./diagram";
 
 /*
@@ -77,27 +78,35 @@ export function DailyRoutineDiagram() {
 export function AlarmDecisionDiagram({
   missionName,
   delayText,
-  autonomous,
+  mode,
 }: {
+  /** Mission or signal-delay profile name, e.g. "ISS" or "Conjunction". */
   missionName: string;
-  /** One-way signal delay, already formatted (e.g. "0.5 s"). */
+  /** Link in words: "0.5 s one-way" or "no contact (blackout)". */
   delayText: string;
-  /** True when the delay is long enough that the crew must act first, then transmit. */
-  autonomous: boolean;
+  /** linkPolicy mode: live (call directly), delayed (act first, then transmit), blackout (no contact). */
+  mode: LinkMode;
 }) {
   const id = "dg-alarm";
   const cx = 160;
-  const rule = autonomous ? "act first, then transmit the data" : "near real-time link: call directly";
+  const rule =
+    mode === "blackout"
+      ? "no contact: act on the onboard procedures; transmit when contact returns"
+      : mode === "delayed"
+        ? "act first, then transmit the data"
+        : "near real-time link: call directly";
+  // The last node is narrow: a short form of the rule.
+  const ruleShort = mode === "blackout" ? "onboard procedures, transmit later" : rule;
   return (
     <DiagramFrame
       minWidth={420}
-      caption={`Decision path for any alarm. Outside a drill, alarms are training alarms from the simulated monitor: practise the same steps. In a real mission (a future certified version) the same alarm would prompt them. Contact rule for the current mission (${missionName}, ${delayText} one-way): ${rule}.`}
+      caption={`Decision path for any alarm. Outside a drill, alarms are training alarms from the simulated monitor: practise the same steps. In a real mission (a future certified version) the same alarm would prompt them. Contact rule for ${missionName} (${delayText}): ${rule}.`}
     >
       <svg
         viewBox="0 0 500 722"
         width="100%"
         role="img"
-        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a training alarm from the simulated monitor: practise acting first, check the crew member and follow the checklist; in a real mission (a future certified version) the same alarm would prompt these steps. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, practise the call to the flight surgeon. Current mission ${missionName}, ${delayText} one-way: ${rule}.`}
+        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a training alarm from the simulated monitor: practise acting first, check the crew member and follow the checklist; in a real mission (a future certified version) the same alarm would prompt these steps. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, ${mode === "blackout" ? "practise preparing the report for the flight surgeon" : "practise the call to the flight surgeon"}. ${missionName}, ${delayText}: ${rule}.`}
       >
         <ArrowDefs id={id} />
 
@@ -139,8 +148,8 @@ export function AlarmDecisionDiagram({
           w={280}
           h={84}
           emphasis
-          title="Practise the surgeon call"
-          lines={[`${missionName}: ${delayText} one-way`, rule]}
+          title={mode === "blackout" ? "Prepare the surgeon report" : "Practise the surgeon call"}
+          lines={[`${missionName}: ${delayText}`, ruleShort]}
         />
       </svg>
     </DiagramFrame>

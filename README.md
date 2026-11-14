@@ -14,7 +14,7 @@ Research prototype, not a certified medical device.
 
 The footer of every page in the app says:
 
-> Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled REAL or DEVICE. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.
+> Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled DEVICE or Crew entry; REAL marks public NASA and NOAA data. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.
 
 These texts live in [`src/lib/disclaimer.ts`](src/lib/disclaimer.ts); the app shows them verbatim (the intended purpose is on the Help page under "About Demify").
 
@@ -27,7 +27,7 @@ These texts live in [`src/lib/disclaimer.ts`](src/lib/disclaimer.ts); the app sh
 | **Drills** (on the crew monitor) | Training scenarios (simulated heart attack/STEMI, cardiac arrest/VF, hypertensive crisis). They change only SIMULATED telemetry, are labelled DRILL on every screen, show a timed response checklist and end on their own after 30 minutes. |
 | **Training alarms** (every page) | Alarm bar for the simulated training monitor, styled after IEC 60601-1-8 (red for high priority, amber for medium), with optional sound, a two-minute silence and activity-aware limits. |
 | **Body map** `/body` | Interactive human figure. Each of 9 body systems is coloured by the worst status of its indicators. The heart beats at the crew member's current heart rate. Select a region to see its function, how spaceflight affects it, the latest readings and the matching procedure steps. |
-| **Check-in** `/check-in` | Daily self-assessment: vitals, sleep, mood, stress, hydration, exercise, body mass, vision symptoms and dosimeter. Each value is checked against tagged reference ranges as you type. Saved values replace the SIMULATED demo data and show the procedure steps a mission would follow. |
+| **Check-in** `/check-in` | Daily self-assessment: vitals, sleep, mood, stress, hydration, exercise, body mass, vision symptoms and dosimeter. Each value is checked against tagged reference ranges as you type. Saved values are labelled Crew entry and replace the SIMULATED demo data (for a vital sign, while the entry is at most 6 hours old); the result shows the procedure steps a mission would follow. |
 | **Radiation** `/radiation` | Solar radiation storm level and proton flux from NOAA GOES satellites, solar flare class, an illustrative dose-rate estimate for the mission profile and a mission dose budget against NASA's 600 mSv career limit (NASA-STD-3001 Vol. 1 Rev C). Measured ISS dosimetry from NASA OSDR serves as a cross-check, alongside the NOAA 3-day outlook. |
 | **Open data (NASA OSDR)** `/research` | Blood biomarkers of the SpaceX Inspiration4 crew from NASA OSDR: blood counts, metabolic panel, inflammation and cytokines, before, during and after flight, with a "what changed after flight" summary and a search over all OSDR studies. |
 | **Guidance** `/guidance` | NASA's five hazards of spaceflight (RIDGE), a searchable reference for all 20 indicators (ranges with their source tags, effects in space, how each is measured on the ISS, procedure steps and sources) and the escalation protocol with the signal delay of each mission profile. |
@@ -37,9 +37,9 @@ These texts live in [`src/lib/disclaimer.ts`](src/lib/disclaimer.ts); the app sh
 
 - **Thresholds.** Every indicator has normal, caution and critical bands with a basis tag. **NASA** means NASA-STD-3001 or the NASA OCHMO technical briefs. **Clinical** means AHA, ADA, NEWS2 or MedlinePlus ranges, or the Fourth Universal Definition of Myocardial Infarction for the ST segment. **App** means a band or rule we defined ourselves (a project rule) and is labelled as such in the UI. Sources: [`src/lib/health/knowledge.ts`](src/lib/health/knowledge.ts) and [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md).
 - **Personal baseline (project rule).** A shift of 25 % or more from your own pre-flight value raises a caution, even if the value is still inside the population range. It never escalates on its own.
-- **Resting vitals only.** Continuous vitals use the median of the last hour at rest. Exercise readings are never judged as resting values.
-- **Escalation.** The critical band alone does not escalate: without a matching rule, a critical value asks for a re-check. An escalation comes only from explicit rules on each indicator: one value strictly beyond an escalation limit (for example blood pressure above 180/120 mmHg; 140–180/90–120 mmHg is caution with a re-check in 15 minutes, a project rule), any critical ST segment, SpO₂ or temperature value or any new vision symptom, a value that persists (stress 8 or more on 2 days in a row, mood 2 or less on 2 days, sleep under 6 h on 7 days, temperature 38.1 °C or more for 24 h, glucose above 250 mg/dL on 2 days, exercise under 60 min on 3 days: all project rules), or a current NOAA S1+ solar radiation storm. Training: in a real mission this prompts a call to the flight surgeon. The simulation shows how a pre-approved procedure would be timed under the mission's signal delay: with a long delay the onboard checklist starts first and the data is transmitted afterwards. Every rule with its basis: [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md#when-a-value-escalates).
-- **Signal delay.** The one-way delay comes from the mission profile (`DEMIFY_MISSION`), and each profile states its basis: ISS 0.5 s (relay through TDRS geostationary satellites plus network latency, illustrative; straight-line light time from 400 km would be about 1.3 ms), Moon 1.3 s (light time at about 384,400 km), Mars transit a fixed 750 s (mid-range of about 3 to 22 minutes one way, illustrative).
+- **Which value counts.** For SIMULATED telemetry the app uses the median of the last hour at rest and skips exercise readings. A crew entry or DEVICE reading is judged on its latest value, and for a continuous vital sign it replaces the simulated telemetry only while it is at most 6 hours old. For daily check-in values the latest crew entry of the last 7 days wins over SIMULATED values.
+- **Escalation.** The critical band alone does not escalate: without a matching rule, a critical value asks for a re-check. An escalation comes only from explicit rules on each indicator: one value strictly beyond an escalation limit (for example blood pressure above 180/120 mmHg; 140–180/90–120 mmHg is caution with a re-check in 15 minutes, a project rule), any critical ST segment, SpO₂ or temperature value (escalating on ST depression over 2 mm or on 39.1 °C or more is a project rule) or any new vision symptom, a value that persists (stress 8 or more on 2 days in a row, mood 2 or less on 2 days, sleep under 6 h on 7 days, temperature 38.1 °C or more for 24 h, glucose above 250 mg/dL on 2 days, exercise under 60 min on 3 days: all project rules), or a current NOAA S1+ solar radiation storm. Training: in a real mission this prompts a call to the flight surgeon. The simulation shows how a pre-approved procedure would be timed under the mission's signal delay: with a long delay the onboard checklist starts first and the data is transmitted afterwards. Every rule with its basis: [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md#when-a-value-escalates).
+- **Signal delay.** The one-way delay comes from the mission profile (`DEMIFY_MISSION`), and each profile states its basis: ISS 0.5 s (relay through TDRS geostationary satellites plus network latency, illustrative; straight-line light time from 400 km would be about 1.3 ms), Moon 1.3 s (light time at about 384,400 km), Mars transit a fixed 750 s (mid-range of about 3 to 22 minutes one way, illustrative). The **Signal delay profile** switch on the Overview and the crew monitor sets the URL parameter `?link=` (Check-in and Guidance read it too) and changes only the delay, not gravity, dose or mission length: `iss`, `artemis-lunar` (Moon), `mars-nearest` (light time at 0.37 AU, about 3.1 min), `mars-transit` (750 s), `mars-far` (light time at about 2.5 AU, about 20.8 min, the longest delay with contact) and `conjunction` (no contact: the Sun is between Earth and Mars, a 14-day blackout in this simulation, illustrative). Below 60 s one way the simulation allows near real-time consultation; from 60 s on it says "act first, then report"; in a blackout it says to act on the onboard procedures and transmit when contact returns.
 
 ## Data labels: what is real and what is simulated
 
@@ -47,10 +47,11 @@ Every value in the app carries one of these labels:
 
 | Label | Meaning |
 |---|---|
-| **REAL** | Fetched from a public source (NOAA SWPC, NASA OSDR), shown with its fetch time. Crew check-in entries are labelled **REAL · crew entry** |
+| **REAL** | Fetched from a public source (NOAA SWPC, NASA OSDR), shown with its fetch time |
 | **SNAPSHOT** *date* | The bundled or last saved copy of a public source, used offline or when the source is down. Never called live |
 | **SIMULATED** | Made by the demo telemetry generator around each crew member's baseline. Not measured |
-| **DEVICE** | Posted by a sensor or gateway to `POST /api/readings`. A monitor fed partly by a device shows **DEVICE + SIMULATED** |
+| **DEVICE** | Posted by a sensor or gateway to `POST /api/readings` with `"source":"sensor"`. A monitor fed partly by a device shows **DEVICE + SIMULATED** |
+| **Crew entry** | Entered in the daily check-in, or posted with `"source":"manual"`. Not called REAL, because analog crews may enter training values |
 
 | Data | Source | Label |
 |---|---|---|
@@ -59,9 +60,9 @@ Every value in the app carries one of these labels:
 | Blood counts, metabolic panel, CRP, cytokines (Inspiration4 crew) | **NASA OSDR** OSD-569 / OSD-575 | REAL, or SNAPSHOT offline |
 | OSDR study catalogue | **NASA OSDR** search API | REAL, or SNAPSHOT offline |
 | Heart rate, blood pressure, SpO₂, temperature, respiration, ST deviation | Wearables or other devices via `POST /api/readings` | SIMULATED until a device posts, then DEVICE |
-| Sleep, mood, stress, hydration, exercise | Daily crew check-in | SIMULATED demo values until the crew enters real ones |
+| Sleep, mood, stress, hydration, exercise | Daily crew check-in | SIMULATED demo values until the crew enters its own, then Crew entry |
 
-There is **no public real-time source of astronaut vital signs**, because crew medical data is protected. Demify therefore takes vital signs from devices over a simple API. Until a device is connected, a deterministic generator produces plausible vital signs around each crew member's baseline, **labelled SIMULATED everywhere in the UI**. Crew entries and DEVICE readings always replace simulated values. Details on every data source: [`docs/research/data-sources.md`](docs/research/data-sources.md).
+There is **no public real-time source of astronaut vital signs**, because crew medical data is protected. Demify therefore takes vital signs from devices over a simple API. Until a device is connected, a deterministic generator produces plausible vital signs around each crew member's baseline, **labelled SIMULATED everywhere in the UI**. In the assessment a crew entry or DEVICE reading of a vital sign replaces the simulated telemetry while it is at most 6 hours old (after that the simulated telemetry counts again, if `DEMIFY_SIMULATE` is on); for check-in values the latest crew entry of the last 7 days wins. The live monitor shows DEVICE only for sensor readings less than 2 minutes old. Details on every data source: [`docs/research/data-sources.md`](docs/research/data-sources.md).
 
 **Offline-first.** Spacecraft networks are intermittent or air-gapped. Each external data source ships a snapshot in [`data/snapshots/`](data/snapshots/). The app falls back from live data to cached data to that snapshot automatically, and every chart shows where its data came from and how fresh it is.
 
@@ -77,7 +78,7 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 | [`.env.example`](.env.example) | Operators | Every setting, with comments |
 | [`LICENSE`](LICENSE) | Everyone | MIT |
 
-To try the device API without hardware, run `npm run sensor:demo` while Demify is up. It posts demo vital signs as a wearable would, and the monitor switches from SIMULATED to DEVICE (see [`docs/OPERATIONS.md` §4.6](docs/OPERATIONS.md#46-sensor-demo-script)). It does not send the `x-demify-admin` header yet, so leave `DEMIFY_ADMIN_TOKEN` empty while you use it.
+To try the device API without hardware, run `npm run sensor:demo` while Demify is up. It posts demo vital signs as a wearable would, and the monitor switches from SIMULATED to DEVICE (see [`docs/OPERATIONS.md` §4.6](docs/OPERATIONS.md#46-sensor-demo-script)). With an admin token set on the server ([below](#stage-and-shared-networks)), run `DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (or export it first); the script sends it as `x-demify-admin`. `npm run` does not read `.env`.
 
 ## Quick start
 
@@ -91,7 +92,7 @@ docker compose up -d --build
 
 Then open http://localhost:3000. Compose publishes the port on `127.0.0.1` only, so other machines cannot reach it; see [Stage and shared networks](#stage-and-shared-networks) to open it to a LAN.
 
-Air-gapped mode (no internet; serves snapshots on port 3001):
+Air-gapped mode (no ground link; serves snapshots on port 3001):
 
 ```bash
 docker compose --profile offline up -d --build
@@ -149,11 +150,13 @@ curl -X POST http://localhost:3000/api/readings \
 
 With `DEMIFY_ADMIN_TOKEN` set, add `-H 'x-demify-admin: <token>'`. `unit` must match the indicator's unit exactly, and `value` must lie in the indicator's plausible range (otherwise 400). Requests must be `application/json`, at most 1 MB, and readings dated more than 5 minutes in the future are rejected. Each crew member can receive up to 600 readings per minute (`DEMIFY_RATE_LIMIT_PER_MIN`, 429 with `Retry-After` above). Request fields, all error codes and a step-by-step guide: [`docs/OPERATIONS.md` §4](docs/OPERATIONS.md#4-connecting-a-sensor).
 
-Demo wearable without hardware (Node 20+, no packages). It does not send the `x-demify-admin` header yet: with `DEMIFY_ADMIN_TOKEN` set it gets `401` and stops, so leave the token empty while you use it or post with `curl` and the header:
+Demo wearable without hardware (Node 20+, no packages):
 
 ```bash
 npm run sensor:demo -- --crew cdr --interval 5
 ```
+
+With `DEMIFY_ADMIN_TOKEN` set on the server, run `DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (or `export DEMIFY_ADMIN_TOKEN=<token>` first); the script sends it as `x-demify-admin`. `npm run` does not read `.env`. Without the token, or with a wrong one, the server answers `401`, the script prints a hint and stops.
 
 <details><summary>Indicator ids and units</summary>
 

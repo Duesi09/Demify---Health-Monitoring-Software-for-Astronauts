@@ -1,3 +1,4 @@
+import { MARS_DELAY_RANGE } from "../link";
 import type { BodyRegionId, HazardId, IndicatorId, Status } from "../types";
 
 /**
@@ -142,7 +143,12 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     steps: [[40, "critical"], [50, "caution"], [101, "nominal"], [131, "caution"]],
     top: "critical",
     basis: "CLIN",
-    ranges: { nominal: "50–100 bpm (fit crews often rest in the 50s)", caution: "40–49 or 101–130 bpm", critical: "< 40 or > 130 bpm, or with symptoms" },
+    ranges: {
+      nominal: "50–100 bpm (fit crews often rest in the 50s)",
+      caution: "40–49 or 101–130 bpm",
+      critical: "< 40 or > 130 bpm (project rule, close to the NEWS2 3-point bands), or with symptoms",
+    },
+    // Project rule: close to the NEWS2 3-point heart-rate bands (≤ 40, ≥ 131).
     escalateAbove: 130,
     escalateBelow: 40,
     continuous: true,
@@ -156,7 +162,8 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Check caffeine, medication and recent exercise.",
       "Drink fluids; before landing follow the pre-landing fluid-loading procedure and wear compression garments.",
     ],
-    escalation: "Below 40 or above 130 bpm at rest, or chest pain, fainting or palpitations.",
+    escalation:
+      "Below 40 or above 130 bpm at rest (project rule, close to the NEWS2 3-point bands), or chest pain, fainting or palpitations.",
     sources: [S.ahaHr, S.cardioRisk, S.orthoTB, S.bioMonitor],
   },
   systolicBP: {
@@ -173,9 +180,10 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     ranges: {
       nominal: "90–129 mmHg",
       caution: "80–89 (low), 130–139 (AHA stage 1) or 140–180 (AHA stage 2): re-check in 15 minutes",
-      critical: "< 80 or > 180 mmHg (AHA hypertensive crisis)",
+      critical: "< 80 mmHg (project rule) or > 180 mmHg (AHA hypertensive crisis)",
     },
     escalateAbove: 180,
+    // Project rule: the low limit is not an AHA category.
     escalateBelow: 80,
     cautionAdvice: "re-check in 15 minutes",
     continuous: true,
@@ -189,7 +197,8 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Review salt, fluid and caffeine intake.",
       "If low: hydrate and avoid fast posture changes; if high: rest and re-check in 15 minutes.",
     ],
-    escalation: "Systolic above 180 or below 80 mmHg, or any reading with headache, chest pain, vision change or dizziness.",
+    escalation:
+      "Systolic above 180 mmHg (AHA hypertensive crisis) or below 80 mmHg (project rule), or any reading with headache, chest pain, vision change or dizziness.",
     sources: [S.aha, S.cardioRisk, S.orthoTB],
   },
   diastolicBP: {
@@ -206,9 +215,10 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     ranges: {
       nominal: "60–79 mmHg",
       caution: "40–59 (low), 80–89 (AHA stage 1) or 90–120 mmHg (AHA stage 2): re-check in 15 minutes",
-      critical: "< 40 or > 120 mmHg (AHA hypertensive crisis)",
+      critical: "< 40 mmHg (project rule) or > 120 mmHg (AHA hypertensive crisis)",
     },
     escalateAbove: 120,
+    // Project rule: the low limit is not an AHA category.
     escalateBelow: 40,
     cautionAdvice: "re-check in 15 minutes",
     continuous: true,
@@ -217,7 +227,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     spaceflightEffect: "Fluid shifts and reduced plasma volume change vascular tone; diastolic values usually move with systolic.",
     measurement: "Automated BP cuff, CSA Bio-Monitor.",
     actions: ["Repeat the measurement after 5 minutes of rest.", "Track together with systolic pressure and heart rate."],
-    escalation: "Diastolic above 120 or below 40 mmHg, or any reading with symptoms.",
+    escalation: "Diastolic above 120 mmHg (AHA hypertensive crisis) or below 40 mmHg (project rule), or any reading with symptoms.",
     sources: [S.aha, S.cardioRisk],
   },
   spo2: {
@@ -261,8 +271,10 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       caution: "35.1–36.0 or 38.1–39.0 °C (NEWS2 1 point)",
       critical: "≤ 35.0 °C (NEWS2 3 points) or ≥ 39.1 °C (NEWS2 2 points; rating it critical is our project rule)",
     },
-    // Any critical value (<= 35.0 or >= 39.1 °C) escalates; a fever of
-    // 38.1 °C or more escalates once it persists 24 h (project rule).
+    // Any critical value escalates: <= 35.0 °C (NEWS2 3 points) and >= 39.1 °C
+    // (NEWS2 2 points; escalating it is a project rule). A fever of 38.1 °C or
+    // more escalates once it persists 24 h (project rule; assess.ts allows up
+    // to 36 h between consecutive readings).
     escalateFromBand: "critical",
     persistence: { op: ">=", value: 38.1, hours: 24 },
     continuous: true,
@@ -273,7 +285,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     measurement: "Thermometer; CSA Bio-Monitor skin temperature.",
     actions: ["Drink fluids and rest.", "Check for signs of infection (sore throat, rash, cough).", "Reduce exercise intensity while elevated."],
     escalation:
-      "35.0 °C or below, 39.1 °C or above, 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.",
+      "35.0 °C or below, 39.1 °C or above (project rule), 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.",
     sources: [S.news2, S.immuneRisk, S.bioMonitor],
   },
   respRate: {
@@ -695,17 +707,42 @@ export function persistenceLabel(def: IndicatorDef): string | null {
 }
 
 /**
- * The values an escalateFromBand rule covers, in words: the critical range
- * text without its notes ("≤ 35.0 °C or ≥ 39.1 °C"), or for a caution band
- * that starts above a single nominal step, "≥ 1 /3".
+ * The values an escalateFromBand rule covers, as a phrase that follows
+ * "any value": the critical range text without its notes
+ * ("≤ 35.0 °C or ≥ 39.1 °C"), or for a caution band the open ends derived
+ * from the steps ("≥ 1 /3", "< 50 bpm or ≥ 101 bpm"). A band with a closed
+ * interval in the middle falls back to "in the caution or critical band".
  */
 export function bandEscalationLabel(def: IndicatorDef): string | null {
   if (def.escalateFromBand === "critical") return def.ranges.critical.replace(/\s*\([^)]*\)/g, "").trim();
   if (def.escalateFromBand === "caution") {
-    const [first, ...rest] = def.steps;
-    const allAbove = rest.every(([, s]) => RANK[s] >= RANK.caution) && RANK[def.top] >= RANK.caution;
-    if (first && first[1] === "nominal" && allAbove) return `≥ ${formatLimit(def, first[0])}`;
-    return "any caution or critical value";
+    const flagged = (s: Status) => RANK[s] >= RANK.caution;
+    // Intervals [lower, upper) of the classification, ascending; null = open end.
+    const parts: Array<{ lower: number | null; upper: number | null; on: boolean }> = [];
+    let lower: number | null = null;
+    for (const [upper, status] of def.steps) {
+      parts.push({ lower, upper, on: flagged(status) });
+      lower = upper;
+    }
+    parts.push({ lower, upper: null, on: flagged(def.top) });
+    // Merge neighbours with the same flag.
+    const runs = parts.reduce<typeof parts>((acc, p) => {
+      const last = acc.at(-1);
+      if (last && last.on === p.on) last.upper = p.upper;
+      else acc.push({ ...p });
+      return acc;
+    }, []);
+    const on = runs.filter((r) => r.on);
+    if (!on.length) return null;
+    // Only open-ended intervals read as plain limits; anything else uses the band name.
+    const ends = on.map((r) =>
+      r.lower == null && r.upper != null
+        ? `< ${formatLimit(def, r.upper)}`
+        : r.upper == null && r.lower != null
+          ? `≥ ${formatLimit(def, r.lower)}`
+          : null,
+    );
+    return ends.every((e) => e != null) ? ends.join(" or ") : "in the caution or critical band";
   }
   return null;
 }
@@ -719,7 +756,7 @@ export function escalationFlags(def: IndicatorDef): string[] {
   if (def.escalateBelow != null) out.push(`< ${formatLimit(def, def.escalateBelow)}`);
   if (def.escalateAbove != null) out.push(`> ${formatLimit(def, def.escalateAbove)}`);
   const band = bandEscalationLabel(def);
-  if (band) out.push(band.startsWith("any ") ? `A${band.slice(1)}` : `Any value ${band}`);
+  if (band) out.push(`Any value ${band}`);
   const p = persistenceLabel(def);
   if (p) out.push(p);
   if (def.stormAlert) out.push("Any current S1+ solar radiation storm");
@@ -833,7 +870,7 @@ export const HAZARDS: Record<HazardId, HazardDef> = {
   distance: {
     id: "distance",
     name: "Distance from Earth",
-    summary: "Mars is ~140 million miles away; one-way communication delays reach 20 minutes and evacuation is impossible.",
+    summary: `Mars is ~140 million miles away; communication delays are ${MARS_DELAY_RANGE} and evacuation is impossible.`,
     effects: ["Crew must diagnose and treat themselves", "Limited medical supplies", "Food must last the mission (nutrition)"],
     url: "https://www.nasa.gov/hrp/hazard-distance-from-earth/",
   },

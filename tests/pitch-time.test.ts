@@ -42,7 +42,7 @@ vi.mock("@/lib/sources/swpc", async (orig) => {
   };
 });
 
-const { assessAllCrew } = await import("@/lib/health/assess");
+const { assessAllCrew, persistenceFlag, readingsFor } = await import("@/lib/health/assess");
 const { INDICATORS, evaluateValue, needsEscalation, persistenceLabel } = await import("@/lib/health/knowledge");
 const { simulateSeries } = await import("@/lib/sources/simulator");
 const { startScenario, stopScenario } = await import("@/lib/store/scenarios");
@@ -122,16 +122,25 @@ describe("P1.0 pitch time (2026-11-15 15:30Z, fresh data, quiet sun)", () => {
     expect([...seen]).toEqual([JSON.stringify(escalating(all))]);
   });
 
-  it("no finding says 'contact the flight surgeon' unless an escalation rule applies", () => {
+  it("no finding says 'contact the flight surgeon' unless an escalation rule applies", async () => {
+    vi.setSystemTime(PITCH);
     for (const a of all) {
+      // The same readings the assessment used (no space weather, so no storm rule).
+      const rs = await readingsFor(a.crew, 24 * 7);
       for (const x of a.assessments) {
+        const where = `${a.crew.id}/${x.indicator}: ${x.finding}`;
         const says = /contact the flight surgeon/i.test(x.finding);
-        expect(says, `${a.crew.id}/${x.indicator}: ${x.finding}`).toBe(x.escalate);
-        if (!x.escalate || x.value == null) continue;
-        // The rule that applies: a single-value rule, or a met persistence rule named in the finding.
-        const p = persistenceLabel(INDICATORS[x.indicator]);
-        const rule = needsEscalation(x.indicator, x.value) || (p != null && x.finding.includes(p));
-        expect(rule, `${a.crew.id}/${x.indicator}: ${x.finding}`).toBe(true);
+        expect(says, where).toBe(x.escalate);
+        if (x.value == null || x.takenAt == null) continue;
+        const source = a.sources[x.indicator];
+        const persist = source ? persistenceFlag(x.indicator, { value: x.value, takenAt: x.takenAt, source }, rs, PITCH.getTime()) : null;
+        const single = needsEscalation(x.indicator, x.value);
+        // The rule that applies: a single-value rule, or a persistence rule
+        // that is actually met on the history. A run still in progress
+        // ("... so far; repeated values escalate") must never count as met.
+        expect(single || persist?.met === true, where).toBe(x.escalate);
+        if (x.escalate && !single) expect(x.finding, where).toContain(persistenceLabel(INDICATORS[x.indicator])!);
+        if (persist && !persist.met && !single) expect(x.finding, where).not.toMatch(/contact the flight surgeon/);
       }
     }
   });

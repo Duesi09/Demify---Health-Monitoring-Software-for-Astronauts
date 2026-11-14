@@ -6,7 +6,7 @@ import { Save, Stethoscope } from "lucide-react";
 import { StatusBadge } from "@/components/ui";
 import { StatusIcon } from "@/components/overview/status-icon";
 import { bySeverity, formatUtc, formatValue } from "@/components/overview/format";
-import { linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
+import { findingUnderLink, linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import { CHECK_IN_INDICATORS, INDICATORS, classify, evaluateValue } from "@/lib/health/knowledge";
 import type { IndicatorId, Status } from "@/lib/types";
 import { CHECK_IN_GROUPS, SCALE_LABELS, type CheckInInput, type CheckInResult } from "./types";
@@ -44,8 +44,24 @@ function evaluate(id: IndicatorId, raw: string | undefined, baseline?: number): 
   };
 }
 
-/** Live status line under each field: status badge + the matching range text. */
-function Feedback({ id, live, serverError }: { id: IndicatorId; live: Live; serverError?: string }) {
+/**
+ * Live status line under each field: status badge + the matching range text.
+ * Escalation wording matches the legend ("Escalation only when Demify shows
+ * contact the flight surgeon"), framed as training; in a blackout there is
+ * no one to call, so it points to the onboard procedures.
+ */
+function Feedback({
+  id,
+  live,
+  serverError,
+  blackout,
+}: {
+  id: IndicatorId;
+  live: Live;
+  serverError?: string;
+  /** No contact with the ground (linkPolicy mode "blackout"). */
+  blackout: boolean;
+}) {
   const def = INDICATORS[id];
   if (serverError) {
     return <p className="text-xs text-critical">{serverError}</p>;
@@ -80,11 +96,15 @@ function Feedback({ id, live, serverError }: { id: IndicatorId; live: Live; serv
         </p>
       )}
       {live.escalate ? (
-        <p className="font-medium text-critical">Escalation threshold: contact the flight surgeon after saving.</p>
+        <p className="font-medium text-critical">
+          {blackout
+            ? "Escalation rule met: after saving, Demify shows it with no contact (blackout). Training: in a real mission this prompts the onboard procedures; transmit when contact returns."
+            : "Escalation rule met: after saving, Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon."}
+        </p>
       ) : live.repeatRule ? (
         <p className="text-fg/90">Single value; repeated values escalate: {live.repeatRule}.</p>
       ) : (
-        s === "critical" && <p className="text-fg/90">No escalation threshold: re-check and log.</p>
+        s === "critical" && <p className="text-fg/90">No escalation rule met: re-check and log.</p>
       )}
     </div>
   );
@@ -96,12 +116,14 @@ function NumberField({
   onChange,
   baseline,
   serverError,
+  blackout,
 }: {
   id: IndicatorId;
   value: string;
   onChange: (v: string) => void;
   baseline?: number;
   serverError?: string;
+  blackout: boolean;
 }) {
   const def = INDICATORS[id];
   const live = evaluate(id, value, baseline);
@@ -147,7 +169,7 @@ function NumberField({
         <span className="shrink-0 pr-3 text-sm text-muted">{def.unit}</span>
       </div>
       <div id={fbId} className="mt-1.5 min-h-5">
-        <Feedback id={id} live={live} serverError={serverError} />
+        <Feedback id={id} live={live} serverError={serverError} blackout={blackout} />
       </div>
     </div>
   );
@@ -158,11 +180,13 @@ function ScaleField({
   value,
   onChange,
   serverError,
+  blackout,
 }: {
   id: IndicatorId;
   value: string;
   onChange: (v: string) => void;
   serverError?: string;
+  blackout: boolean;
 }) {
   const def = INDICATORS[id];
   const [lo, hi] = def.inputRange;
@@ -229,7 +253,7 @@ function ScaleField({
         </span>
       </div>
       <div id={fbId} className="mt-1.5 min-h-5">
-        <Feedback id={id} live={live} serverError={serverError} />
+        <Feedback id={id} live={live} serverError={serverError} blackout={blackout} />
       </div>
     </fieldset>
   );
@@ -274,6 +298,7 @@ export function CheckInForm({
     critical: entered.filter(([, l]) => l.status === "critical").length,
   };
   const fieldErrors = result && !result.ok ? (result.fieldErrors ?? {}) : {};
+  const blackout = linkPolicy(commDelaySeconds).mode === "blackout";
 
   const grouped = new Set(CHECK_IN_GROUPS.flatMap((g) => g.indicators));
   const groups = [
@@ -323,7 +348,14 @@ export function CheckInForm({
             <div className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2">
               {g.indicators.map((id) =>
                 isScale(id) ? (
-                  <ScaleField key={id} id={id} value={values[id] ?? ""} onChange={set(id)} serverError={fieldErrors[id]} />
+                  <ScaleField
+                    key={id}
+                    id={id}
+                    value={values[id] ?? ""}
+                    onChange={set(id)}
+                    serverError={fieldErrors[id]}
+                    blackout={blackout}
+                  />
                 ) : (
                   <NumberField
                     key={id}
@@ -332,6 +364,7 @@ export function CheckInForm({
                     onChange={set(id)}
                     serverError={fieldErrors[id]}
                     baseline={baselines[id]}
+                    blackout={blackout}
                   />
                 ),
               )}
@@ -457,12 +490,13 @@ function ResultPanel({
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
             {escalate.map((i) => (
               <li key={i.indicator}>
-                {i.finding} <span className="text-muted">Escalate when: {INDICATORS[i.indicator].escalation}</span>
+                {findingUnderLink(i.finding, policy.mode)}{" "}
+                <span className="text-muted">Escalate when: {INDICATORS[i.indicator].escalation}</span>
               </li>
             ))}
             {result.otherEscalations.map((e) => (
               <li key={e.indicator}>
-                {e.finding} <span className="text-muted">(from earlier data)</span>
+                {findingUnderLink(e.finding, policy.mode)} <span className="text-muted">(from earlier data)</span>
               </li>
             ))}
           </ul>
@@ -480,7 +514,7 @@ function ResultPanel({
               </p>
               <StatusBadge status={i.status} />
             </div>
-            <p className="mt-1 text-sm text-muted">{i.finding}</p>
+            <p className="mt-1 text-sm text-muted">{findingUnderLink(i.finding, policy.mode)}</p>
             {i.actions.length > 0 && (
               <div className="mt-2">
                 <h3 className="text-[11px] text-muted">What to do now</h3>

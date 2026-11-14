@@ -17,7 +17,7 @@ an air-gapped spacecraft network.
 | Radiation environment (live) | **NOAA SWPC** GOES proton and X-ray flux, Kp index, 3-day outlook | `/radiation`, dose-rate indicator |
 | ISS measured dose | OSDR **Environmental Data App** (ISS dosimetry, rodent missions) | ISS reference dose on `/radiation` |
 | Bone | No in-flight density data. Proxies: calcium and ALP (CMP), osteopontin (Alamar) | Shown as markers only |
-| Sleep, mood, behaviour | None public | Daily self-check-in |
+| Sleep, mood, behaviour | None public | Daily self-check-in, labelled **Crew entry** (SIMULATED demo values until the crew enters its own) |
 
 ## NASA OSDR: Open Science Data Repository
 

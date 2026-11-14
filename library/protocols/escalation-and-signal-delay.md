@@ -25,11 +25,11 @@ The finding then reads "contact the flight surgeon" (or "critical: contact the f
 
 ## Escalation limits per indicator
 
-- Heart rate: below 40 or above 130 bpm (CLIN).
-- ST segment: any critical value, elevation ≥ 1 mm or depression > 2 mm (CLIN; > 2 mm depression is a project rule).
-- Blood pressure: systolic above 180 or below 80 mmHg; diastolic above 120 or below 40 mmHg (CLIN, AHA hypertensive crisis).
+- Heart rate: below 40 or above 130 bpm (project rule, close to the NEWS2 3-point bands, ≤ 40 / ≥ 131 bpm).
+- ST segment: any critical value, elevation ≥ 1 mm or depression > 2 mm (CLIN, the UDMI 1 mm cut-point; the UDMI uses higher cut-points in leads V2–V3, and the app reads a single value; > 2 mm depression is a project rule).
+- Blood pressure: systolic above 180 or below 80 mmHg; diastolic above 120 or below 40 mmHg (CLIN, AHA hypertensive crisis, for above 180 / 120 mmHg; the below 80 / 40 mmHg limits are a project rule).
 - SpO₂: any value ≤ 90 % (CLIN).
-- Temperature: any critical value, ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h (CLIN, NEWS2 bands; rating ≥ 39.1 °C critical and the 24 h rule are project rules).
+- Temperature: any critical value, ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h (CLIN for ≤ 35.0 °C, NEWS2 3 points; escalating at ≥ 39.1 °C, NEWS2 2 points, and the 24 h rule are project rules).
 - Respiratory rate: above 24 or below 9 /min (CLIN, NEWS2 3-point bands).
 - Glucose: below 54 mg/dL; above 400 mg/dL; above 250 mg/dL on 2 days in a row (CLIN, ADA level 2; the 400 mg/dL ceiling and the 2-day rule are project rules).
 - Sleep: below 6 h on 7 days in a row, "sleep debt" (project rule, based on OCHMO-TB-041).

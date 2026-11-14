@@ -12,7 +12,7 @@ export const DISCLAIMER_SHORT = "Research prototype, not a certified medical dev
 
 /** Site footer and anywhere the full statement fits. */
 export const DISCLAIMER_LONG =
-  "Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled REAL or DEVICE. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.";
+  "Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled DEVICE or Crew entry; REAL marks public NASA and NOAA data. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.";
 
 /** Intended purpose statement (shown on /help under "About Demify"). */
 export const INTENDED_PURPOSE =

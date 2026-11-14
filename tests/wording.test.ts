@@ -16,7 +16,7 @@ const SRC = path.join(ROOT, "src");
  * medical device software, and these phrases describe exactly that. Use the
  * constants in src/lib/disclaimer.ts and training framing instead.
  */
-const FORBIDDEN = [/not a medical device/i, /decision[\s-]+support/i];
+const FORBIDDEN = [/not a medical device/i, /decision[\s-]+support/i, /AI[\s-]+powered/i];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -25,17 +25,44 @@ function walk(dir: string): string[] {
   });
 }
 
+/** "file:line: text" for every line of these files that uses a forbidden phrase. */
+function forbiddenHits(files: string[]): string[] {
+  const hits: string[] = [];
+  for (const file of files) {
+    const lines = readFileSync(file, "utf8").split("\n");
+    lines.forEach((line, i) => {
+      if (FORBIDDEN.some((re) => re.test(line))) hits.push(`${path.relative(ROOT, file)}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  return hits;
+}
+
 describe("wording guard: src/ never uses medical-device trigger phrases", () => {
   it("no file under src/ contains them", () => {
-    const hits: string[] = [];
-    for (const file of walk(SRC)) {
-      if (/\.(png|jpe?g|gif|ico|webp|woff2?)$/i.test(file)) continue;
-      const lines = readFileSync(file, "utf8").split("\n");
-      lines.forEach((line, i) => {
-        if (FORBIDDEN.some((re) => re.test(line))) hits.push(`${path.relative(ROOT, file)}:${i + 1}: ${line.trim()}`);
-      });
-    }
+    const files = walk(SRC).filter((f) => !/\.(png|jpe?g|gif|ico|webp|woff2?)$/i.test(f));
+    const hits = forbiddenHits(files);
     expect(hits, `Use DISCLAIMER_SHORT / DISCLAIMER_LONG or training framing instead:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  // Docs only ban the three trigger phrases; ordinary words ("first", "only")
+  // stay allowed there. Brand and pitch material has its own review.
+  it("README.md, docs/**/*.md (except docs/brand and docs/pitch) and .env.example do not contain them", () => {
+    const docs = path.join(ROOT, "docs");
+    const skip = [path.join(docs, "brand"), path.join(docs, "pitch")];
+    const files = [
+      path.join(ROOT, "README.md"),
+      path.join(ROOT, ".env.example"),
+      ...walk(docs).filter((f) => f.endsWith(".md") && !skip.some((d) => f.startsWith(d + path.sep))),
+    ].filter((f) => {
+      try {
+        return statSync(f).isFile();
+      } catch {
+        return false;
+      }
+    });
+    expect(files.length).toBeGreaterThan(2);
+    const hits = forbiddenHits(files);
+    expect(hits, `Use the wording in src/lib/disclaimer.ts instead:\n${hits.join("\n")}`).toEqual([]);
   });
 });
 
@@ -43,7 +70,7 @@ describe("disclaimer constants", () => {
   it("match the agreed texts exactly", () => {
     expect(DISCLAIMER_SHORT).toBe("Research prototype, not a certified medical device.");
     expect(DISCLAIMER_LONG).toBe(
-      "Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled REAL or DEVICE. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.",
+      "Research prototype – not a certified medical device. Not for diagnosis, treatment or emergency decisions. Vital signs are simulated unless labelled DEVICE or Crew entry; REAL marks public NASA and NOAA data. Thresholds come from NASA standards, clinical guidelines or our own project rules, and each carries its source tag. In a real situation follow your mission's medical procedures and contact your flight surgeon or emergency service.",
     );
     expect(INTENDED_PURPOSE).toMatch(/^Demify is open-source research and training software for analog and simulated space missions\./);
     expect(INTENDED_PURPOSE).toMatch(/It must not be used for the medical care of any individual\.$/);

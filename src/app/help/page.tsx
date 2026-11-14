@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { BASIS_INFO, BasisTag } from "@/components/guidance/basis";
-import { formatDelay } from "@/components/guidance/escalation-protocol";
 import { DRILL_BUTTONS } from "@/components/crew/protocols";
 import { CopyCode } from "@/components/help/copy-code";
 import {
@@ -15,15 +14,16 @@ import {
 import { DemoTag } from "@/components/monitor/shared";
 import { DrillTag, SimulatedTag, SourceTag } from "@/components/overview/status-icon";
 import { PageHeader, StatusBadge, Tag, tagClass } from "@/components/ui";
-import { currentMission } from "@/lib/config";
+import { currentLink, currentMission } from "@/lib/config";
 import { INTENDED_PURPOSE } from "@/lib/disclaimer";
 import type { Basis } from "@/lib/health/knowledge";
 import { ADMIN_HEADER, adminToken } from "@/lib/http";
+import { linkPolicy, withLink } from "@/lib/link";
 import { MAX_SCENARIO_MS } from "@/lib/store/scenarios";
 import type { Status } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Help" };
-// The alarm section shows the configured mission's signal delay.
+// The alarm section shows the signal delay of ?link= (else the configured mission's).
 export const dynamic = "force-dynamic";
 
 const TOC = [
@@ -221,10 +221,17 @@ const FAQ: { q: string; a: ReactNode }[] = [
 
 /* ------------------------------------------------------------------------- */
 
-export default function HelpPage() {
+export default async function HelpPage(props: PageProps<"/help">) {
+  const sp = await props.searchParams;
   const mission = currentMission();
   const tokenSet = adminToken() != null;
-  const autonomous = mission.commDelaySeconds >= 60;
+  // ?link= swaps the signal delay like on the other pages (/help?link=conjunction shows the blackout text).
+  const { profile: link, selected } = currentLink(sp.link);
+  const policy = linkPolicy(link.oneWayS);
+  const linkName = selected ? link.label : mission.name;
+  const where = selected ? `Signal delay profile ${link.label}` : `Current mission ${mission.name}`;
+  // policy.label is formatDelay(oneWayS), or "no contact (blackout)".
+  const delayText = policy.mode === "blackout" ? policy.label : `${policy.label} one-way`;
   const autoEndMin = Math.round(MAX_SCENARIO_MS / 60_000);
 
   return (
@@ -346,11 +353,7 @@ export default function HelpPage() {
         description="Training alarms from the simulated training monitor appear in a bar at the top of every page. Follow the path below from the top."
       >
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,500px)_minmax(0,1fr)]">
-          <AlarmDecisionDiagram
-            missionName={mission.name}
-            delayText={formatDelay(mission.commDelaySeconds)}
-            autonomous={autonomous}
-          />
+          <AlarmDecisionDiagram missionName={linkName} delayText={delayText} mode={policy.mode} />
           <ul className="space-y-3 text-sm">
             <li className="rounded-xl border border-border bg-surface p-4">
               <p className="font-semibold">Turn the sound on once</p>
@@ -375,19 +378,25 @@ export default function HelpPage() {
               </p>
             </li>
             <li
-              className={`rounded-xl border p-4 ${autonomous ? "border-caution/50 bg-caution/5" : "border-border bg-surface"}`}
+              className={`rounded-xl border p-4 ${policy.mode === "live" ? "border-border bg-surface" : "border-caution/50 bg-caution/5"}`}
             >
               <p className="font-semibold">
-                {autonomous ? "Act first, then transmit" : "Call the flight surgeon directly"}
+                {policy.mode === "blackout"
+                  ? "No contact: act on the onboard procedures"
+                  : policy.mode === "delayed"
+                    ? "Act first, then transmit"
+                    : "Call the flight surgeon directly"}
               </p>
               <p className="mt-1 leading-relaxed text-muted">
-                Current mission {mission.name}: signal delay {formatDelay(mission.commDelaySeconds)} one-way.{" "}
-                {autonomous
-                  ? "In a real mission: stabilise with the checklist, log readings and actions, then send everything in one message. Do not wait for the reply before treating."
-                  : "The link is almost live. In a real mission, start the onboard emergency procedure first; the call must never delay treatment."}
+                {policy.mode === "blackout" ? `${where}: ${policy.label}.` : `${where}: signal delay ${delayText}.`}{" "}
+                {policy.mode === "blackout"
+                  ? "In a real mission: act on the onboard procedures, log readings and actions, and transmit everything when contact returns."
+                  : policy.mode === "delayed"
+                    ? "In a real mission: stabilise with the checklist, log readings and actions, then send everything in one message. Do not wait for the reply before treating."
+                    : "The link is almost live. In a real mission, start the onboard emergency procedure first; the call must never delay treatment."}
               </p>
               <p className="mt-2">
-                <PageLink href="/guidance#escalation">Escalation protocol</PageLink>
+                <PageLink href={withLink("/guidance#escalation", selected)}>Escalation protocol</PageLink>
               </p>
             </li>
           </ul>

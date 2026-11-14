@@ -1,5 +1,5 @@
 import { INDICATORS } from "@/lib/health/knowledge";
-import { linkPolicy } from "@/lib/link";
+import { linkPolicy, type LinkMode } from "@/lib/link";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 
 /**
@@ -10,6 +10,12 @@ import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
  * Wording is deliberately procedural, not prescriptive: every clinical step
  * defers to the onboard medical checklist and the flight surgeon. No drug
  * names, doses or amounts (guarded by tests/clinical-safety.test.ts).
+ *
+ * In a blackout (linkPolicy mode "blackout", e.g. solar conjunction) there is
+ * no one to contact: no step tells the crew to contact or transmit to the
+ * flight surgeon "immediately" or to act "under flight surgeon direction".
+ * Those steps follow the onboard procedures and transmit when contact returns
+ * (guarded by tests/blackout-protocol.test.ts).
  */
 
 export type ProtocolId = ScenarioType | "general";
@@ -50,6 +56,22 @@ export interface Protocol {
   id: ProtocolId;
   title: string;
   steps: ProtocolStep[];
+  /** Link mode the steps were written for (blackout: no contact with the ground). */
+  mode: LinkMode;
+}
+
+/**
+ * Blackout wording for indicator crew actions that assume a link to the
+ * ground (knowledge.ts actions are written for a live or delayed link).
+ */
+const BLACKOUT_ACTION: Record<string, string> = {
+  [INDICATORS.stDeviation.actions[1]]: "Record the 12-lead ECG; transmit it to the flight surgeon when contact returns.",
+  [INDICATORS.stDeviation.actions[2]]: "Follow the onboard medical checklist for chest pain.",
+};
+
+/** A crew action as written for this link mode (unchanged unless in a blackout). */
+export function actionUnderLink(text: string, mode: LinkMode): string {
+  return mode === "blackout" ? (BLACKOUT_ACTION[text] ?? text) : text;
 }
 
 /**
@@ -81,17 +103,26 @@ export function buildProtocol(
   /** commDelaySeconds: one-way delay in seconds, null for no contact (blackout); missionName names the link in the step text. */
   opts: { commDelaySeconds: number | null; missionName: string; alarm?: MonitorAlarm | null },
 ): Protocol {
+  const mode = linkPolicy(opts.commDelaySeconds).mode;
+  const blackout = mode === "blackout";
   const surgeon = surgeonStep(opts.commDelaySeconds, opts.missionName);
-  const st = INDICATORS.stDeviation.actions;
+  const st = INDICATORS.stDeviation.actions.map((a) => actionUnderLink(a, mode));
   switch (id) {
     case "stemi":
       return {
         id,
+        mode,
         title: "Suspected heart attack (STEMI)",
         steps: [
           { id: "rest", text: st[0], detail: "Note the time symptoms began (chest pain, breathlessness, sweating, nausea)." },
           { id: "ecg", text: st[1] },
-          { id: "checklist", text: st[2], detail: "Any medication only as the onboard medical checklist or the flight surgeon directs." },
+          {
+            id: "checklist",
+            text: st[2],
+            detail: blackout
+              ? "Any medication only per the onboard medical procedures."
+              : "Any medication only as the onboard medical checklist or the flight surgeon directs.",
+          },
           {
             id: "aed",
             text: "Have the defibrillator (AED) ready per the onboard procedure.",
@@ -104,12 +135,15 @@ export function buildProtocol(
     case "vf":
       return {
         id,
+        mode,
         title: "Cardiac arrest (VF / pulseless VT)",
         steps: [
           {
             id: "confirm",
             text: "Confirm: unresponsive, not breathing normally, no pulse. Call out “cardiac arrest” to the crew.",
-            detail: "If a pulse is present, follow the onboard arrhythmia checklist instead and contact the flight surgeon.",
+            detail: blackout
+              ? "If a pulse is present, follow the onboard arrhythmia checklist instead; transmit the log when contact returns."
+              : "If a pulse is present, follow the onboard arrhythmia checklist instead and contact the flight surgeon.",
           },
           {
             id: "cpr",
@@ -117,8 +151,18 @@ export function buildProtocol(
             detail: "Restrain the patient or brace the rescuer (e.g. handstand or reverse bear-hug position) so compressions are effective.",
           },
           { id: "aed", text: "Bring the AED, attach the pads and follow its voice prompts; shock only when the device advises." },
-          { id: "resume", text: "Resume CPR immediately after each shock; switch compressors about every 2 minutes." },
-          { id: "acls", text: "Follow the onboard advanced cardiac life support (ACLS) checklist under flight surgeon direction." },
+          {
+            id: "resume",
+            text: blackout
+              ? "Resume CPR straight after each shock; switch compressors about every 2 minutes."
+              : "Resume CPR immediately after each shock; switch compressors about every 2 minutes.",
+          },
+          {
+            id: "acls",
+            text: blackout
+              ? "Follow the onboard advanced cardiac life support (ACLS) checklist as it directs; no flight surgeon input until contact returns."
+              : "Follow the onboard advanced cardiac life support (ACLS) checklist under flight surgeon direction.",
+          },
           surgeon,
           { id: "log", text: "Keep this sheet: record every shock, rhythm check and medication time." },
         ],
@@ -126,6 +170,7 @@ export function buildProtocol(
     case "hypertensive-crisis":
       return {
         id,
+        mode,
         title: "Hypertensive crisis (BP > 180/120 mmHg)",
         steps: [
           { id: "rest", text: "Stop activity; rest quietly, restrained, with continuous monitoring." },
@@ -135,7 +180,12 @@ export function buildProtocol(
             text: "Check for warning symptoms: severe headache, chest pain, vision change, confusion, breathlessness.",
             detail: "Any of these with BP > 180/120 is a medical emergency.",
           },
-          { id: "checklist", text: "Follow the onboard medical checklist for high blood pressure; medication only per flight surgeon direction." },
+          {
+            id: "checklist",
+            text: blackout
+              ? "Follow the onboard medical checklist for high blood pressure; medication only per the onboard medical procedures."
+              : "Follow the onboard medical checklist for high blood pressure; medication only per flight surgeon direction.",
+          },
           surgeon,
           { id: "trend", text: "Re-measure every 5–15 minutes and log each value with its time." },
         ],
@@ -144,13 +194,14 @@ export function buildProtocol(
       const ind = opts.alarm?.indicator ? INDICATORS[opts.alarm.indicator] : null;
       return {
         id: "general",
+        mode,
         title: opts.alarm ? `High-priority alarm: ${opts.alarm.text}` : "High-priority alarm",
         steps: [
           {
             id: "check",
             text: "Check the crew member first, then the sensor: responsive? breathing? electrodes, cuff and probe in place?",
           },
-          ...(ind?.actions ?? []).map((text, i) => ({ id: `act-${i}`, text })),
+          ...(ind?.actions ?? []).map((text, i) => ({ id: `act-${i}`, text: actionUnderLink(text, mode) })),
           surgeon,
         ],
       };

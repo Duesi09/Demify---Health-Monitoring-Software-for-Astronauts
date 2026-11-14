@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight, Stethoscope } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { CrewAssessment } from "@/lib/health/assess";
-import { linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
+import { findingUnderLink, linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import type { IndicatorId, ReadingSource } from "@/lib/types";
 import { bySeverity } from "./format";
 import { DrillTag, SimulatedTag, StatusIcon } from "./status-icon";
@@ -61,7 +61,8 @@ function simulatedOnly(it: EscalationItem): boolean {
  * Top-of-page alert listing every crew member whose data warrants contacting
  * the flight surgeon. With long signal delays the crew acts first; in a
  * blackout (no contact) it acts on the onboard procedures and transmits when
- * contact returns (linkPolicy in src/lib/link.ts).
+ * contact returns (linkPolicy in src/lib/link.ts); finding texts then say
+ * the rule is met but there is no contact (findingUnderLink).
  *
  * Findings driven by a training scenario are tagged DRILL. When every listed
  * finding comes from a drill, the whole banner is framed as a rehearsal
@@ -193,7 +194,7 @@ export function EscalationBanner({
                       <StatusIcon status={f.status} className="mt-0.5" />
                       <span className="min-w-0">
                         {f.drill && <DrillTag label="Drill" className="mr-1.5 align-[1px]" />}
-                        {f.finding}{" "}
+                        {findingUnderLink(f.finding, policy.mode)}{" "}
                         <span className="text-muted">
                           Escalate when: {INDICATORS[f.indicator].escalation}
                           {f.drill ? " (training scenario value)" : f.source === "simulated" && " (SIMULATED data)"}

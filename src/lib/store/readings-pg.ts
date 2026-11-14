@@ -41,7 +41,6 @@ const IMPORT_BATCH = 2_000;
 const LOCK_RETENTION = 7_311_003;
 
 interface State {
-  url: string;
   ready: Promise<void> | null;
   /** Skip the database until this time (after a connection failure). */
   downUntil: number;
@@ -52,26 +51,42 @@ interface State {
   lastRetention: number;
   retention: Promise<void> | null;
   crew: { at: number; list: CrewMember[] } | null;
+  /** Last console.warn per kind of message. */
+  lastLog: Map<string, number>;
 }
 
-let state: State | null = null;
+const shared = globalThis as typeof globalThis & {
+  __demifyReadingsPg?: { url: string; pool: Pool | null; state: State };
+};
 
-/** Per-process state, reset when DATABASE_URL changes (tests switch databases). */
+/**
+ * Process-wide state, kept on globalThis because Next.js bundles this module
+ * once for route handlers and once for pages, and both copies must share one
+ * start-up, one spool flag, one retry window and one log limiter. It lives as
+ * long as the shared pool: closePool() or a new DATABASE_URL starts afresh.
+ */
 function current(): State {
   const url = process.env.DATABASE_URL?.trim() ?? "";
-  if (!state || state.url !== url) {
-    state = {
-      url,
-      ready: null,
-      downUntil: 0,
-      degraded: false,
-      spoolPending: true,
-      draining: null,
-      lastRetention: 0,
-      retention: null,
-      crew: null,
-    };
+  let pool: Pool | null = null;
+  try {
+    pool = getPool();
+  } catch {
+    /* unusable DATABASE_URL: withDb reports it and the JSON store is used */
   }
+  const held = shared.__demifyReadingsPg;
+  if (held && held.url === url && held.pool === pool) return held.state;
+  const state: State = {
+    ready: null,
+    downUntil: 0,
+    degraded: false,
+    spoolPending: true,
+    draining: null,
+    lastRetention: 0,
+    retention: null,
+    crew: null,
+    lastLog: new Map(),
+  };
+  shared.__demifyReadingsPg = { url, pool, state };
   return state;
 }
 
@@ -79,14 +94,12 @@ function current(): State {
 /* Logging and error handling                                                 */
 /* ------------------------------------------------------------------------- */
 
-const lastLog = new Map<string, number>();
-
 /** console.warn at most once a minute per kind of message. */
-function logLimited(kind: string, message: string): void {
+function logLimited(s: State, kind: string, message: string): void {
   const now = Date.now();
-  const last = lastLog.get(kind);
+  const last = s.lastLog.get(kind);
   if (last !== undefined && now - last < LOG_EVERY_MS && now >= last) return;
-  lastLog.set(kind, now);
+  s.lastLog.set(kind, now);
   console.warn(`[demify] ${message}`);
 }
 
@@ -120,25 +133,33 @@ class DatabaseUnavailable extends Error {}
 async function withDb<T>(what: string, op: (pool: Pool) => Promise<T>): Promise<T> {
   const s = current();
   if (Date.now() < s.downUntil) throw new DatabaseUnavailable("waiting before the next database attempt");
+  // A failure before op runs (migrations, import, spool replay) always waits
+  // RETRY_AFTER_MS, so a broken start-up is not retried on every request.
+  let started = false;
   try {
     const pool = getPool();
     await ready(pool, s);
+    // Wait for a replay another request started, so no read misses spooled readings.
     if (s.spoolPending) await drain(pool, s);
+    else if (s.draining) await s.draining;
+    started = true;
     const out = await op(pool);
     if (s.degraded) {
       s.degraded = false;
-      logLimited("recovered", "PostgreSQL is reachable again; crew readings are stored in the database.");
+      logLimited(s, "recovered", "PostgreSQL is reachable again; crew readings are stored in the database.");
     }
     return out;
   } catch (err) {
-    if (isDataError(err)) {
-      logLimited("data", `PostgreSQL could not ${what} (${describe(err)}); the JSON file store was used instead.`);
+    if (started && isDataError(err)) {
+      logLimited(s, "data", `PostgreSQL could not ${what} (${describe(err)}); the JSON file store was used instead.`);
     } else {
       s.downUntil = Date.now() + RETRY_AFTER_MS;
       s.degraded = true;
+      const why = isDataError(err) ? "PostgreSQL start-up failed" : "PostgreSQL is unreachable";
       logLimited(
+        s,
         "down",
-        `PostgreSQL is unreachable (${describe(err)}). Crew readings are read from and written to the JSON file ` +
+        `${why} (${describe(err)}). Crew readings are read from and written to the JSON file ` +
           `store until it is back; spooled readings are copied into the database then.`,
       );
     }
@@ -495,7 +516,7 @@ async function maybeRunRetention(pool: Pool, s: State): Promise<void> {
     .then(() => {})
     .catch((err: unknown) => {
       s.lastRetention = 0; // try again on the next insert
-      logLimited("retention", `PostgreSQL retention pass failed (${describe(err)}); it is retried on the next insert.`);
+      logLimited(s, "retention", `PostgreSQL retention pass failed (${describe(err)}); it is retried on the next insert.`);
     })
     .finally(() => {
       if (s.retention === run) s.retention = null;

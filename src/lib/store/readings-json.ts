@@ -69,11 +69,31 @@ export const DEFAULT_CREW: CrewMember[] = [
 
 const dbFile = () => path.join(config.dataDir, "demify-db.json");
 
-// One shared load promise: concurrent first callers must all get the same
-// DbShape object, otherwise a slower read could replace a newer in-memory DB.
-let loading: Promise<DbShape> | null = null;
-// Serialise writes so concurrent requests can't clobber each other.
-let writeChain: Promise<void> = Promise.resolve();
+interface FileState {
+  // One shared load promise: concurrent first callers must all get the same
+  // DbShape object, otherwise a slower read could replace a newer in-memory DB.
+  loading: Promise<DbShape> | null;
+  // Serialise writes so concurrent requests can't clobber each other.
+  writeChain: Promise<void>;
+}
+
+const shared = globalThis as typeof globalThis & { __demifyJsonStore?: Map<string, FileState> };
+
+/**
+ * In-memory copy and write queue of one database file, kept on globalThis:
+ * Next.js bundles server modules once for route handlers and once for pages,
+ * and both copies must share one cache and one queue, or a write through one
+ * copy could persist its stale data over a write made through the other.
+ */
+function fileState(file = dbFile()): FileState {
+  const all = (shared.__demifyJsonStore ??= new Map());
+  let state = all.get(file);
+  if (!state) {
+    state = { loading: null, writeChain: Promise.resolve() };
+    all.set(file, state);
+  }
+  return state;
+}
 
 function isDbShape(v: unknown): v is DbShape {
   return (
@@ -119,14 +139,16 @@ async function readAndParse(): Promise<DbShape> {
 }
 
 function load(): Promise<DbShape> {
-  if (!loading) {
-    loading = readAndParse();
+  const state = fileState();
+  if (!state.loading) {
+    const loading = readAndParse();
+    state.loading = loading;
     // Let a later call retry after a transient failure (e.g. EACCES).
     loading.catch(() => {
-      loading = null;
+      if (state.loading === loading) state.loading = null;
     });
   }
-  return loading;
+  return state.loading;
 }
 
 async function persist(db: DbShape) {
@@ -230,14 +252,15 @@ export async function addReadings(
  * duplicates a reading that did reach the database.
  */
 export async function appendReadings(readings: Reading[]): Promise<void> {
+  const state = fileState();
   const run = async () => {
     const db = await load();
     db.readings.push(...readings);
     db.readings = evict(db.readings);
     await persist(db);
   };
-  writeChain = writeChain.then(run, run);
-  await writeChain;
+  state.writeChain = state.writeChain.then(run, run);
+  await state.writeChain;
 }
 
 /**
@@ -252,8 +275,9 @@ export async function appendReadings(readings: Reading[]): Promise<void> {
 export async function drainJsonStore<T>(
   importer: (db: JsonDbShape) => Promise<T>,
 ): Promise<{ file: string; renamedTo: string; result: T } | null> {
+  const file = dbFile();
+  const state = fileState(file);
   const run = async () => {
-    const file = dbFile();
     const exists = () =>
       fs.access(file).then(
         () => true,
@@ -263,23 +287,23 @@ export async function drainJsonStore<T>(
         },
       );
     if (!(await exists())) {
-      loading = null;
+      state.loading = null;
       return null;
     }
     // Read the file itself, not the in-memory copy: the file is what gets renamed.
     const db = await readAndParse();
     if (!(await exists())) {
-      loading = null; // it was corrupt and has been moved aside
+      state.loading = null; // it was corrupt and has been moved aside
       return null;
     }
     const result = await importer(db);
     const renamedTo = `${file}.imported-${new Date().toISOString().replace(/[:.]/g, "-")}`;
     await fs.rename(file, renamedTo);
-    loading = null;
+    state.loading = null;
     return { file, renamedTo, result };
   };
-  const done = writeChain.then(run, run);
-  writeChain = done.then(
+  const done = state.writeChain.then(run, run);
+  state.writeChain = done.then(
     () => {},
     () => {},
   );

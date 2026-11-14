@@ -43,14 +43,17 @@ export const FUTURE_SKEW_MS = 5 * 60_000;
 /** Space-weather data older than this is labelled stale in the finding. */
 const SPACE_WEATHER_STALE_MS = 3 * 3_600_000;
 const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 /** Daily check-ins are rarely exactly 24 h apart: allow this much slack on hour-based persistence rules. */
-const PERSIST_GRACE_MS = 3_600_000;
+const PERSIST_GRACE_MS = HOUR_MS;
 /**
- * Longest gap between two readings that still counts as "persisting" for an
- * hour-based rule: at least one reading a day (plus the slack). Two fevers
- * three days apart with nothing in between do not make 72 h of fever.
+ * Longest gap between two consecutive readings that still counts as
+ * "persisting" for an hour-based rule (project rule). Daily check-ins drift
+ * (08:00 one day, 19:00 the next), so up to 36 h between readings keeps the
+ * run going; two fevers three days apart with nothing in between do not make
+ * 72 h of fever.
  */
-const PERSIST_MAX_GAP_MS = DAY_MS + PERSIST_GRACE_MS;
+export const PERSIST_MAX_GAP_MS = 36 * HOUR_MS;
 
 /** False for unparseable timestamps and for readings dated in the future. */
 function notInFuture(r: Reading, now: number): boolean {
@@ -192,9 +195,10 @@ export interface PersistenceFlag {
  *           (stress >= 8 on 2 days, mood <= 2 on 2 days, sleep < 6 h on 7 days)
  *  - hours: the condition holds on every at-rest reading back to at least N h
  *           before the current value (temperature >= 38.1 °C for 24 h), with
- *           a 1 h slack for daily check-in timing and at least one reading a
- *           day inside the span (a longer gap ends the run). Crew/sensor
- *           values are judged on their own, simulated telemetry on its own.
+ *           a 1 h slack for daily check-in timing and consecutive readings
+ *           at most 36 h apart (PERSIST_MAX_GAP_MS; a longer gap ends the
+ *           run). Crew/sensor values are judged on their own, simulated
+ *           telemetry on its own.
  */
 export function persistenceFlag(
   id: IndicatorId,
@@ -231,15 +235,19 @@ export function persistenceFlag(
       )
       .sort((a, b) => a.takenAt.localeCompare(b.takenAt));
     let start = curT;
+    // Qualifying readings in the run taken before the current value.
+    let earlier = 0;
     for (let i = pool.length - 1; i >= 0; i--) {
       const t = Date.parse(pool[i].takenAt);
       if (!meetsPersistence(id, pool[i].value) || start - t > PERSIST_MAX_GAP_MS) break;
+      if (t < curT) earlier++;
       start = Math.min(start, t);
     }
     const span = curT - start;
     return {
-      met: span >= rule.hours * 3_600_000 - PERSIST_GRACE_MS,
-      progress: span >= 3_600_000 ? `${Math.floor(span / 3_600_000)} h so far` : null,
+      met: span >= rule.hours * HOUR_MS - PERSIST_GRACE_MS,
+      // Never "single value" while an earlier qualifying reading is in the run.
+      progress: span >= HOUR_MS ? `${Math.floor(span / HOUR_MS)} h so far` : earlier > 0 ? "under 1 h so far" : null,
     };
   }
   return null;

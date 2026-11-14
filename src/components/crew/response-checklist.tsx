@@ -139,8 +139,10 @@ export function ResponseChecklist({
       </ol>
 
       <p className="mt-3 text-[11px] text-muted">
-        Follows the onboard medical checklist; the flight surgeon directs treatment. Times are this device&apos;s clock and
-        are kept only in this browser tab.
+        {protocol.mode === "blackout"
+          ? "Follows the onboard medical checklist. No contact with the ground (blackout): the crew acts on the onboard procedures and transmits this log when contact returns."
+          : "Follows the onboard medical checklist; the flight surgeon directs treatment."}{" "}
+        Times are this device&apos;s clock and are kept only in this browser tab.
       </p>
     </section>
   );

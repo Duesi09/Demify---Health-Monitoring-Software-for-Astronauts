@@ -5,13 +5,13 @@ import { CrewGrid, type CrewGridItem } from "@/components/overview/crew-grid";
 import { CrewTrends } from "@/components/overview/crew-trends";
 import { EscalationBanner, escalationItems } from "@/components/overview/escalation-banner";
 import { LinkSwitch } from "@/components/link-switch";
-import { bySeverity } from "@/components/overview/format";
+import { byEscalation } from "@/components/overview/format";
 import { SimulatedTag } from "@/components/overview/status-icon";
 import { buildCrewTrends } from "@/components/overview/trends-data";
 import { Provenance, StatusBadge } from "@/components/ui";
 import { currentLink, currentMission, missionDay } from "@/lib/config";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
-import { MARS_DELAY_RANGE, linkPolicy, withLink } from "@/lib/link";
+import { MARS_DELAY_RANGE, findingUnderLink, linkPolicy, withLink } from "@/lib/link";
 import { getAllLiveVitals } from "@/lib/monitor/live";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
 
@@ -84,7 +84,8 @@ export default async function OverviewPage(props: PageProps<"/">) {
 
   const escalations = escalationItems(all);
 
-  // Plain, serialisable data for the live (client) crew grid.
+  // Plain, serialisable data for the live (client) crew grid. Top findings
+  // put met escalation rules first, so each card names what the banner names.
   const crew: CrewGridItem[] = all.map((a) => ({
     id: a.crew.id,
     link: selected,
@@ -94,12 +95,12 @@ export default async function OverviewPage(props: PageProps<"/">) {
     regions: a.regions,
     findings: a.assessments
       .filter((x) => x.status === "caution" || x.status === "critical")
-      .sort(bySeverity)
+      .sort(byEscalation)
       .slice(0, 3)
       .map((x) => ({
         indicator: x.indicator,
         status: x.status,
-        finding: x.finding,
+        finding: findingUnderLink(x.finding, policy.mode),
         source: a.sources[x.indicator],
         ...(x.drill ? { drill: true } : {}),
       })),
@@ -141,7 +142,7 @@ export default async function OverviewPage(props: PageProps<"/">) {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
-              Heart and blood pressure monitors
+              Heart and blood pressure monitors.
             </h2>
             <p className="mt-1 text-sm text-muted">
               Simulated training monitors: SIMULATED telemetry unless a sensor or gateway posts DEVICE readings.

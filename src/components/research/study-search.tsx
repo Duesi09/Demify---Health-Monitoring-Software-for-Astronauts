@@ -22,7 +22,10 @@ function sentence(text: string): string {
  * Status line under the search box, or null when nothing needs saying:
  *  - the server answered with the cached default list instead (`offline`),
  *  - offline mode, showing the default list or a seeded example's snapshot,
- *  - online, but OSDR failed and a cached copy of this query is shown.
+ *  - online, but the live search failed and a cached copy of this query is
+ *    shown. The cause is not known here (ground link down, network
+ *    unreachable or an OSDR error), so the wording stays neutral; the
+ *    fallback above uses the server's reason-specific message.
  */
 function statusText(
   offline: OfflineInfo | null,
@@ -45,7 +48,7 @@ function statusText(
     return `Search needs a connection; showing ${shown}. Example searches that are not greyed out also work offline.`;
   }
   if (result && result.meta.error && result.meta.freshness !== "live") {
-    return `OSDR did not answer; showing ${shown}.`;
+    return `Live OSDR search unavailable; showing ${shown}.`;
   }
   return null;
 }

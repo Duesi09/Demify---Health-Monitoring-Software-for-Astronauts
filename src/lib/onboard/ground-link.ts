@@ -45,8 +45,32 @@ export function isForcedOffline(): boolean {
   return env("DEMIFY_OFFLINE")?.toLowerCase() === "true";
 }
 
-const lastLog = new Map<string, number>();
+interface Shared {
+  /** Last effective answer of groundLinkUpNow, per backend (DATABASE_URL + file). */
+  cache: { key: string; up: boolean; at: number } | null;
+  inflight: { key: string; promise: Promise<boolean> } | null;
+  /** Bumped by setGroundLink so a read that started earlier cannot overwrite the new answer. */
+  version: number;
+  /** Database left alone until `until` after a failure. */
+  dbDown: { url: string; until: number } | null;
+  lastLog: Map<string, number>;
+}
+
+const holder = globalThis as typeof globalThis & { __demifyGroundLink?: Shared };
+
+/**
+ * Kept on globalThis: Next.js bundles this module once for route handlers and
+ * once for pages, and a switch moved through the API must reach the pages'
+ * copy at once, not when its cache expires.
+ */
+function shared(): Shared {
+  holder.__demifyGroundLink ??= { cache: null, inflight: null, version: 0, dbDown: null, lastLog: new Map() };
+  return holder.__demifyGroundLink;
+}
+
+/** console.warn at most once a minute per kind of message (the kind includes the file or URL). */
 function logLimited(kind: string, message: string): void {
+  const { lastLog } = shared();
   const now = Date.now();
   const last = lastLog.get(kind);
   if (last !== undefined && now - last < LOG_EVERY_MS && now >= last) return;
@@ -83,7 +107,7 @@ function readLinkFile(): StoredLink | null {
     raw = readFileSync(file, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      logLimited("file-read", `Could not read ${file} (${describe(err)}); treating the ground link as up.`);
+      logLimited(`file-read:${file}`, `Could not read ${file} (${describe(err)}); treating the ground link as up.`);
     }
     return null;
   }
@@ -95,7 +119,7 @@ function readLinkFile(): StoredLink | null {
   } catch {
     /* reported below */
   }
-  logLimited("file-invalid", `${file} is not a valid ground link file; treating the ground link as up.`);
+  logLimited(`file-invalid:${file}`, `${file} is not a valid ground link file; treating the ground link as up.`);
   return null;
 }
 
@@ -141,17 +165,16 @@ function onboardDb() {
   return dbModules;
 }
 
-let dbDown: { url: string; until: number } | null = null;
-
 function databaseUsable(url: string | undefined): url is string {
   if (!url) return false;
+  const { dbDown } = shared();
   return !(dbDown && dbDown.url === url && Date.now() < dbDown.until);
 }
 
 function markDatabaseDown(url: string, err: unknown): void {
-  dbDown = { url, until: Date.now() + RETRY_AFTER_MS };
+  shared().dbDown = { url, until: Date.now() + RETRY_AFTER_MS };
   logLimited(
-    "db-down",
+    `db-down:${url}`,
     `PostgreSQL is unreachable for the ground link switch (${describe(err)}); using ${linkFile()} until it is back.`,
   );
 }
@@ -178,7 +201,7 @@ async function mirror(link: StoredLink): Promise<void> {
   try {
     await writeLinkFile(link);
   } catch (err) {
-    logLimited("mirror", `Could not update ${linkFile()} (${describe(err)}); the database still holds the switch.`);
+    logLimited(`mirror:${linkFile()}`, `Could not update ${linkFile()} (${describe(err)}); the database still holds the switch.`);
   }
 }
 
@@ -227,11 +250,6 @@ export async function getGroundLink(): Promise<GroundLinkState> {
   }
 }
 
-let cache: { key: string; up: boolean; at: number } | null = null;
-let inflight: { key: string; promise: Promise<boolean> } | null = null;
-/** Bumped by setGroundLink so a read that started earlier cannot overwrite the new answer. */
-let version = 0;
-
 const cacheKey = () => `${databaseUrl() ?? ""}|${linkFile()}`;
 
 /**
@@ -257,9 +275,10 @@ export async function setGroundLink(up: boolean, changedBy?: string): Promise<Gr
     stored = { link, backend: "file" };
   }
   const state = toState(stored.link, stored.backend);
-  version++;
-  inflight = null;
-  cache = { key: cacheKey(), up: stored.link.up, at: Date.now() };
+  const sh = shared();
+  sh.version++;
+  sh.inflight = null;
+  sh.cache = { key: cacheKey(), up: stored.link.up, at: Date.now() };
   return state;
 }
 
@@ -272,30 +291,32 @@ export async function setGroundLink(up: boolean, changedBy?: string): Promise<Gr
 export function groundLinkUpNow(): boolean | Promise<boolean> {
   try {
     if (isForcedOffline()) return false;
+    const sh = shared();
     const key = cacheKey();
     const now = Date.now();
+    const { cache } = sh;
     if (cache && cache.key === key && now - cache.at < CACHE_MS && now >= cache.at) return cache.up;
     if (!databaseUsable(databaseUrl())) {
       const up = (readLinkFile() ?? DEFAULT_LINK).up;
-      cache = { key, up, at: now };
+      sh.cache = { key, up, at: now };
       return up;
     }
-    if (!inflight || inflight.key !== key) {
-      const started = version;
-      const promise = loadLink()
+    if (!sh.inflight || sh.inflight.key !== key) {
+      const started = sh.version;
+      const promise: Promise<boolean> = loadLink()
         .then(
           ({ link }) => {
-            if (version === started) cache = { key, up: link.up, at: Date.now() };
+            if (sh.version === started) sh.cache = { key, up: link.up, at: Date.now() };
             return link.up && !isForcedOffline();
           },
           () => true,
         )
         .finally(() => {
-          if (inflight?.promise === promise) inflight = null;
+          if (sh.inflight?.promise === promise) sh.inflight = null;
         });
-      inflight = { key, promise };
+      sh.inflight = { key, promise };
     }
-    return inflight.promise;
+    return sh.inflight.promise;
   } catch {
     return true;
   }

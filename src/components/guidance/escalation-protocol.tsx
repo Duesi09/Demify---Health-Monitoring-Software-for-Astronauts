@@ -1,6 +1,6 @@
 import { CircleCheck, Lock, PhoneCall, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
 import { INDICATORS, bandEscalationLabel, escalationFlags, type IndicatorDef } from "@/lib/health/knowledge";
-import { LINK_PROFILES, LINK_PROFILE_IDS, MARS_DELAY_RANGE, linkPolicy, type LinkProfile } from "@/lib/link";
+import { LINK_PROFILES, LINK_PROFILE_IDS, LIVE_LIMIT_RULE, MARS_DELAY_RANGE, linkPolicy, type LinkProfile } from "@/lib/link";
 import type { Status } from "@/lib/types";
 import { StatusBadge, Tag } from "@/components/ui";
 
@@ -93,8 +93,10 @@ function FlagList({ flags }: { flags: string[] }) {
   );
 }
 
-/** The one delay formatter lives in src/lib/link.ts; re-exported for existing importers (/help). */
-export { formatDelay } from "@/lib/link";
+/** "no contact (blackout)" -> "No contact (blackout)" for list cells. */
+function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export function EscalationProtocol() {
   return (
@@ -211,6 +213,7 @@ export function CommDelay({ link, missionName }: { link: LinkProfile; missionNam
             .
           </p>
           <p className="mt-1 text-xs text-muted">Basis: {link.basis}.</p>
+          <p className="mt-0.5 text-xs text-muted">Near real-time or delayed ({LIVE_LIMIT_RULE}).</p>
         </div>
       </header>
 
@@ -231,7 +234,7 @@ export function CommDelay({ link, missionName }: { link: LinkProfile; missionNam
                 {current && <Tag size="xs">Current</Tag>}
               </span>
               <span className="shrink-0 whitespace-nowrap tabular">
-                {pp.mode === "blackout" ? pp.label : `${pp.label} one way`}
+                {pp.mode === "blackout" ? capitalized(pp.label) : `${pp.label} one way`}
               </span>
             </li>
           );

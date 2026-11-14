@@ -22,6 +22,8 @@ A blackout means the ground link is down: no contact with mission control, the f
 
 ## Handling a medical event during a blackout
 
+When the ground link is down and a medical event happens, the crew handles it with the onboard procedures:
+
 1. Act on the onboard procedures and the drill checklists; do not wait for the ground. The flight-surgeon step becomes: "Prepare the report for the flight surgeon: time of onset, rhythm, vital signs, actions taken." Act on the onboard procedures; transmit when contact returns.
 2. The crew decides. The onboard assistant advises from the local library and never decides; if the library has no good answer it says so.
 3. Log everything with its time: every vital sign, every action, every check-in and every alarm. Keep the response checklist sheet: it records the time of each step.

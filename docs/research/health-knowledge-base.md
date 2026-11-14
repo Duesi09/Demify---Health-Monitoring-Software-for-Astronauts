@@ -56,11 +56,11 @@ must not be used as a dosimeter:
 
 | Indicator | Source tag | Key sources |
 |---|---|---|
-| Heart rate | CLIN | AHA; NASA HRP cardiovascular risk; OCHMO-TB-019 |
-| ST segment deviation (ECG) | CLIN | Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018): new ST elevation ≥ 1 mm is the STEMI criterion; NASA HRP cardiovascular risk; CSA Bio-Monitor (continuous ECG). The app reads one value, not two contiguous leads, and rating > 2 mm depression critical is a project rule |
-| Blood pressure | CLIN | AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg (stage 2) are caution with a re-check in 15 minutes (the 15 minutes are a project rule); above 180 / 120 mmHg (AHA hypertensive crisis) escalates, as does below 80 / 40 mmHg. In-flight BP runs about 8–10 mmHg lower (Norsk 2015) |
+| Heart rate | CLIN | AHA; NASA HRP cardiovascular risk; OCHMO-TB-019. The escalation limits < 40 and > 130 bpm are a project rule, close to the NEWS2 3-point bands (≤ 40 and ≥ 131 bpm) |
+| ST segment deviation (ECG) | CLIN | Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018): new ST elevation ≥ 1 mm is the STEMI criterion; NASA HRP cardiovascular risk; CSA Bio-Monitor (continuous ECG). In leads V2–V3 the UDMI uses higher elevation cut-points: ≥ 2 mm in men aged 40 or older, ≥ 2.5 mm in men under 40, ≥ 1.5 mm in women of any age. The app reads a single ST value, not two contiguous leads, and applies the 1 mm cut-point to it; rating > 2 mm depression critical is a project rule |
+| Blood pressure | CLIN | AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg (stage 2) are caution with a re-check in 15 minutes (the 15 minutes are a project rule); above 180 / 120 mmHg (AHA hypertensive crisis) escalates. Below 80 / 40 mmHg also escalates; that low limit is a project rule. In-flight BP runs about 8–10 mmHg lower (Norsk 2015) |
 | SpO₂ | CLIN | MedlinePlus; NASA hypoxia risk; CSA Bio-Monitor |
-| Temperature | CLIN | NEWS2 bands: 36.1–38.0 °C nominal (0 points), 35.1–36.0 or 38.1–39.0 °C caution (1 point), ≤ 35.0 °C (3 points) or ≥ 39.1 °C (2 points) critical; rating ≥ 39.1 °C critical is a project rule. Core temperature rises about 1 °C in flight (Stahn 2017) |
+| Temperature | CLIN | NEWS2 bands: 36.1–38.0 °C nominal (0 points), 35.1–36.0 or 38.1–39.0 °C caution (1 point), ≤ 35.0 °C (3 points) or ≥ 39.1 °C (2 points) critical; rating ≥ 39.1 °C critical and escalating on it are project rules (NEWS2 gives 2 points there, not 3). Core temperature rises about 1 °C in flight (Stahn 2017) |
 | Respiratory rate | CLIN | NEWS2; OCHMO-TB-004 (CO₂); CSA Bio-Monitor |
 | Glucose | CLIN | ADA hypoglycaemia levels 1 and 2 |
 | Sleep | NASA | OCHMO-TB-041: an 8.5 h sleep period; < 6 h for 7 days is equivalent to 24–36 h without sleep |
@@ -95,11 +95,11 @@ flight surgeon) comes only from these explicit rules in `knowledge.ts`:
 
 | Indicator | Escalates when | Basis |
 |---|---|---|
-| Heart rate | < 40 or > 130 bpm | CLIN |
-| ST segment | Any critical value: elevation ≥ 1 mm or depression > 2 mm (symptom-type) | CLIN; > 2 mm depression is a project rule |
-| Blood pressure | Systolic > 180 or < 80 mmHg; diastolic > 120 or < 40 mmHg | CLIN (AHA hypertensive crisis) |
+| Heart rate | < 40 or > 130 bpm | Project rule, close to the NEWS2 3-point bands (≤ 40 / ≥ 131 bpm) |
+| ST segment | Any critical value: elevation ≥ 1 mm or depression > 2 mm (symptom-type) | CLIN (UDMI 1 mm cut-point; UDMI uses higher cut-points in V2–V3, and the app reads a single value); > 2 mm depression is a project rule |
+| Blood pressure | Systolic > 180 or < 80 mmHg; diastolic > 120 or < 40 mmHg | CLIN (AHA hypertensive crisis) for > 180 / > 120 mmHg; the < 80 / < 40 mmHg limits are a project rule |
 | SpO₂ | Any value ≤ 90 % (symptom-type) | CLIN |
-| Temperature | Any critical value: ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h | CLIN (NEWS2 bands); rating ≥ 39.1 °C critical and the 24 h rule are project rules |
+| Temperature | Any critical value: ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h | CLIN for ≤ 35.0 °C (NEWS2 3 points); escalating at ≥ 39.1 °C (NEWS2 2 points) and the 24 h rule are project rules |
 | Respiratory rate | > 24 or < 9 /min | CLIN (NEWS2 3-point bands) |
 | Glucose | < 54 mg/dL; > 400 mg/dL; > 250 mg/dL on 2 days in a row | CLIN (ADA level 2); the 400 mg/dL ceiling and the 2-day rule are project rules |
 | Sleep | < 6 h on 7 days in a row ("sleep debt", also rated critical) | Project rule, based on OCHMO-TB-041 |
@@ -121,12 +121,12 @@ rules and the code cannot drift apart.
 
 ## How the app assesses health (`src/lib/health/assess.ts`)
 
-1. **Continuous signals** (from wearables): the app takes the median of the last 60 minutes at rest and skips readings taken during exercise.
+1. **Continuous signals** (from wearables): for SIMULATED telemetry the app takes the median of the last 60 minutes at rest and skips readings tagged as exercise. A crew entry or DEVICE reading is judged on its latest value. During a drill the current sample is judged, not the median.
 2. **Discrete check-ins:** the app uses the most recent value.
-3. **Real versus simulated data:** a crew entry or DEVICE reading always overrides a SIMULATED one.
+3. **Real versus simulated data:** for a continuous vital sign, a crew entry or DEVICE reading overrides SIMULATED telemetry only while it is at most 6 h old (`REAL_CONTINUOUS_MAX_AGE_MS`), so an old spot check cannot hide newer telemetry. For check-in indicators the latest crew entry of the last 7 days wins over SIMULATED values.
 4. **Personal baseline (project rule):** a change of 25 % or more from the person's own pre-flight baseline raises a continuous signal to caution, even when the value is still inside the population range. It never escalates. In a 3-year mission, change within one person matters more than population norms.
 5. **Trends (project rule):** a mood drop or a stress rise of 2 points or more over 3 days raises the value to caution. It never escalates.
-6. **Escalation:** only by the rules in [When a value escalates](#when-a-value-escalates). Persistence rules use one value per UTC day (crew entries and DEVICE readings win over SIMULATED ones) or, for temperature, every reading at rest over the last 24 h. A storm escalates only on current NOAA data: with an offline snapshot or data older than 3 hours the finding asks the crew to verify with the onboard dosimeters instead.
+6. **Escalation:** only by the rules in [When a value escalates](#when-a-value-escalates). Persistence rules use one value per UTC day (crew entries and DEVICE readings win over SIMULATED ones) or, for temperature, every reading at rest back to at least 24 h before the current one (1 h slack for check-in timing). Two consecutive temperature readings may be up to 36 h apart (project rule, `PERSIST_MAX_GAP_MS`); a longer gap ends the run. Crew entries and DEVICE readings are judged on their own, SIMULATED telemetry on its own. A storm escalates only on current NOAA data: with an offline snapshot or data older than 3 hours the finding asks the crew to verify with the onboard dosimeters instead.
 7. **Body regions:** each body region takes the worst status among its mapped indicators.
 
 ## References

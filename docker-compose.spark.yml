@@ -1,0 +1,442 @@
+# Demify onboard server: one NVIDIA DGX Spark (GB10, Arm64, 128 GB unified
+# memory, DGX OS) as the prototype stand-in for a station's medical server.
+#
+# Four long-running containers:
+#   db     PostgreSQL 17 + pgvector: crew readings, the onboard library
+#          (passages, embeddings, full-text index), sync history and the
+#          simulated ground link switch.
+#   model  Ollama on the GPU: the local language model and the embedding
+#          model, used ONLY through its OpenAI-compatible API, so it can be
+#          swapped for vLLM, llama.cpp or TensorRT-LLM.
+#   app    Demify (Next.js): crew UI, deterministic rule engine and alarms,
+#          onboard assistant (advises, never decides).
+#   sync   Demify sync service (same image): pulls the library from the
+#          ground while the ground link is up, refreshes the data snapshots,
+#          embeds new passages.
+#
+#   cp .env.spark.example .env        # then set POSTGRES_PASSWORD (required)
+#   docker compose -f docker-compose.spark.yml up -d --build
+#   docker compose -f docker-compose.spark.yml --profile models run --rm model-pull
+#   docker compose -f docker-compose.spark.yml ps     # wait for "(healthy)"
+#
+# The .env from .env.spark.example sets COMPOSE_FILE=docker-compose.spark.yml,
+# so plain `docker compose ...` uses this file in this folder.
+#
+# Nothing downloads a model by itself: the model-pull step above is the only
+# download, and the team runs it on purpose. Until then the onboard assistant
+# shows matching library passages instead of a model answer.
+#
+# The pitch setup is docker-compose.yml (no database, no model) and is not
+# changed by this file. Full guide: docs/SPARK.md; overview:
+# docs/ARCHITECTURE.md.
+#
+# Networks (and how a station network would differ):
+#   onboard  internal bridge, no route out: db, model, app and sync talk here.
+#            PostgreSQL is reachable on this network only and never published.
+#   default  the path to the ground link (live NOAA/OSDR data, model and image
+#            downloads) and the published app port. On a real station this
+#            would not be a plain bridge to the host's uplink: the ground side
+#            would be a dedicated interface behind the station's comms
+#            gateway that only reaches an allow-listed ground relay (data
+#            mirror and library server), the crew network would reach the app
+#            through a TLS reverse proxy, and model downloads would be
+#            uplinked as signed files instead of pulled from a registry.
+
+name: demify-spark # fixed project name -> volumes are demify-spark_<name>
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Settings shared by app and sync (same image, same meaning as in
+# docker-compose.yml; see .env.example and .env.spark.example).
+x-demify-env: &demify-env
+  # Mission profile: iss | artemis-lunar | mars-transit
+  DEMIFY_MISSION: ${DEMIFY_MISSION:-iss}
+  DEMIFY_MISSION_START: ${DEMIFY_MISSION_START:-}
+  # true = hard air-gap: never call external APIs, the ground link stays down
+  # whatever the switch says.
+  DEMIFY_OFFLINE: ${DEMIFY_OFFLINE:-false}
+  DEMIFY_CACHE_TTL: ${DEMIFY_CACHE_TTL:-300}
+  DEMIFY_FETCH_TIMEOUT_MS: ${DEMIFY_FETCH_TIMEOUT_MS:-8000}
+  DEMIFY_SIMULATE: ${DEMIFY_SIMULATE:-true}
+  DEMIFY_RETENTION_DAYS: ${DEMIFY_RETENTION_DAYS:-}
+  DEMIFY_MAX_READINGS: ${DEMIFY_MAX_READINGS:-}
+  DEMIFY_RATE_LIMIT_PER_MIN: ${DEMIFY_RATE_LIMIT_PER_MIN:-}
+  # Admin token for the write APIs (drills, sensor readings, ground link
+  # switch, Sync now). Set it whenever DEMIFY_BIND is not 127.0.0.1.
+  DEMIFY_ADMIN_TOKEN: ${DEMIFY_ADMIN_TOKEN:-}
+  # External data sources (point them at a ground relay / mirror if needed).
+  NASA_API_KEY: ${NASA_API_KEY:-DEMO_KEY}
+  OSDR_BASE_URL: ${OSDR_BASE_URL:-https://osdr.nasa.gov}
+  OSDR_BIODATA_URL: ${OSDR_BIODATA_URL:-https://visualization.osdr.nasa.gov}
+  SWPC_BASE_URL: ${SWPC_BASE_URL:-https://services.swpc.noaa.gov}
+  # --- onboard server ------------------------------------------------------
+  # Use a URL-safe password (letters and digits, e.g. openssl rand -hex 24):
+  # it is placed into this URL as is.
+  DATABASE_URL: postgres://demify:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.spark.example)}@db:5432/demify
+  # OpenAI-compatible endpoint of the model server. Point it at another
+  # server (vLLM, llama.cpp, TensorRT-LLM) to swap the model runtime.
+  DEMIFY_MODEL_URL: ${DEMIFY_MODEL_URL:-http://model:11434/v1}
+  DEMIFY_LLM_MODEL: ${DEMIFY_LLM_MODEL:-gpt-oss:20b}
+  DEMIFY_EMBED_MODEL: ${DEMIFY_EMBED_MODEL:-nomic-embed-text}
+  DEMIFY_LLM_TIMEOUT_MS: ${DEMIFY_LLM_TIMEOUT_MS:-}
+  DEMIFY_EMBED_TIMEOUT_MS: ${DEMIFY_EMBED_TIMEOUT_MS:-}
+  DEMIFY_ASSISTANT_MIN_SCORE: ${DEMIFY_ASSISTANT_MIN_SCORE:-}
+  DEMIFY_ASSISTANT_TOP_K: ${DEMIFY_ASSISTANT_TOP_K:-}
+  # The Earth-side library is simulated by a folder: ./library, mounted
+  # read-only below. Edit a document there, then "Sync now" (or wait for the
+  # next scheduled sync) while the ground link is up.
+  DEMIFY_GROUND_LIBRARY_DIR: /ground/library
+  # Scheduled library sync while the ground link is up (hours), and the age
+  # after which the library counts as stale in the UI (hours).
+  DEMIFY_SYNC_INTERVAL_HOURS: ${DEMIFY_SYNC_INTERVAL_HOURS:-6}
+  DEMIFY_SYNC_MAX_AGE_HOURS: ${DEMIFY_SYNC_MAX_AGE_HOURS:-24}
+  # --- proxy / custom CA (optional; empty = direct connection) ------------
+  # DEMIFY_-prefixed on purpose, like docker-compose.yml. The container names
+  # are always in NO_PROXY so app -> model, app -> db and sync -> app never
+  # go through a proxy; DEMIFY_NO_PROXY adds hosts to that list.
+  HTTPS_PROXY: ${DEMIFY_HTTPS_PROXY:-}
+  HTTP_PROXY: ${DEMIFY_HTTP_PROXY:-}
+  NO_PROXY: db,model,app,sync,localhost,127.0.0.1${DEMIFY_NO_PROXY:+,${DEMIFY_NO_PROXY}}
+  NODE_EXTRA_CA_CERTS: ${DEMIFY_NODE_EXTRA_CA_CERTS:-}
+
+# Same hardening as docker-compose.yml for the two Demify containers.
+x-demify-hardening: &demify-hardening
+  image: ${DEMIFY_IMAGE:-demify:latest}
+  init: true # tini as PID 1: clean signal forwarding and zombie reaping
+  restart: always
+  stop_grace_period: 20s
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging: *logging
+
+services:
+  # -------------------------------------------------------------------------
+  # PostgreSQL 17 + pgvector. Internal network only, never published.
+  # -------------------------------------------------------------------------
+  db:
+    image: ${DEMIFY_DB_IMAGE:-pgvector/pgvector:pg17}
+    restart: always
+    # The image stops PostgreSQL with SIGINT (fast shutdown: a final
+    # checkpoint, then exit). Give it time so a planned stop never needs
+    # crash recovery.
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: demify
+      POSTGRES_USER: demify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.spark.example)}
+      # Page checksums: PostgreSQL verifies every data page it reads and
+      # reports silent corruption instead of returning wrong data. Only
+      # applied when the cluster is created (first start on an empty volume).
+      POSTGRES_INITDB_ARGS: --data-checksums
+    # Tuned for 128 GB of unified memory that PostgreSQL SHARES with the GPU:
+    # the language model owns most of it, and the data set is small
+    # (library: megabytes; readings: capped by DEMIFY_MAX_READINGS). So the
+    # buffers stay modest and leave the model its headroom.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=2GB
+      # Planner hint only (allocates nothing): page cache it may count on.
+      - -c
+      - effective_cache_size=8GB
+      # HNSW index builds (pgvector) are much faster while the graph fits in
+      # maintenance_work_mem; parallel builds use /dev/shm (see shm_size).
+      - -c
+      - maintenance_work_mem=1GB
+      - -c
+      - max_parallel_maintenance_workers=4
+      - -c
+      - work_mem=16MB
+      # app (pool of 10) + sync (pool of 10) + CLI and psql sessions.
+      - -c
+      - max_connections=50
+      # NVMe storage.
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - checkpoint_timeout=15min
+      # PostgreSQL's defaults, spelled out: crash recovery from the WAL
+      # depends on them, so never turn them off on this box.
+      - -c
+      - fsync=on
+      - -c
+      - full_page_writes=on
+      - -c
+      - synchronous_commit=on
+    shm_size: 2gb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP on purpose: during first-time initialisation the temporary
+      # server listens on the Unix socket only, so this stays "starting"
+      # until the real server accepts connections.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "demify", "-d", "demify"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 2s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: ${DEMIFY_DB_MEMORY:-12G}
+    networks:
+      - onboard
+    logging: *logging
+
+  # -------------------------------------------------------------------------
+  # Model server (Ollama) on the GPU. Not published unless DEMIFY_MODEL_BIND
+  # is set (see model-port below). Pin the image tag you tested, e.g.
+  # DEMIFY_OLLAMA_IMAGE=ollama/ollama:<version> (docs/SPARK.md).
+  # -------------------------------------------------------------------------
+  model:
+    image: ${DEMIFY_OLLAMA_IMAGE:-ollama/ollama:latest}
+    restart: always
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      # Keep the models in (GPU) memory: no cold start when the crew asks.
+      OLLAMA_KEEP_ALIVE: "-1"
+      # The language model plus the embedding model, both resident.
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      # Parallel requests per model. Each slot reserves its own KV cache of
+      # OLLAMA_CONTEXT_LENGTH tokens, so keep it modest.
+      OLLAMA_NUM_PARALLEL: ${DEMIFY_OLLAMA_NUM_PARALLEL:-2}
+      # The OpenAI-compatible API cannot set the context size per request,
+      # so the server sets it: enough for the question, the retrieved
+      # passages and the answer.
+      OLLAMA_CONTEXT_LENGTH: ${DEMIFY_OLLAMA_CONTEXT_LENGTH:-8192}
+      OLLAMA_FLASH_ATTENTION: "1"
+      # Model downloads (model-pull) go through this proxy, if any. Ollama
+      # pulls over HTTPS only, so HTTP_PROXY is deliberately not set.
+      HTTPS_PROXY: ${DEMIFY_HTTPS_PROXY:-}
+      NO_PROXY: db,model,app,sync,localhost,127.0.0.1${DEMIFY_NO_PROXY:+,${DEMIFY_NO_PROXY}}
+    volumes:
+      - models:/root/.ollama
+    expose:
+      - "11434"
+    healthcheck:
+      # Lists the local models through the server's API (loopback, so no
+      # proxy is ever involved).
+      test: ["CMD", "env", "OLLAMA_HOST=127.0.0.1:11434", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      start_interval: 2s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - onboard
+      - default # model downloads only (model-pull)
+    logging: *logging
+
+  # -------------------------------------------------------------------------
+  # One-shot, explicit model download. Never started by `up`:
+  #   docker compose -f docker-compose.spark.yml --profile models run --rm model-pull
+  # The model server does the download (over the default network); this
+  # client only asks it to.
+  # -------------------------------------------------------------------------
+  model-pull:
+    image: ${DEMIFY_OLLAMA_IMAGE:-ollama/ollama:latest}
+    profiles: ["models"]
+    restart: "no"
+    environment:
+      OLLAMA_HOST: http://model:11434
+      DEMIFY_LLM_MODEL: ${DEMIFY_LLM_MODEL:-gpt-oss:20b}
+      DEMIFY_EMBED_MODEL: ${DEMIFY_EMBED_MODEL:-nomic-embed-text}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for m in "$$DEMIFY_LLM_MODEL" "$$DEMIFY_EMBED_MODEL"; do
+          echo "[model-pull] pulling $$m"
+          ollama pull "$$m"
+        done
+        echo "[model-pull] models on the server:"
+        ollama list
+    depends_on:
+      model:
+        condition: service_healthy
+    networks:
+      - onboard
+    logging: *logging
+
+  # -------------------------------------------------------------------------
+  # Demify app. Starts once PostgreSQL is healthy; the model server is NOT
+  # required (without it the onboard assistant shows library passages only).
+  # -------------------------------------------------------------------------
+  app:
+    <<: *demify-hardening
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Builds natively for arm64 on the Spark (no emulation needed).
+      args:
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
+      # CA bundle for builds behind a TLS-intercepting proxy (DEMIFY_BUILD_CA).
+      secrets:
+        - build_ca
+    ports:
+      # Loopback by default; DEMIFY_BIND=0.0.0.0 serves the station LAN
+      # (then also set DEMIFY_ADMIN_TOKEN).
+      - "${DEMIFY_BIND:-127.0.0.1}:${DEMIFY_PORT:-3000}:3000"
+    environment:
+      <<: *demify-env
+      DEMIFY_DATA_DIR: /data
+      DEMIFY_SNAPSHOT_DIR: /data/snapshots
+      DEMIFY_RESEED_SNAPSHOTS: ${DEMIFY_RESEED_SNAPSHOTS:-false}
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1001,gid=1001,mode=0755
+    volumes:
+      # Snapshots, the ground link mirror file and the JSON spool that keeps
+      # crew readings while PostgreSQL is unreachable.
+      - app-data:/data
+      - ./library:/ground/library:ro
+    healthcheck:
+      test:
+        - CMD
+        - env
+        - -u
+        - NODE_USE_ENV_PROXY
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${DEMIFY_CPUS:-4.0}"
+          memory: ${DEMIFY_MEMORY:-2G}
+    networks:
+      - onboard
+      - default # ground link (NOAA/OSDR) and the published port
+
+  # -------------------------------------------------------------------------
+  # Sync service (same image as the app): library sync from the ground every
+  # DEMIFY_SYNC_INTERVAL_HOURS while the ground link is up, snapshot refresh,
+  # embeddings for new passages. Seeds an empty library from the copy in the
+  # image (/app/library) on first start, even during a blackout.
+  # -------------------------------------------------------------------------
+  sync:
+    <<: *demify-hardening
+    pull_policy: never # the image is built by the app service
+    command: ["node", "scripts/sync-service.mjs"]
+    environment:
+      <<: *demify-env
+      DEMIFY_APP_URL: http://app:3000
+      DEMIFY_SYNC_HEARTBEAT: /tmp/demify-sync-heartbeat
+      DEMIFY_SYNC_TICK_SECONDS: ${DEMIFY_SYNC_TICK_SECONDS:-}
+      DEMIFY_SNAPSHOT_REFRESH_MINUTES: ${DEMIFY_SNAPSHOT_REFRESH_MINUTES:-}
+      # The sync service keeps no files: /data is a tmpfs here, and the
+      # snapshot seeding of the entrypoint is skipped (the app owns the
+      # snapshots and refreshes them when the sync service asks it to).
+      DEMIFY_DATA_DIR: /data
+      DEMIFY_SNAPSHOT_DIR: /app/data/snapshots-seed
+    tmpfs:
+      - /tmp
+      - /data:uid=1001,gid=1001,mode=0755
+    volumes:
+      - ./library:/ground/library:ro
+    healthcheck:
+      # Healthy while the sync loop touches its heartbeat file (every tick,
+      # also while it waits for PostgreSQL): younger than 5 minutes.
+      test:
+        - CMD
+        - node
+        - -e
+        - "try{process.exit(Date.now()-require('node:fs').statSync(process.env.DEMIFY_SYNC_HEARTBEAT||'/tmp/demify-sync-heartbeat').mtimeMs<300000?0:1)}catch{process.exit(1)}"
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      start_interval: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks:
+      - onboard
+      - default # future ground library server over the ground link
+
+  # -------------------------------------------------------------------------
+  # Optional: the model API on this machine only (127.0.0.1), e.g. for
+  # `curl http://127.0.0.1:11434/api/ps` or a benchmark tool. Runs only when
+  # DEMIFY_MODEL_BIND is set to a host port (replicas 0 otherwise, so the
+  # API stays unpublished by default). Compose cannot publish a port
+  # conditionally, hence this small TCP relay in the Demify image.
+  # -------------------------------------------------------------------------
+  model-port:
+    image: ${DEMIFY_IMAGE:-demify:latest}
+    pull_policy: never
+    init: true
+    restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      replicas: 0${DEMIFY_MODEL_BIND:+1}
+    entrypoint: ["node", "-e"]
+    command:
+      - >-
+        const net=require('node:net');
+        net.createServer(c=>{const u=net.connect(11434,'model');
+        c.pipe(u).pipe(c);u.on('error',()=>c.destroy());c.on('error',()=>u.destroy());})
+        .listen(11434,'0.0.0.0',()=>console.log('relay :11434 -> model:11434'));
+    healthcheck:
+      disable: true
+    ports:
+      - "127.0.0.1:${DEMIFY_MODEL_BIND:-11434}:11434"
+    networks:
+      # A container on an internal network alone cannot publish a port, so
+      # the relay reaches the model over the default network.
+      - default
+    logging: *logging
+
+secrets:
+  build_ca:
+    file: ${DEMIFY_BUILD_CA:-./docker/no-extra-ca.pem}
+
+networks:
+  onboard:
+    internal: true # no egress: PostgreSQL and the model API stay onboard
+  default: {}
+
+volumes:
+  pgdata: # PostgreSQL cluster (back it up with pg_dump, docs/SPARK.md)
+  models: # Ollama model files (tens of GB)
+  app-data: # app /data: snapshots, ground link mirror, JSON spool

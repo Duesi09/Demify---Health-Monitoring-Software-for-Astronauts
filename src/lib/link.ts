@@ -30,8 +30,15 @@ export function lightTimeSeconds(distanceKm: number): number {
   return distanceKm / SPEED_OF_LIGHT_KM_S;
 }
 
-/** One-way delays at or above this are "delayed": no real-time conversation. */
+/**
+ * One-way delays at or above this are "delayed": no real-time conversation.
+ * A project rule (not a NASA number); the UI states it once with
+ * LIVE_LIMIT_RULE.
+ */
 export const LIVE_LIMIT_S = 60;
+
+/** How the UI labels LIVE_LIMIT_S as ours. */
+export const LIVE_LIMIT_RULE = `project rule: under ${LIVE_LIMIT_S} s one way counts as near real-time`;
 
 /** How the UI states the Earth-Mars delay when no specific distance is meant. */
 export const MARS_DELAY_RANGE = "about 3 to 22 minutes one way";
@@ -212,8 +219,9 @@ export const BLACKOUT_ADVICE = "act on the onboard procedures; transmit when con
 export const BLACKOUT_LABEL = "no contact (blackout)";
 
 /**
- * Single source for "is the ground reachable in real time?". Replaces the
- * scattered `commDelaySeconds >= 60` checks.
+ * Single source for "is the ground reachable in real time?" (live below
+ * LIVE_LIMIT_S, delayed from it, blackout without contact). Use it instead
+ * of comparing a delay against a raw number.
  */
 export function linkPolicy(oneWayS: number | null): LinkPolicy {
   if (oneWayS == null || !Number.isFinite(oneWayS) || oneWayS < 0) {
@@ -250,6 +258,19 @@ export function linkPolicy(oneWayS: number | null): LinkPolicy {
     summary: `${label} one way, ${roundTripLabel} round trip`,
     advice: "act first, then report; do not wait for a reply",
   };
+}
+
+/** What a finding's "contact the flight surgeon" becomes in a blackout. */
+export const BLACKOUT_ESCALATION =
+  "escalation rule met but no contact (blackout); act on the onboard procedures and transmit when contact returns";
+
+/**
+ * A finding text as shown under a link policy. Live and delayed links keep
+ * it as it is; in a blackout "contact the flight surgeon." becomes
+ * BLACKOUT_ESCALATION, because there is no one to contact.
+ */
+export function findingUnderLink(finding: string, mode: LinkMode): string {
+  return mode === "blackout" ? finding.replace(/contact the flight surgeon(?=\.)/g, BLACKOUT_ESCALATION) : finding;
 }
 
 /**

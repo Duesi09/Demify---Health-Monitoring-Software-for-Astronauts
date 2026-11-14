@@ -18,7 +18,6 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { LOCK_SYNC, withAdvisoryLock } from "./db.mjs";
-import { embed, modelStatus } from "./model.mjs";
 
 /** @typedef {import("./library.d.mts").LibraryCategory} LibraryCategory */
 /** @typedef {import("./library.d.mts").LibraryDoc} LibraryDoc */
@@ -30,6 +29,25 @@ import { embed, modelStatus } from "./model.mjs";
 /** @typedef {import("./config.d.mts").OnboardConfig} OnboardConfig */
 /** @typedef {import("pg").Pool} Pool */
 /** @typedef {import("pg").PoolClient} PoolClient */
+
+/**
+ * The model client (onboard/model.mjs), loaded on first use: bundled search
+ * and full-text search never need it, and a broken or missing model client
+ * then only disables embeddings (search falls back, the sync records why)
+ * instead of breaking the whole library module.
+ * @type {Promise<typeof import("./model.mjs")> | null}
+ */
+let modelClient = null;
+function model() {
+  if (!modelClient) {
+    const p = import("./model.mjs");
+    modelClient = p;
+    p.catch(() => {
+      if (modelClient === p) modelClient = null;
+    });
+  }
+  return modelClient;
+}
 
 /** @type {readonly LibraryCategory[]} */
 const CATEGORIES = ["protocol", "reference", "baseline", "inventory", "drug-reference"];
@@ -347,6 +365,8 @@ function parseItem(where, raw) {
  */
 async function readLibraryTree(dir) {
   const root = path.resolve(dir);
+  const stat = await fs.stat(root).catch(() => null);
+  if (!stat?.isDirectory()) throw new Error(`library folder ${root} does not exist or is not a folder`);
   const files = await listFiles(root);
   /** @type {LibraryDoc[]} */
   const docs = [];
@@ -508,18 +528,20 @@ export function inventoryDoc(items, updated) {
   const lines = [
     "# Medical kit inventory",
     "",
-    `${INVENTORY_NOTE} Devices and supplies only: this prototype lists no medicines. Every entry gives the stowage location, the quantity and, where it applies, the expiry date. Check the physical kit and the onboard procedures before use.`,
+    `${INVENTORY_NOTE} Devices and supplies; this prototype lists no medicines. Every entry gives the stowage location, the quantity and, where it applies, the expiry date. Check the physical kit and the onboard procedures before use.`,
   ];
-  for (const category of [...groups.keys()].sort(cmp)) {
+  for (const category of [...groups.keys()].sort((a, b) => cmp(a.toLowerCase(), b.toLowerCase()) || cmp(a, b))) {
     const heading = category.charAt(0).toUpperCase() + category.slice(1);
     lines.push("", `## ${heading}`, "");
-    const list = /** @type {MedKitItem[]} */ (groups.get(category)).sort((a, b) => cmp(a.name, b.name) || cmp(a.id, b.id));
+    const list = /** @type {MedKitItem[]} */ (groups.get(category)).sort(
+      (a, b) => cmp(a.name.toLowerCase(), b.name.toLowerCase()) || cmp(a.id, b.id),
+    );
     for (const it of list) {
       const parts = [`${oneLine(it.name)}: ${it.location ? `stowed in ${oneLine(it.location)}` : "location not recorded"}`];
       if (it.quantity != null) parts.push(`quantity ${it.quantity}${it.unit && it.unit !== "each" ? ` ${oneLine(it.unit)}` : ""}`);
       if (it.expiresOn) parts.push(`expires ${it.expiresOn}`);
       const extra = it.notes ? oneLine(it.notes.replace(INVENTORY_NOTE, "")) : "";
-      if (extra) parts.push(extra.replace(/\.$/, ""));
+      if (extra) parts.push(extra.replace(/\.$/, "").replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()));
       parts.push(`item id ${it.id}`);
       lines.push(`- ${parts.join("; ")}.`);
     }
@@ -563,15 +585,20 @@ const STOPWORDS = new Set(
 );
 
 /**
- * Light English stemmer (plurals and -ing), applied to documents and queries alike.
- * @param {string} w
+ * Light English stemmer (plurals, -ing, -ed, final -e), applied to documents
+ * and queries alike, so "handling" and "handle" or "advised" and "advise"
+ * meet in the same stem.
+ * @param {string} word
  */
-function stem(w) {
+function stem(word) {
+  let w = word;
   if (w.length <= 3 || /^\d/.test(w)) return w;
-  if (w.endsWith("ies") && w.length > 4) return `${w.slice(0, -3)}y`;
-  if (w.endsWith("sses")) return w.slice(0, -2);
-  if (w.endsWith("ing") && w.length > 5) return w.slice(0, -3);
-  if (w.endsWith("s") && !/(ss|us|is)$/.test(w)) return w.slice(0, -1);
+  if (w.endsWith("ies") && w.length > 4) w = `${w.slice(0, -3)}y`;
+  else if (w.endsWith("sses")) w = w.slice(0, -2);
+  else if (w.endsWith("s") && !/(ss|us|is)$/.test(w)) w = w.slice(0, -1);
+  if (w.endsWith("ing") && w.length > 5) w = w.slice(0, -3);
+  else if (w.endsWith("ed") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("e") && w.length > 4) w = w.slice(0, -1);
   return w;
 }
 
@@ -756,7 +783,7 @@ export async function embedPending(pool, cfg, limit = 256) {
   let done = 0;
   for (let i = 0; i < todo.length; i += EMBED_BATCH) {
     const batch = todo.slice(i, i + EMBED_BATCH);
-    const vectors = await embed(cfg, batch.map(embedText), "document");
+    const vectors = await (await model()).embed(cfg, batch.map(embedText), "document");
     if (!Array.isArray(vectors) || vectors.length !== batch.length) {
       throw new Error(`embedding model returned ${Array.isArray(vectors) ? vectors.length : "no"} vectors for ${batch.length} texts`);
     }
@@ -974,18 +1001,21 @@ async function runSync(pool, client, cfg, result, runId) {
   const before = await countPending(pool, cfg);
   let after = before;
   if (before > 0 && cfg.modelUrl && cfg.vectorSearch) {
-    const status = await modelStatus(cfg, 3000);
-    if (!status.reachable) {
-      extra.embedError = `model server unreachable${status.error ? ` (${status.error})` : ""}`;
-    } else {
-      try {
+    /** @type {import("./model.mjs").ModelStatus | null} */
+    let status = null;
+    try {
+      status = await (await model()).modelStatus(cfg, 3000);
+      if (!status.reachable) {
+        extra.embedError = `model server unreachable${status.error ? ` (${status.error})` : ""}`;
+      } else {
         // Bounded: each round embeds up to 256 chunks.
         for (let round = 0; round < Math.ceil(before / 256) + 1; round++) {
           if ((await embedPending(pool, cfg, 256)) === 0) break;
         }
-      } catch (err) {
-        extra.embedError = `embedding failed: ${message(err)}${status.embedReady ? "" : ` (model ${cfg.embedModel} not listed by the model server)`}`;
       }
+    } catch (err) {
+      const unlisted = status && !status.embedReady ? ` (model ${cfg.embedModel} not listed by the model server)` : "";
+      extra.embedError = `embedding failed: ${message(err)}${unlisted}`;
     }
     after = await countPending(pool, cfg);
     result.chunksEmbedded = Math.max(0, before - after);
@@ -1164,7 +1194,7 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK) {
       /** @type {number[] | null} */
       let vector = null;
       try {
-        const [v] = await embed(cfg, [q], "query");
+        const [v] = await (await model()).embed(cfg, [q], "query");
         if (Array.isArray(v) && v.length === cfg.embedDim && v.every(Number.isFinite)) vector = v;
         else fallbackReason = "embedding model returned an unusable vector";
       } catch (err) {

@@ -63,7 +63,9 @@ function reading(over: Partial<Omit<Reading, "id">> = {}): Omit<Reading, "id"> {
 }
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
-const strip = (rs: Reading[]) => rs.map(({ id: _id, ...r }) => r);
+/** Everything but the id (the two stores generate different ids). */
+const strip = (rs: Reading[]) =>
+  rs.map(({ crewId, indicator, value, unit, takenAt, source, note }) => ({ crewId, indicator, value, unit, takenAt, source, note }));
 
 describe.skipIf(!TEST_URL)("PostgreSQL readings store", () => {
   beforeEach(async () => {
@@ -365,6 +367,34 @@ describe.skipIf(!TEST_URL)("PostgreSQL readings store", () => {
       const kept = JSON.parse(await fs.readFile(path.join(dir, renamed!), "utf8"));
       expect(kept.readings.map((r: Reading) => r.id)).toEqual([ghost.id]);
     });
+  });
+});
+
+describe("JSON store shared by Next.js module copies (no database)", () => {
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "demify-readings-copies-"));
+    vi.stubEnv("DEMIFY_DATA_DIR", dir);
+    vi.stubEnv("DATABASE_URL", "");
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("a write through one copy is seen by, and never overwritten by, the other", async () => {
+    // Next.js bundles server modules once for route handlers and once for pages.
+    const pages = await store();
+    expect(await pages.listReadings()).toEqual([]); // this copy has the file in memory now
+    vi.resetModules();
+    const routes = await store();
+    expect(routes).not.toBe(pages);
+    const [a] = await routes.addReadings([reading({ value: 70 })]);
+    expect((await pages.listReadings()).map((r) => r.id)).toEqual([a.id]);
+    const [b] = await pages.addReadings([reading({ value: 71 })]);
+    const onDisk = JSON.parse(await fs.readFile(dbPath(), "utf8"));
+    expect(onDisk.readings.map((r: Reading) => r.id)).toEqual([a.id, b.id]);
   });
 });
 

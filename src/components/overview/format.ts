@@ -50,6 +50,11 @@ export function bySeverity<T extends { status: Status }>(a: T, b: T): number {
   return RANK[b.status] - RANK[a.status];
 }
 
+/** Sort comparator: met escalation rules first, then most severe (crew cards name what the banner names). */
+export function byEscalation<T extends { status: Status; escalate?: boolean }>(a: T, b: T): number {
+  return Number(!!b.escalate) - Number(!!a.escalate) || bySeverity(a, b);
+}
+
 /** "2026-11-14 08:50 UTC" */
 export function formatUtc(iso: string): string {
   return `${iso.replace("T", " ").slice(0, 16)} UTC`;

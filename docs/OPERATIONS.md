@@ -231,8 +231,9 @@ The first build takes a few minutes. Later starts take seconds.
 - [ ] Optional: send test readings with `npm run sensor:demo` (needs Node 20
       or newer on the machine, see [§4.6](#46-sensor-demo-script)) and watch
       the monitor switch from **SIMULATED** to **DEVICE**. With
-      `DEMIFY_ADMIN_TOKEN` set the script gets `401` and stops, because it
-      does not send the `x-demify-admin` header yet.
+      `DEMIFY_ADMIN_TOKEN` set, run
+      `DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (or export it first);
+      the script sends it as `x-demify-admin`. `npm run` does not read `.env`.
 - [ ] For a real mission, set `DEMIFY_MISSION` and `DEMIFY_MISSION_START` in
       `.env` (see [§8](#8-configuration-reference)) and restart.
 
@@ -348,7 +349,7 @@ user 1001 and must be able to write the restored files.
 Keep backups somewhere other than the Demify host. A copy on the same disk
 does not survive that disk.
 
-> **No internet on the host?** `alpine` is pulled from Docker Hub the first
+> **No ground link on the host?** `alpine` is pulled from Docker Hub the first
 > time. Either bring it along (`docker save alpine | gzip > alpine.tgz` on a
 > connected machine, `docker load < alpine.tgz` on the host), or use the
 > Demify image, which contains `tar` too:
@@ -444,9 +445,12 @@ Limits, so nobody is surprised on stage:
 - The daily **check-in** form saves through the app itself (a server action),
   not through `POST /api/readings`, so the token does not cover it. Keep the
   loopback default wherever check-ins must stay private.
-- `npm run sensor:demo` does not send the `x-demify-admin` header yet: with
-  a token set it gets `401` and stops. Leave `DEMIFY_ADMIN_TOKEN` empty while
-  you use it, or post with `curl` and the header as shown above.
+- `npm run sensor:demo` reads the token from the `DEMIFY_ADMIN_TOKEN`
+  environment variable of its own shell, not from `.env` (`npm run` does not
+  read `.env`). With a token set, run
+  `DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (or export it first); the
+  script sends it as `x-demify-admin`. Without it the server answers `401`,
+  and the script prints a hint and stops.
 - The token is not a user login and does not encrypt anything. On a real
   network put Demify behind a reverse proxy with TLS
   ([`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls)).
@@ -589,8 +593,8 @@ Good to know:
   **DEVICE + SIMULATED** and the rest stay simulated. With none it reports
   `simulated` and shows **SIMULATED**. Send at least every 60 seconds.
 - Readings posted with `"source":"manual"` (the default) are stored and
-  assessed, and are labelled **REAL · crew entry**, but they do not drive the
-  live monitor. Devices should send `"source":"sensor"`.
+  assessed, and are labelled **Crew entry** like check-in values, but they do
+  not drive the live monitor. Devices should send `"source":"sensor"`.
 - While a drill runs for a crew member, the monitor shows the drill, not the
   sensor values. Sensor readings are still stored.
 - With real sensors in use, set `DEMIFY_SIMULATE=false` so no simulated values
@@ -634,10 +638,18 @@ Open that crew member's monitor while it runs: the vitals switch from
 **SIMULATED** to **DEVICE**. About 2 minutes after you stop the script they
 fall back to **SIMULATED**.
 
-With `DEMIFY_ADMIN_TOKEN` set, the script gets `401` and stops, because it
-does not send the `x-demify-admin` header yet. Leave the token empty while you
-use it, or post with `curl` and the header
-([§3.7](#37-stage-and-shared-networks)).
+With `DEMIFY_ADMIN_TOKEN` set on the server
+([§3.7](#37-stage-and-shared-networks)), run
+`DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (or export it first); the
+script sends it as `x-demify-admin`. `npm run` does not read `.env`, so a
+token that is only in `.env` does not reach the script. Without the token, or
+with a different one, the server answers `401` and the script prints a hint
+and stops:
+
+```text
+1:17:41 PM  401 Admin token required. Open /unlock?token=<token> once in this browser, or send the x-demify-admin header.
+          the server has an admin token: export DEMIFY_ADMIN_TOKEN and run again
+```
 
 ---
 
@@ -719,7 +731,7 @@ flowchart LR
     stale -- "no" --> snap["Show offline snapshot"]
 ```
 
-There are three ways to run without internet:
+There are three ways to run without a ground link:
 
 | Mode | How | Use when |
 |---|---|---|
@@ -732,8 +744,9 @@ which reports `"offline":true`.
 
 **Refreshing the bundled snapshots** before a release:
 
-1. Run the app with internet (`npm run dev`) and open **Radiation** and
-   **NASA data** so every source is fetched once. Fresh copies land in
+1. Run the app with a ground link (`npm run dev` on a machine that reaches
+   NOAA and NASA) and open **Radiation** and **Open data (NASA OSDR)** so
+   every source is fetched once. Fresh copies land in
    `data/runtime/snapshots/`.
 2. Run `npm run snapshots:promote`. It copies the refreshed snapshots into
    `data/snapshots/` and stops at the first corrupt file (fix or delete it
@@ -756,11 +769,11 @@ with `DEMIFY_RESEED_SNAPSHOTS=true`. Details:
 | `permission denied ... docker.sock` (Linux) | User not in the `docker` group | `sudo usermod -aG docker "$USER"`, then log out and in |
 | `port is already allocated` / `address already in use` | Another program uses port 3000 | Add `DEMIFY_PORT=3010` to `.env`, run `docker compose up -d`, open http://localhost:3010 |
 | Demify works on the host, but tablets or sensors on the LAN cannot connect | Compose binds to `127.0.0.1` by default | Set `DEMIFY_BIND=0.0.0.0` (and a `DEMIFY_ADMIN_TOKEN`) in `.env`, run `docker compose up -d` ([§3.7](#37-stage-and-shared-networks)) |
-| Starting a drill shows `Could not start the drill: Admin token required. ...`, or a sensor or `npm run sensor:demo` gets `401` | `DEMIFY_ADMIN_TOKEN` is set and this browser or device has no valid token | Browser: open `/unlock?token=<token>` once (before you share your screen). Device or `curl`: send `x-demify-admin: <token>`. Sensor demo: leave the token empty. A changed token needs a new unlock |
+| Starting a drill shows `Could not start the drill: Admin token required. ...`, or a sensor or `npm run sensor:demo` gets `401` | `DEMIFY_ADMIN_TOKEN` is set and this browser or device has no valid token | Browser: open `/unlock?token=<token>` once (before you share your screen). Device or `curl`: send `x-demify-admin: <token>`. Sensor demo: run `DEMIFY_ADMIN_TOKEN=<token> npm run sensor:demo` (`npm run` does not read `.env`). A changed token needs a new unlock |
 | `/bin/sh^M: bad interpreter` or `exec ... no such file or directory` at container start | Old checkout with Windows line endings | Current `.gitattributes` and `Dockerfile` handle this. Run `git pull`, then re-checkout with LF (stash your changes first): `git rm -r -q --cached . && git reset --hard`, then `docker compose build --no-cache && docker compose up -d` |
 | Container stays `unhealthy` | Server failed to start, or the data volume is not writable | `docker compose logs demify`. For a bind mount, make it owned by uid 1001 ([`DEPLOYMENT.md` §2](DEPLOYMENT.md#2-what-is-in-the-image)) |
 | No alarm sound | The browser blocks audio until you interact, or sound was silenced | Click **Enable alarm sound** in the alarm bar. Check the system volume. A silence lasts 2 minutes |
-| Charts say **SNAPSHOT** with a date | No internet from the container, `DEMIFY_OFFLINE=true`, a proxy in between, or the air-gapped profile | Expected offline. Otherwise check `DEMIFY_OFFLINE`, set `DEMIFY_HTTPS_PROXY` if you are behind a proxy ([`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca)), and look for `fetch failed` in the logs |
+| Charts say **SNAPSHOT** with a date | No ground link from the container, `DEMIFY_OFFLINE=true`, a proxy in between, or the air-gapped profile | Expected offline. Otherwise check `DEMIFY_OFFLINE`, set `DEMIFY_HTTPS_PROXY` if you are behind a proxy ([`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca)), and look for `fetch failed` in the logs |
 | `401` from the reverse proxy | The proxy requires a login | Use the credentials of your proxy. Demify itself has no login; its own `401` says `Admin token required` (see above) |
 | Behind a reverse proxy, starting a drill gives `403 Cross-origin requests are not allowed`, or a check-in does not save (the log mentions `origin` not matching the host) | The proxy does not pass the original `Host` header, so the browser's `Origin` looks foreign | nginx: `proxy_set_header Host $host;` (Caddy does this by default). See [`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls) |
 | `403` / `407` from a corporate proxy during `docker compose build` | Build needs the proxy or its CA | See [`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca) |

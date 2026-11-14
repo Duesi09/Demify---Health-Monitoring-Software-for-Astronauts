@@ -6,6 +6,7 @@ import {
   BLACKOUT_ADVICE,
   LINK_PROFILES,
   LINK_PROFILE_IDS,
+  LIVE_LIMIT_RULE,
   LIVE_LIMIT_S,
   MARS_DELAY_RANGE,
   MISSION_LINK,
@@ -20,6 +21,7 @@ import {
 import { MISSION_PROFILES } from "@/lib/config";
 import { buildProtocol } from "@/components/crew/protocols";
 import { EscalationBanner, type EscalationItem } from "@/components/overview/escalation-banner";
+import { CommDelay } from "@/components/guidance/escalation-protocol";
 import { LinkSwitch } from "@/components/link-switch";
 
 /** Relative error |a - b| / b. */
@@ -203,5 +205,41 @@ describe("delay wording follows the policy", () => {
     for (const id of LINK_PROFILE_IDS) expect(html).toContain(`href="/check-in?crew=cdr&amp;link=${id}"`);
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
     expect(html).toMatch(/aria-current="true"[^>]*>Mars \(transit\)</);
+  });
+});
+
+describe("the near real-time limit is labelled as our rule", () => {
+  it("LIVE_LIMIT_RULE states the 60 s project rule", () => {
+    expect(LIVE_LIMIT_RULE).toBe("project rule: under 60 s one way counts as near real-time");
+  });
+
+  it("Guidance communication-delay card: the rule once, list cells capitalised", () => {
+    for (const link of [LINK_PROFILES.iss, LINK_PROFILES["mars-transit"], LINK_PROFILES.conjunction]) {
+      const t = text(renderToStaticMarkup(createElement(CommDelay, { link, missionName: "ISS" })));
+      expect(t.split("(project rule: under 60 s one way counts as near real-time)")).toHaveLength(2);
+      expect(t).toContain("No contact (blackout)");
+    }
+  });
+});
+
+describe("/help follows ?link=", () => {
+  async function help(link?: string) {
+    const { default: HelpPage } = await import("@/app/help/page");
+    const props = { params: Promise.resolve({}), searchParams: Promise.resolve(link ? { link } : {}) } as Parameters<typeof HelpPage>[0];
+    return text(renderToStaticMarkup(await HelpPage(props)));
+  }
+
+  it("/help?link=conjunction shows the blackout text", async () => {
+    const t = await help("conjunction");
+    expect(t).toContain("No contact: act on the onboard procedures");
+    expect(t).toContain("Signal delay profile Conjunction: no contact (blackout).");
+    expect(t).toContain("transmit everything when contact returns");
+    expect(t).not.toContain("Call the flight surgeon directly");
+  });
+
+  it("/help?link=mars-transit acts first; without ?link= the mission's own link applies", async () => {
+    expect(await help("mars-transit")).toContain("Act first, then transmit");
+    const t = await help();
+    expect(t).toMatch(/Current mission .*: signal delay .* one-way\./);
   });
 });

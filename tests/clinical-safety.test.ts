@@ -277,15 +277,45 @@ describe("persistence rules with history (assess.ts)", () => {
     expect(await assessmentOf("bodyTemp")).toMatchObject({ status: "critical", escalate: true });
   });
 
-  it("temperature: a gap of more than a day without readings does not count as persisting", async () => {
+  it("temperature: a gap of more than 36 h without readings does not count as persisting", async () => {
     const now = Date.now() - 60_000;
     state.readings = [reading("bodyTemp", 38.5, now - 72 * H), reading("bodyTemp", 38.5, now)];
     const a = await assessmentOf("bodyTemp");
     expect(a.escalate).toBe(false);
     expect(a.finding).toContain("single value; repeated values escalate");
 
+    state.readings = [reading("bodyTemp", 38.5, now - 37 * H), reading("bodyTemp", 38.5, now)];
+    expect((await assessmentOf("bodyTemp")).escalate).toBe(false);
+
     state.readings = [reading("bodyTemp", 38.5, now - 48 * H), reading("bodyTemp", 38.4, now - 24 * H), reading("bodyTemp", 38.5, now)];
     expect((await assessmentOf("bodyTemp")).escalate).toBe(true);
+  });
+
+  it.each([26, 35])("temperature: daily check-ins %d h apart (drifting times) count as persisting", async (hours) => {
+    const now = Date.now() - 60_000;
+    state.readings = [reading("bodyTemp", 38.4, now - hours * H), reading("bodyTemp", 38.5, now)];
+    const a = await assessmentOf("bodyTemp");
+    expect(a).toMatchObject({ status: "caution", escalate: true });
+    expect(a.finding).toBe("Temperature 38.5 °C: ≥ 38.1 °C persisting 24 h, contact the flight surgeon.");
+    const { PERSIST_MAX_GAP_MS } = await import("@/lib/health/assess");
+    expect(PERSIST_MAX_GAP_MS).toBe(36 * H);
+  });
+
+  it("temperature: never 'single value' while an earlier fever reading is in the window", async () => {
+    const now = Date.now() - 60_000;
+    state.readings = [reading("bodyTemp", 38.4, now - 20 * 60_000), reading("bodyTemp", 38.5, now)];
+    let a = await assessmentOf("bodyTemp");
+    expect(a.escalate).toBe(false);
+    expect(a.finding).not.toContain("single value");
+    expect(a.finding).toContain("under 1 h so far; repeated values escalate (≥ 38.1 °C persisting 24 h)");
+
+    state.readings = [reading("bodyTemp", 38.4, now - 6 * H), reading("bodyTemp", 38.5, now)];
+    a = await assessmentOf("bodyTemp");
+    expect(a.finding).not.toContain("single value");
+    expect(a.finding).toContain("6 h so far");
+
+    state.readings = [reading("bodyTemp", 38.5, now)];
+    expect((await assessmentOf("bodyTemp")).finding).toContain("single value; repeated values escalate");
   });
 
   it("finding text reads with one colon: value, band, progress, rule", async () => {

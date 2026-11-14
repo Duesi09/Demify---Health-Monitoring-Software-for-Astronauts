@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   BODY_REGIONS,
   CHECK_IN_INDICATORS,
+  HAZARDS,
   INDICATORS,
+  bandEscalationLabel,
   classify,
   escalationFlags,
   evaluateValue,
   needsEscalation,
+  type IndicatorDef,
 } from "@/lib/health/knowledge";
+import { MARS_DELAY_RANGE } from "@/lib/link";
 import type { IndicatorId } from "@/lib/types";
 
 describe("knowledge base integrity", () => {
@@ -125,5 +129,52 @@ describe("escalationFlags", () => {
     expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any value ≥ 1 /3"]);
     expect(escalationFlags(INDICATORS.radiationDoseRate)).toEqual(["> 10 mSv/day", "Any current S1+ solar radiation storm"]);
     expect(escalationFlags(INDICATORS.hydration)).toEqual([]);
+  });
+});
+
+describe("bandEscalationLabel", () => {
+  it("reads after 'any value' for caution bands, derived from the steps", () => {
+    expect(bandEscalationLabel(INDICATORS.visionChange)).toBe("≥ 1 /3");
+    // Open ends on both sides (a heart-rate-like caution band).
+    const hr: IndicatorDef = { ...INDICATORS.heartRate, escalateFromBand: "caution" };
+    expect(bandEscalationLabel(hr)).toBe("< 50 bpm or ≥ 101 bpm");
+  });
+
+  it("falls back to a grammatical phrase, never 'any ... any caution or critical value'", () => {
+    // A caution band closed on both sides (nominal below and above).
+    const odd: IndicatorDef = {
+      ...INDICATORS.visionChange,
+      steps: [[1, "nominal"], [2, "caution"]],
+      top: "nominal",
+      escalateFromBand: "caution",
+    };
+    expect(bandEscalationLabel(odd)).toBe("in the caution or critical band");
+    expect(escalationFlags(odd)).toContain("Any value in the caution or critical band");
+    for (const def of Object.values(INDICATORS)) {
+      for (const f of escalationFlags(def)) expect(f, def.id).not.toMatch(/\bany\b.*\bany\b/i);
+    }
+  });
+});
+
+describe("rule labels (ours vs published)", () => {
+  it("marks project-defined escalation limits on heart rate, blood pressure and temperature", () => {
+    expect(INDICATORS.heartRate.escalation).toMatch(/Below 40 or above 130 bpm at rest \(project rule, close to the NEWS2 3-point bands\)/);
+    expect(INDICATORS.heartRate.ranges.critical).toMatch(/project rule/);
+    expect(INDICATORS.systolicBP.escalation).toMatch(/below 80 mmHg \(project rule\)/);
+    expect(INDICATORS.diastolicBP.escalation).toMatch(/below 40 mmHg \(project rule\)/);
+    expect(INDICATORS.bodyTemp.escalation).toMatch(/39\.1 °C or above \(project rule\)/);
+  });
+
+  it("names the AHA hypertensive crisis only for > 180/120", () => {
+    expect(INDICATORS.systolicBP.ranges.critical).toBe("< 80 mmHg (project rule) or > 180 mmHg (AHA hypertensive crisis)");
+    expect(INDICATORS.diastolicBP.ranges.critical).toBe("< 40 mmHg (project rule) or > 120 mmHg (AHA hypertensive crisis)");
+    for (const def of [INDICATORS.systolicBP, INDICATORS.diastolicBP]) {
+      expect(def.escalation).not.toMatch(/below \d+ mmHg \(AHA/);
+    }
+  });
+
+  it("states the Mars delay as the shared range", () => {
+    expect(HAZARDS.distance.summary).toContain(MARS_DELAY_RANGE);
+    expect(HAZARDS.distance.summary).not.toMatch(/20 minutes/);
   });
 });

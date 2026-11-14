@@ -2,7 +2,7 @@
 id: vital-sign-ranges
 title: Vital-sign ranges and escalation rules
 category: reference
-source: Demify health knowledge base (docs/research/health-knowledge-base.md, src/lib/health/knowledge.ts), with the NASA, CSA and clinical sources named per indicator
+source: Demify health knowledge base, citing the NASA, CSA and clinical sources named per indicator (AHA, ADA, NEWS2, MedlinePlus, NASA-STD-3001, OCHMO technical briefs, NASA HRP)
 license: Project text, MIT; the cited sources keep their own terms
 reviewed: Project text, not clinically reviewed
 updated: 2026-11-14
@@ -27,16 +27,16 @@ Personal baseline (project rule): a change of 25 % or more from the crew member'
 
 ## Blood pressure at a glance
 
-AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg (stage 2) are caution with a re-check in 15 minutes (the 15 minutes are a project rule). Above 180 / 120 mmHg is the AHA hypertensive crisis: a systolic value above 180 mmHg or a diastolic value above 120 mmHg escalates, so contact the flight surgeon. Below 80 / 40 mmHg also escalates. Any reading with headache, chest pain, vision change or dizziness is a reason to contact the flight surgeon. In-flight blood pressure runs about 8–10 mmHg lower (Norsk 2015). The hypertensive crisis drill checklist is in "Alarm response drill checklists".
+AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg (stage 2) are caution with a re-check in 15 minutes (the 15 minutes are a project rule). Above 180 / 120 mmHg is the AHA hypertensive crisis: a systolic value above 180 mmHg or a diastolic value above 120 mmHg escalates, so contact the flight surgeon. Below 80 / 40 mmHg also escalates; that low limit is a project rule. Any reading with headache, chest pain, vision change or dizziness is a reason to contact the flight surgeon. In-flight blood pressure runs about 8–10 mmHg lower (Norsk 2015). The hypertensive crisis drill checklist is in "Alarm response drill checklists".
 
 ## Resting heart rate
 
 - Source tag: CLIN (general clinical range)
 - Nominal: 50–100 bpm (fit crews often rest in the 50s)
 - Caution: 40–49 or 101–130 bpm
-- Critical: < 40 or > 130 bpm, or with symptoms
+- Critical: < 40 or > 130 bpm (project rule, close to the NEWS2 3-point bands), or with symptoms
 - Automatic escalation flag: < 40 bpm; > 130 bpm
-- Contact the flight surgeon when: Below 40 or above 130 bpm at rest, or chest pain, fainting or palpitations.
+- Contact the flight surgeon when: Below 40 or above 130 bpm at rest (project rule, close to the NEWS2 3-point bands), or chest pain, fainting or palpitations.
 - Crew actions: Rest seated for 5 minutes and measure again. Check caffeine, medication and recent exercise. Drink fluids; before landing follow the pre-landing fluid-loading procedure and wear compression garments.
 - In spaceflight: Microgravity shifts fluid headward and the heart becomes more spherical; arrhythmia risk rises and orthostatic tachycardia or fainting is common after landing.
 - Measured with: CSA Bio-Monitor smart shirt (ECG), ECG kit, CEVIS cycle display.
@@ -47,9 +47,9 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Source tag: CLIN (general clinical range)
 - Nominal: 90–129 mmHg
 - Caution: 80–89 (low), 130–139 (AHA stage 1) or 140–180 (AHA stage 2): re-check in 15 minutes
-- Critical: < 80 or > 180 mmHg (AHA hypertensive crisis)
+- Critical: < 80 mmHg (project rule) or > 180 mmHg (AHA hypertensive crisis)
 - Automatic escalation flag: < 80 mmHg; > 180 mmHg
-- Contact the flight surgeon when: Systolic above 180 or below 80 mmHg, or any reading with headache, chest pain, vision change or dizziness.
+- Contact the flight surgeon when: Systolic above 180 mmHg (AHA hypertensive crisis) or below 80 mmHg (project rule), or any reading with headache, chest pain, vision change or dizziness.
 - Crew actions: Sit quietly for 5 minutes, arm at heart level, and repeat the measurement. Review salt, fluid and caffeine intake. If low: hydrate and avoid fast posture changes; if high: rest and re-check in 15 minutes.
 - In spaceflight: 24-hour blood pressure drops about 8–10 mmHg in flight as fluid redistributes. Low pressure and fainting are typical right after landing.
 - Measured with: Automated BP cuff, CSA Bio-Monitor.
@@ -60,9 +60,9 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Source tag: CLIN (general clinical range)
 - Nominal: 60–79 mmHg
 - Caution: 40–59 (low), 80–89 (AHA stage 1) or 90–120 mmHg (AHA stage 2): re-check in 15 minutes
-- Critical: < 40 or > 120 mmHg (AHA hypertensive crisis)
+- Critical: < 40 mmHg (project rule) or > 120 mmHg (AHA hypertensive crisis)
 - Automatic escalation flag: < 40 mmHg; > 120 mmHg
-- Contact the flight surgeon when: Diastolic above 120 or below 40 mmHg, or any reading with symptoms.
+- Contact the flight surgeon when: Diastolic above 120 mmHg (AHA hypertensive crisis) or below 40 mmHg (project rule), or any reading with symptoms.
 - Crew actions: Repeat the measurement after 5 minutes of rest. Track together with systolic pressure and heart rate.
 - In spaceflight: Fluid shifts and reduced plasma volume change vascular tone; diastolic values usually move with systolic.
 - Measured with: Automated BP cuff, CSA Bio-Monitor.
@@ -88,7 +88,7 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Caution: 35.1–36.0 or 38.1–39.0 °C (NEWS2 1 point)
 - Critical: ≤ 35.0 °C (NEWS2 3 points) or ≥ 39.1 °C (NEWS2 2 points; rating it critical is our project rule)
 - Automatic escalation flag: Any value ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h
-- Contact the flight surgeon when: 35.0 °C or below, 39.1 °C or above, 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.
+- Contact the flight surgeon when: 35.0 °C or below, 39.1 °C or above (project rule), 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.
 - Crew actions: Drink fluids and rest. Check for signs of infection (sore throat, rash, cough). Reduce exercise intensity while elevated.
 - In spaceflight: Core temperature rises up to ~1 °C over long missions (impaired heat loss without convection), so compare against your own in-flight baseline.
 - Measured with: Thermometer; CSA Bio-Monitor skin temperature.

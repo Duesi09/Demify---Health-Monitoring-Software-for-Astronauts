@@ -13,6 +13,10 @@
 # Multi-arch (e.g. ARM flight computers):
 #   docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/demify:<tag> --push .
 #
+# The same image runs the onboard server's sync service and its scripts
+# (docker-compose.spark.yml, docs/SPARK.md); on an NVIDIA DGX Spark it builds
+# natively for arm64.
+#
 # See docs/DEPLOYMENT.md for the full guide.
 
 ARG NODE_IMAGE=node:24-alpine
@@ -82,6 +86,7 @@ ENV NODE_ENV=production \
     DEMIFY_DATA_DIR=/data \
     DEMIFY_SNAPSHOT_DIR=/data/snapshots \
     DEMIFY_SNAPSHOT_SEED_DIR=/app/data/snapshots-seed \
+    DEMIFY_SEED_LIBRARY_DIR=/app/library \
     NODE_USE_ENV_PROXY=1
 # NODE_USE_ENV_PROXY=1 makes Node's built-in fetch honour HTTPS_PROXY /
 # HTTP_PROXY / NO_PROXY (it ignores them otherwise). It is a no-op when no
@@ -102,6 +107,15 @@ COPY --from=builder /app/public ./public
 # Offline snapshots of the external APIs, shipped read-only in the image and
 # copied into the data volume on first start by the entrypoint.
 COPY --from=builder /app/data/snapshots ./data/snapshots-seed
+# Onboard server (docker-compose.spark.yml): the plain-Node modules shared by
+# the app and the scripts, the curated library (the release copy that seeds
+# an empty database, DEMIFY_SEED_LIBRARY_DIR; without a database the app reads
+# it directly) and the production scripts run by the sync container and by
+# operators. Root-owned like the rest of /app, so read-only for the runtime
+# user. Dev-only tools (scripts/dev/**) are kept out by .dockerignore.
+COPY --from=builder /app/onboard ./onboard
+COPY --from=builder /app/library ./library
+COPY --from=builder /app/scripts/library-ingest.mjs /app/scripts/sync-service.mjs /app/scripts/db-migrate.mjs ./scripts/
 COPY docker/entrypoint.sh /usr/local/bin/demify-entrypoint
 # Strip CR in case the repo was checked out on Windows with CRLF endings
 # (otherwise: "/bin/sh^M: not found" at container start).
@@ -109,7 +123,16 @@ RUN sed -i 's/\r$//' /usr/local/bin/demify-entrypoint \
  && chmod 0755 /usr/local/bin/demify-entrypoint \
  && rm -f /app/data/demify-db.json \
  && mkdir -p /app/.next/cache \
- && chown nextjs:nodejs /app/.next/cache
+ && chown nextjs:nodejs /app/.next/cache \
+ # The sync service and the scripts run with plain Node outside the Next.js
+ # bundle, so "pg" (traced into the standalone node_modules because the app
+ # imports it) and every onboard module must resolve here. Fail the build
+ # now rather than the sync container at start-up.
+ && { test -f node_modules/pg/package.json \
+      || { echo "pg is missing from the standalone node_modules" >&2; exit 1; }; } \
+ && node --input-type=module \
+      -e "for (const f of process.argv.slice(1)) await import('/app/' + f)" onboard/*.mjs \
+ && for f in scripts/*.mjs; do node --check "$f" || exit 1; done
 
 USER nextjs:nodejs
 VOLUME ["/data"]
