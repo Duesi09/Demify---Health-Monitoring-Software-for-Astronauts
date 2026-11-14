@@ -44,12 +44,12 @@ Either way works:
   Windows: Git Bash) and run
 
   ```bash
-  git clone https://github.com/Duesi09/Demify---Health-Monitoring-Software-for-Astronauts.git
+  git clone -b Project-2-Phase-1 https://github.com/Duesi09/Demify---Health-Monitoring-Software-for-Astronauts.git
   cd Demify---Health-Monitoring-Software-for-Astronauts
   ```
 
-- **Without Git:** on the GitHub page of the project choose **Code**, then
-  **Download ZIP**, and unpack the ZIP file into a folder of your choice.
+- **Without Git:** on the GitHub page of the project first switch the branch
+  to **Project-2-Phase-1**, then choose **Code** and **Download ZIP**, and unpack the ZIP file into a folder of your choice.
 
 ## 3. Run the installer
 
@@ -148,7 +148,7 @@ All commands run in the Demify folder.
 | Open Demify | Browser: <http://localhost:3000> (the onboard assistant: <http://localhost:3000/assistant>). If the installer chose another port, it printed the address |
 | Stop Demify | `docker compose down` |
 | Start it again | Start Docker Desktop and Ollama (they usually start with your computer), then `docker compose up -d`, or run the installer again |
-| Update Demify | `git pull`, then run the installer again (same command as in section 3). With the ZIP download: download the new ZIP, unpack it, copy your `.env` file from the old folder into the new one, then run the installer in the new folder |
+| Update Demify | `git pull origin Project-2-Phase-1`, then run the installer again (same command as in section 3). With the ZIP download: download the new ZIP, unpack it, copy your `.env` file from the old folder into the new one, then run the installer in the new folder |
 | Use another model | `bash install.sh --model gemma3:1b` (PowerShell: `-Model gemma3:1b`) |
 | Remove the model | `ollama rm gemma3:4b` (the name the installer printed) |
 | Remove Demify | `docker compose down -v` (this also deletes the data Demify stored, such as check-ins and readings), then delete the folder |

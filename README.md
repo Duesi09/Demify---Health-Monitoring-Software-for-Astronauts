@@ -87,7 +87,7 @@ To try the device API without hardware, run `npm run sensor:demo` while Demify i
 
 ## Quick start
 
-**The installer** (easiest). Download this repository (`git clone`, or **Code > Download ZIP** on GitHub), open a terminal in its folder and run one command:
+**The installer** (easiest). Download this repository from the branch `Project-2-Phase-1` (`git clone -b Project-2-Phase-1 https://github.com/Duesi09/Demify---Health-Monitoring-Software-for-Astronauts.git`, or switch to that branch on GitHub and choose **Code > Download ZIP**), open a terminal in its folder and run one command:
 
 | System | Command |
 |---|---|
