@@ -75,9 +75,22 @@ Market sizing in three steps:
 | 2 | **Support and maintenance** | Every serious operator | Yearly contract with guaranteed response times |
 | 3 | **Hosted Demify** | Earth sites (stations, rigs, analog habitats) | Monthly fee per crew member; we run it, they just use it |
 | 4 | **Custom indicators and device connectors** | Operators with their own sensors | Per feature |
-| 5 | **Grants and prizes** | Space and innovation programmes | Fund the early phase before customers (which programmes depends on the country we are in) |
+| 5 | **Grants and prizes** | Swiss and European space and innovation programmes | Fund the early phase before customers (see "Funding path in Switzerland" below) |
 
 Example, year 3 (**estimate**): 10 hosted sites with 30 people each, at $40 per person per month, is about **$144,000 a year**, plus integration and support contracts on top.
+
+### Funding path in Switzerland
+
+We are a Swiss team. NASA's own small-business funding is for US companies, so our early money comes from Swiss and European programmes. Switzerland is a member of ESA, the European Space Agency.
+
+| Step | Programme | What it gives | Why it fits |
+|---|---|---|---|
+| 1 | **Innosuisse Initial Coaching** | A coaching voucher worth up to CHF 10,000 | Turns the hackathon project into a business plan with an accredited coach |
+| 2 | **Venture Kick** | Up to CHF 150,000 in three stages over about nine months, starting before a company exists | Made for very early Swiss teams |
+| 3 | **ESA BIC Switzerland** (ESA's start-up incubator) | Recent cohorts: up to EUR 200,000 non-dilutive funding plus technical and business support | Requires a space connection, which is exactly our case |
+| 4 | **Innosuisse innovation project** | Funding for a science-based project with a research partner | For the medical validation with a Swiss university or hospital |
+
+Amounts and deadlines change; check each programme's site before applying.
 
 ### Costs
 
@@ -119,7 +132,7 @@ The flipchart splits it into **backstage** (left: how we deliver), **value propo
 | "If it's free, how do you survive?" | Integration, support, hosting for Earth sites, and grants, the same model many open-source companies use |
 | "Is it a medical device?" | Not today. It is decision support, and it says so. Becoming one is a later, separate step with a medical partner |
 | "Are the vital signs real?" | The NASA data and the space weather are real. Vital signs are simulated until a device is connected, and the app labels them as simulated everywhere |
-| "What do you need next?" | A flight surgeon or space medicine advisor, and one pilot site (an analog mission or a polar station) |
+| "What do you need next?" | A flight surgeon or space medicine advisor, one pilot site (an analog mission or a polar station), and a first grant: Venture Kick, then ESA BIC Switzerland |
 
 ---
 
@@ -133,4 +146,5 @@ The flipchart splits it into **backstage** (left: how we deliver), **value propo
 - Antarctic stations: [CIA World Factbook](https://www.cia.gov/the-world-factbook/about/archives/2022/countries/antarctica/), [Wikipedia: Research stations in Antarctica](https://Www.Wikipedia.org/wiki/Antarctic_Station)
 - Offshore: [Professional Pilot](https://propilotmag.com/offshore/), [NS Energy](https://www.nsenergybusiness.com/features/featuretransport-logistics-personnel/), [Gulf of Mexico study](https://www.curehunter.com/public/pubmed10127859.do)
 - Remote patient monitoring market: [MarketsandMarkets](https://www.prnewswire.co.uk/news-releases/remote-patient-monitoring-market-to-hit-usd-56-94-billion-by-2030-with-12-7-cagr--marketsandmarkets-302375683.html), [Research and Markets](https://www.researchandmarkets.com/publication/mggilz8/4479452)
+- Swiss funding: [ESA BIC Switzerland (startupticker)](https://www.startupticker.ch/en/news/esa-bic-switzerland-promotes-five-startups-with-space-connections), [ESA BIC Switzerland (SERI)](https://www.sbfi.admin.ch/sbfi/en/home/news/press-releases.msg-id-63763.html), [Venture Kick](https://www.venturekick.ch/Venture-Kick-scales-its-support-for-Swiss-startups), [Innosuisse Initial Coaching](https://www.innosuisse.ch/inno/en/home/support-for-start-ups/startup-coaching/initial-coaching/application.html), [Innosuisse start-up innovation projects](https://www.innosuisse.admin.ch/en/start-up-innovation-projects)
 - Business Model Canvas: Strategyzer (strategyzer.com)
