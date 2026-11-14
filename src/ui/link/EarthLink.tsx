@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { evaluateIndexed, indexReadings } from '@/domain/engine'
-import { PROFILES, PROFILE_IDS, linkState, type ProfileId } from '@/domain/missionContext'
+import { linkState, parseProfile, PROFILE_IDS, PROFILES, type ProfileId } from '@/domain/missionContext'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { Reading } from '@/domain/types'
 import { PageShell } from '../PageShell'
@@ -16,7 +16,11 @@ interface Props {
   initialReadings: Reading[]
   initialDay: number
   initialProfile: ProfileId
+  /** False when the address named no place, as when arriving from the header. */
+  profileGiven: boolean
 }
+
+const PROFILE_KEY = 'demify.link.profile'
 
 const stepButton =
   'rounded-full bg-raised px-4 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:bg-axis disabled:opacity-40'
@@ -25,13 +29,32 @@ const stepButton =
  * The Earth link section: how far Earth is, how old its picture of the crew
  * member is, when an answer can arrive at the earliest, and what to do until then.
  */
-export function EarthLink({ initialReadings, initialDay, initialProfile }: Props) {
+export function EarthLink({ initialReadings, initialDay, initialProfile, profileGiven }: Props) {
   const [day, setDay] = useState(initialDay)
   const [profile, setProfile] = useState(initialProfile)
 
   const index = useMemo(() => indexReadings(initialReadings), [initialReadings])
   const evaluation = useMemo(() => evaluateIndexed(index, day), [index, day])
   const link = useMemo(() => linkState(profile, day), [profile, day])
+
+  // The header links carry only the day. Coming back without a place in the
+  // address, return to the one chosen earlier in this browser session.
+  useEffect(() => {
+    if (profileGiven) return
+    try {
+      const saved = window.sessionStorage.getItem(PROFILE_KEY)
+      if (saved !== null) setProfile(parseProfile(saved))
+    } catch {
+      // Storage can be switched off; the default place is fine then.
+    }
+  }, [profileGiven])
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(PROFILE_KEY, profile)
+    } catch {
+      // Nothing to do: the place simply is not remembered.
+    }
+  }, [profile])
 
   // Keep day and place in the address, so a reload or a shared link opens the same view.
   // Waits for the slider to rest: browsers limit how often the address may change.

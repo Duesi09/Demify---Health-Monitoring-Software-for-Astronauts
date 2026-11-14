@@ -103,7 +103,6 @@ The simulated values of the ten older indicators did not change; a checksum test
 ### Not finished
 
 - An independent bug review of the Phase 3 code was started and cut off by the usage limit. Every section was driven in a real browser and scanned, but nobody has read all the new code a second time.
-- The mission profile chosen on Earth link is not kept when you leave the section.
 - The older sections of this handbook (thresholds table, patterns, simulated mission day table) do not list the two new indicators, the fatigue pattern or the solar particle event.
 
 ---

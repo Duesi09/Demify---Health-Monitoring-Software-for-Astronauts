@@ -15,5 +15,5 @@ export default async function Page({
   searchParams: Promise<{ day?: string | string[]; profile?: string | string[] }>
 }) {
   const [{ day, profile }, readings] = await Promise.all([searchParams, getMissionReadings()])
-  return <EarthLink initialReadings={readings} initialDay={parseDay(day)} initialProfile={parseProfile(profile)} />
+  return <EarthLink initialReadings={readings} initialDay={parseDay(day)} initialProfile={parseProfile(profile)} profileGiven={profile !== undefined} />
 }
