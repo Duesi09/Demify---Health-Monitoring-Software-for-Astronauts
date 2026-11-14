@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Heart, Volume2, VolumeX } from "lucide-react";
-import { ALARM_LIMITS } from "@/lib/monitor/alarms";
 import type { LiveVitals, MonitorAlarm, Rhythm } from "@/lib/types";
+import { ALARM_LIMITS } from "@/lib/monitor/alarms";
 import "./monitor.css";
 import {
+  ActivityTag,
+  AlarmPrefix,
   DemoTag,
   DrillTag,
   MONITOR_COLOR,
   SourceTag,
+  activityLimits,
   alarmFor,
-  alarmPrefix,
   fmt,
   topAlarm,
   useReducedMotion,
@@ -35,6 +37,12 @@ const RHYTHM_SHORT: Record<Rhythm, string> = {
   "sinus-bradycardia": "Sinus brady",
   vt: "VTach",
   vf: "VFib",
+};
+
+const ACTIVITY_SR: Record<LiveVitals["activity"], string> = {
+  rest: "",
+  exercise: "During scheduled exercise. ",
+  sleep: "During sleep. ",
 };
 
 const CAPTION_SOURCE: Record<LiveVitals["source"], string> = {
@@ -212,19 +220,23 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
   /* ---- channels ---- */
   const abpTop = Math.max(190, Math.ceil(((v.sys ?? 0) + 20) / 20) * 20);
   const channels: ChannelSpec[] = [
-    { key: "ecg", label: "II", sublabel: "x1 · 25 mm/s", color: MONITOR_COLOR.ecg, range: [-0.8, 1.6], weight: 2.2 },
+    // Gain is shown by the 1 mV calibration pulse, speed is the real sweep speed.
+    { key: "ecg", label: "II", showSpeed: true, cal: { value: 1, label: "1 mV" }, color: MONITOR_COLOR.ecg, range: [-0.8, 1.6], weight: 2.2 },
     { key: "abp", label: "ABP", sublabel: "mmHg", color: MONITOR_COLOR.abp, range: [-6, abpTop], weight: 1.5, scale: [0, 80, 160] },
     { key: "pleth", label: "Pleth", color: MONITOR_COLOR.pleth, range: [-0.05, 1.05], weight: 1.1 },
     { key: "resp", label: "Resp", sublabel: "Imp", color: MONITOR_COLOR.resp, range: [-1.25, 1.25], weight: 1 },
   ];
 
   /* ---- numerics ---- */
+  // Stale: values are held and greyed; they must not keep flashing as if live.
+  const numAlarms = stale ? [] : v.alarms;
   const L = ALARM_LIMITS;
-  const hrAlarm = alarmFor(v.alarms, "heartRate");
-  const stAlarm = alarmFor(v.alarms, "stDeviation");
-  const abpAlarm = alarmFor(v.alarms, "systolicBP", "diastolicBP");
-  const spo2Alarm = alarmFor(v.alarms, "spo2");
-  const respAlarm = alarmFor(v.alarms, "respRate");
+  const lim = activityLimits(v.activity);
+  const hrAlarm = alarmFor(numAlarms, "heartRate");
+  const stAlarm = alarmFor(numAlarms, "stDeviation");
+  const abpAlarm = alarmFor(numAlarms, "systolicBP", "diastolicBP");
+  const spo2Alarm = alarmFor(numAlarms, "spo2");
+  const respAlarm = alarmFor(numAlarms, "respRate");
   const st = `${v.stMm >= 0 ? "+" : "−"}${Math.abs(v.stMm).toFixed(1)}`;
   const perfusion = v.spo2 == null || v.sys == null || v.dia == null ? 0 : Math.max(0.12, Math.min(1, (v.sys - v.dia) / 50));
   const hrText = fmt(v.hr);
@@ -232,6 +244,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
 
   const summary =
     `Demo patient monitor for ${v.crewName}${v.scenario ? `, training scenario ${v.scenario.label}` : ""}. ` +
+    ACTIVITY_SR[v.activity] +
     `Heart rate ${v.hr ?? "not measurable"}${v.hr != null ? " beats per minute" : ""}, ${RHYTHM_LABEL[v.rhythm]}. ` +
     `ST ${st} millimetres. Arterial pressure ${v.sys != null ? `${v.sys} over ${v.dia}, mean ${v.map}` : "not measurable"}. ` +
     `SpO2 ${v.spo2 != null ? `${v.spo2} percent` : "not measurable"}. Respiration ${v.resp ?? "not measurable"} per minute. ` +
@@ -255,6 +268,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {v.scenario && <DrillTag scenario={v.scenario} className="max-w-full" />}
+            <ActivityTag activity={v.activity} />
             <SourceTag source={v.source} />
             <span className="text-[12px] font-light tabular-nums tracking-[0.04em] text-white/70" suppressHydrationWarning>
               {clock ?? "--:--:--"} <span className="text-[9.5px] tracking-[0.18em] text-white/40">UTC</span>
@@ -266,27 +280,35 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               aria-label={soundUnavailable ? "QRS tone unavailable in this browser" : sound ? "Turn QRS tone off" : "Turn QRS tone on"}
               title={soundUnavailable ? "Audio unavailable" : sound ? "QRS tone on" : "QRS tone off"}
               disabled={soundUnavailable}
-              className="grid size-7 place-items-center rounded-full text-white/60 ring-1 ring-inset ring-white/12 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:opacity-40"
+              // 44 px touch target around a 30 px visual circle.
+              className="group -my-2 grid size-11 place-items-center rounded-full text-white/60 focus-visible:outline-none disabled:opacity-40"
             >
-              {sound ? <Volume2 size={14} aria-hidden /> : <VolumeX size={14} aria-hidden />}
+              <span className="grid size-[30px] place-items-center rounded-full ring-1 ring-inset ring-white/12 transition-colors group-hover:bg-white/8 group-hover:text-white group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-white/70">
+                {sound ? <Volume2 size={14} aria-hidden /> : <VolumeX size={14} aria-hidden />}
+              </span>
             </button>
           </div>
         </header>
 
         {/* ---- alarm message area ---- */}
-        <div className="mt-3 flex h-8 items-center @3xl:mt-4">
+        <div className="mt-3 flex min-h-8 items-stretch @3xl:mt-4">
           {stale ? (
-            <div className="flex h-full w-full items-center gap-3 rounded-[10px] bg-white/[0.06] px-3 text-[12.5px] font-semibold uppercase tracking-[0.12em] text-[#64d2ff]">
-              <span>No signal · comms lost</span>
-              <span className="ml-auto text-[10px] font-medium tracking-[0.16em] text-white/45">Last values held</span>
+            <div className="flex w-full items-center gap-3 rounded-[10px] bg-white/[0.06] px-3 py-1.5 text-[12.5px] font-semibold uppercase tracking-[0.12em] text-[#64d2ff]">
+              <span className="@md:hidden">No signal</span>
+              <span className="hidden @md:inline">No signal · comms lost</span>
+              <span className="ml-auto whitespace-nowrap text-[10px] font-medium tracking-[0.16em] text-white/45">
+                <span className="@md:hidden">Values held</span>
+                <span className="hidden @md:inline">Last values held</span>
+              </span>
             </div>
           ) : shown ? (
             <div
               key={shown.id}
-              className={`flex h-full w-full min-w-0 items-center gap-3 rounded-[10px] px-3 text-[12.5px] font-semibold tracking-[0.1em] ${shown.priority === "high" ? "dm-band-high" : "dm-band-medium"}`}
+              className={`flex w-full min-w-0 items-center gap-3 rounded-[10px] px-3 py-1.5 text-[12.5px] font-semibold leading-tight tracking-[0.1em] ${shown.priority === "high" ? "dm-band-high" : "dm-band-medium"}`}
             >
-              <span className="truncate">
-                {alarmPrefix(shown)} {shown.text}
+              {/* Wraps rather than truncates: the alarm text must stay complete. */}
+              <span className="min-w-0 break-words">
+                <AlarmPrefix alarm={shown} /> {shown.text}
               </span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {shown.drill && (
@@ -300,7 +322,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               </span>
             </div>
           ) : (
-            <div className="flex h-full w-full items-center px-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/30">
+            <div className="flex w-full items-center px-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/30">
               No active alarms
             </div>
           )}
@@ -323,13 +345,13 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               }
               color={MONITOR_COLOR.ecg}
               alarm={hrAlarm}
-              limits={[String(L.hr.high), String(L.hr.low)]}
+              limits={[String(lim.hrHigh), String(lim.hrLow)]}
               className="order-1 @3xl:col-span-2"
               extra={
-                <div className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-[0.14em] text-white/45">
-                  <span className="@3xl:hidden">{RHYTHM_SHORT[v.rhythm]}</span>
+                <div className="mt-0.5 text-[10px] font-medium uppercase leading-snug tracking-[0.14em] text-white/45">
+                  <span className="whitespace-nowrap @3xl:hidden">{RHYTHM_SHORT[v.rhythm]}</span>
                   <span className="hidden @3xl:inline">{RHYTHM_LABEL[v.rhythm]}</span>
-                  {v.pvcPerMin > 0 && <> · PVC {v.pvcPerMin}/min</>}
+                  {v.pvcPerMin > 0 && <span className="whitespace-nowrap"> · PVC {v.pvcPerMin}/min</span>}
                 </div>
               }
             >
@@ -403,7 +425,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               label="Resp"
               color={MONITOR_COLOR.resp}
               alarm={respAlarm}
-              limits={[String(L.resp.high), String(L.resp.low)]}
+              limits={[String(lim.respHigh), String(lim.respLow)]}
               className="order-4 @3xl:order-5"
             >
               <div className="flex items-baseline gap-1.5">

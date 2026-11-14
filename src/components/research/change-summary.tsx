@@ -6,6 +6,19 @@ import { ANALYTE_INFO, SUBJECT_STYLE, fmtPct, fmtValue, unitLabel } from "./anal
  * "What changed after flight": % change at R+1 (one day after splashdown)
  * versus each person's own pre-flight mean (L-92/L-44/L-3). Server-safe.
  */
+/** Notable changes get a squared hairline frame (monitor style), not a coloured dot. */
+const NOTABLE = "inline-block rounded-[3px] px-1 py-px ring-1 ring-inset ring-fg/45";
+
+function Pct({ pct, notable }: { pct: number | null; notable: boolean }) {
+  if (!notable) return <span className="text-muted">{fmtPct(pct)}</span>;
+  return (
+    <span className={`${NOTABLE} font-semibold text-fg`}>
+      {fmtPct(pct)}
+      <span className="sr-only"> (notable change)</span>
+    </span>
+  );
+}
+
 export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects: { id: string; sex: "M" | "F" }[] }) {
   if (!rows.length) return <p className="text-sm text-muted">No data.</p>;
   return (
@@ -29,7 +42,7 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
                     <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: SUBJECT_STYLE[c.subject].color }} aria-hidden />
                     {c.subject}
                   </span>
-                  <span className={c.notable ? "font-semibold text-fg" : "text-muted"}>{fmtPct(c.pct)}</span>
+                  <Pct pct={c.pct} notable={c.notable} />
                   {(c.range === "high" || c.range === "low") && (
                     <StatusBadge status="caution" size="xs" label={c.range === "high" ? "High" : "Low"} className="mt-1 flex w-fit" />
                   )}
@@ -69,12 +82,9 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
                   const title = `${c.subject}: pre-flight mean ${fmtValue(c.baseline)} → R+1 ${fmtValue(c.postflight)} ${unitLabel(r.unit)}`;
                   return (
                     <td key={c.subject} className="py-2 pr-4 text-right" title={title}>
-                      <span className={c.notable ? "font-semibold text-fg" : "text-muted"}>{fmtPct(c.pct)}</span>
+                      <Pct pct={c.pct} notable={c.notable} />
                       {(c.range === "high" || c.range === "low") && (
                         <StatusBadge status="caution" size="xs" label={c.range === "high" ? "High" : "Low"} className="ml-1.5 align-[-2px]" />
-                      )}
-                      {c.notable && c.range !== "high" && c.range !== "low" && (
-                        <span className="ml-1 text-xs text-accent" aria-label="notable change">●</span>
                       )}
                     </td>
                   );
@@ -86,8 +96,12 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
         </table>
       </div>
       <p className="mt-3 text-[11px] text-muted">
-        R+1 value versus each person&apos;s own pre-flight mean (L-92, L-44, L-3; suspect values excluded). ● notable change (≥ 15 % for
-        clinical tests, ≥ 50 % for research immunoassays) · High/Low: R+1 value outside the lab reference range. Hover a cell for the raw values.
+        R+1 value versus each person&apos;s own pre-flight mean (L-92, L-44, L-3; suspect values excluded).{" "}
+        <span className={`${NOTABLE} font-semibold text-fg`} aria-hidden>
+          +17 %
+        </span>{" "}
+        Framed value: notable change (≥ 15 % for clinical tests, ≥ 50 % for
+        research immunoassays, or outside the lab range) · High/Low: R+1 value outside the lab reference range. Hover a cell for the raw values.
         Four people and one short flight: these are observations, not statistically tested effects.
       </p>
     </div>

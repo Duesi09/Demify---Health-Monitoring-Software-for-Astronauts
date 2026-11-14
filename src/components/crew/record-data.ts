@@ -48,6 +48,12 @@ export interface RecordRow {
   sourceLabel: string | null;
   spark: Spark | null;
   finding: string;
+  /**
+   * What the "Current" value is: the resting median of the last 60 min
+   * (simulated continuous telemetry), the current drill sample, or the latest
+   * reading (manual / sensor / daily indicators).
+   */
+  basis: "median" | "drill" | "latest" | null;
 }
 
 export function relativeAge(iso: string, now: number): string {
@@ -96,9 +102,13 @@ function sparkFor(id: IndicatorId, rs: Reading[], now: number): Spark | null {
     const pts = [...buckets]
       .sort((a, b) => a[0] - b[0])
       .map(([b, { sum, n }]) => [(b + 0.5) / 48, sum / n] as [number, number]);
-    // The newest sample (e.g. a live drill value) is drawn at its own position.
-    const last = points[points.length - 1];
-    pts.push([Math.min(1, (Date.parse(last.takenAt) - since) / DAY_MS), last.value]);
+    // The newest sample (e.g. a live drill value) replaces the centre of its
+    // own (last) bucket and is drawn at its own time. It lies after the
+    // previous bucket's centre, so the line never doubles back.
+    const last = points.findLast((r) => Date.parse(r.takenAt) <= now);
+    if (last && pts.length) {
+      pts[pts.length - 1] = [Math.min(1, Math.max(0, (Date.parse(last.takenAt) - since) / DAY_MS)), last.value];
+    }
     return pts.length >= 2 ? { window: "24 h", points: pts, basis } : null;
   }
   // Daily indicators: one value per UTC day over 7 days, real entries win.
@@ -126,6 +136,8 @@ export function buildRecord(a: CrewAssessment, readings: Reading[], now: number)
     const value = as?.value ?? null;
     const baseline = a.crew.baseline[id] ?? null;
     const source = a.sources[id] ?? null;
+    const basis: RecordRow["basis"] =
+      value == null ? null : as?.drill ? "drill" : def.continuous && source === "simulated" ? "median" : "latest";
     return {
       id,
       label: def.label,
@@ -143,6 +155,7 @@ export function buildRecord(a: CrewAssessment, readings: Reading[], now: number)
       sourceLabel: source ? SOURCE_LABEL[source] : null,
       spark: sparkFor(id, readings, now),
       finding: as?.finding ?? "",
+      basis,
     };
   });
 }

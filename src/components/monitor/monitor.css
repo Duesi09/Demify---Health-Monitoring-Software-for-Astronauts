@@ -172,3 +172,21 @@
     color: #1c1400;
   }
 }
+
+/* High-priority "***" marker: keeps blinking under reduced motion (below),
+ * when the band and numerics hold solid colours instead of flashing. */
+@keyframes dm-blink {
+  0%,
+  59% {
+    opacity: 1;
+  }
+  60%,
+  100% {
+    opacity: 0.15;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dm-prefix-high {
+    animation: dm-blink 1s steps(1, end) infinite;
+  }
+}

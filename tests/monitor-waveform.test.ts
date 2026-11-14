@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ABP_DELAY_S,
+  ABP_NOTCH_LEVEL,
   BeatScheduler,
   PLETH_DELAY_S,
   WaveSynth,
@@ -100,6 +101,36 @@ describe("pressure shapes", () => {
     expect(localMin).toBe(true);
   });
 
+  it("ABP has a broad, rounded systolic peak and the notch at 60-70 % of pulse pressure", () => {
+    for (const rr of [1, 0.6]) {
+      let above = 0;
+      let peakT = 0;
+      let peak = 0;
+      const step = 0.001;
+      for (let dt = 0; dt < rr; dt += step) {
+        const v = abpShape(dt, rr);
+        if (v > 0.9) above += step;
+        if (v > peak) [peak, peakT] = [v, dt];
+      }
+      // A spike would stay above 90 % for only a few tens of ms.
+      expect(above).toBeGreaterThan(rr === 1 ? 0.12 : 0.08);
+      expect(peak).toBeCloseTo(1, 2);
+      // Notch: first local minimum after the peak.
+      let notch = Number.NaN;
+      for (let dt = peakT + step; dt < rr - 2 * step; dt += step) {
+        const [a, b, c] = [abpShape(dt - step, rr), abpShape(dt, rr), abpShape(dt + step, rr)];
+        if (b <= a && b < c) {
+          notch = b;
+          break;
+        }
+      }
+      expect(notch).toBeGreaterThan(0.58);
+      expect(notch).toBeLessThan(0.72);
+    }
+    expect(ABP_NOTCH_LEVEL).toBeGreaterThanOrEqual(0.6);
+    expect(ABP_NOTCH_LEVEL).toBeLessThanOrEqual(0.7);
+  });
+
   it("pleth peaks later than ABP", () => {
     let abpPeak = 0;
     let plPeak = 0;
@@ -195,6 +226,38 @@ describe("WaveSynth", () => {
     expect(Math.max(...pleth) - Math.min(...pleth)).toBeLessThan(0.05);
     const ecg = out.map((s) => s.ecg);
     expect(Math.max(...ecg) - Math.min(...ecg)).toBeGreaterThan(0.3);
+  });
+
+  it("eases ABP, pleth and resp down over ~300 ms when the pulse is lost (no vertical drop)", () => {
+    const synth = new WaveSynth(NORMAL, 4);
+    const out: { t: number; abp: number; pleth: number; resp: number }[] = [];
+    let onset = 0;
+    for (let i = 0; i <= 8 * SR; i++) {
+      const t = 100 + i / SR;
+      if (i === 4 * SR) {
+        // Pick the onset in systole so the drop would be the largest.
+        onset = t;
+        synth.set({ ...NORMAL, rhythm: "vf", hr: null, sys: null, dia: null, spo2: null, resp: null });
+      }
+      out.push({ t, ...synth.sample(t) });
+    }
+    const after = out.filter((s) => s.t >= onset - 0.01);
+    let maxStep = { abp: 0, pleth: 0, resp: 0 };
+    for (let i = 1; i < after.length; i++) {
+      maxStep = {
+        abp: Math.max(maxStep.abp, Math.abs(after[i].abp - after[i - 1].abp)),
+        pleth: Math.max(maxStep.pleth, Math.abs(after[i].pleth - after[i - 1].pleth)),
+        resp: Math.max(maxStep.resp, Math.abs(after[i].resp - after[i - 1].resp)),
+      };
+    }
+    // Without easing the first sample would drop by ~70-115 mmHg.
+    expect(maxStep.abp).toBeLessThan(5);
+    expect(maxStep.pleth).toBeLessThan(0.05);
+    expect(maxStep.resp).toBeLessThan(0.08);
+    // ... yet it has settled to the flat line well within half a second.
+    const settled = out.filter((s) => s.t > onset + 0.45);
+    expect(Math.max(...settled.map((s) => s.abp))).toBeLessThan(10);
+    expect(Math.max(...settled.map((s) => s.pleth))).toBeLessThan(0.1);
   });
 
   it("STEMI raises the ST segment on the synthesised trace", () => {

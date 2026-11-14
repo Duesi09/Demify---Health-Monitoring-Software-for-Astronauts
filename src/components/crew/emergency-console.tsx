@@ -1,28 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { CircleStop, Siren, TriangleAlert } from "lucide-react";
+import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
-import type { LiveVitals, ScenarioType } from "@/lib/types";
+import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
+import { useCrewLiveContext } from "./crew-live";
 import { DRILL_BUTTONS, SCENARIO_NAME, activeProtocol, buildProtocol, type ProtocolId } from "./protocols";
 import { ResponseChecklist } from "./response-checklist";
-import { formatElapsed, useCrewLive } from "./use-crew-live";
+import { formatElapsed } from "./use-crew-live";
 
 interface Sheet {
   key: string;
   protocol: ProtocolId;
   drill: boolean;
-  alarmText: string | null;
+  /**
+   * The alarm that opened the sheet, as first seen. It is looked up again by
+   * its stable id on every poll (its text carries the live number, so it
+   * changes from one sample to the next); this copy is the fallback once the
+   * alarm has cleared, so the indicator-specific steps stay on the sheet.
+   */
+  alarm: MonitorAlarm | null;
 }
 
 function sheetFor(v: LiveVitals): Sheet | null {
   const p = activeProtocol(v);
   if (!p) return null;
-  return v.scenario
-    ? { key: `drill:${v.scenario.type}:${v.scenario.startedAt}`, protocol: p.id, drill: true, alarmText: null }
-    : { key: `alarm:${p.id}`, protocol: p.id, drill: false, alarmText: p.alarm?.text ?? null };
+  if (v.scenario) return { key: `drill:${v.scenario.type}:${v.scenario.startedAt}`, protocol: p.id, drill: true, alarm: null };
+  // A general sheet belongs to one alarm; the specific protocols (STEMI, VF,
+  // hypertensive crisis) persist while the alarm that maps to them changes.
+  const key = p.id === "general" ? `alarm:general:${p.alarm?.id ?? "?"}` : `alarm:${p.id}`;
+  return { key, protocol: p.id, drill: false, alarm: p.alarm };
 }
+
+type FocusTarget = "end" | "buttons" | null;
 
 /**
  * Emergency drill panel + response checklist for one crew member.
@@ -32,26 +43,28 @@ function sheetFor(v: LiveVitals): Sheet | null {
 export function EmergencyConsole({
   crewId,
   crewName,
-  initial,
   commDelaySeconds,
   missionName,
 }: {
   crewId: string;
   crewName: string;
-  initial: LiveVitals;
   commDelaySeconds: number;
   missionName: string;
 }) {
-  const router = useRouter();
-  const { live, receivedAt, nowMs, refetch } = useCrewLive(crewId, initial);
+  const { live, receivedAt, nowMs, refetch, refreshing, refreshPage } = useCrewLiveContext();
   const [confirm, setConfirm] = useState<ScenarioType | null>(null);
   const [busy, setBusy] = useState<"start" | "end" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, startRefresh] = useTransition();
+  const [announce, setAnnounce] = useState("");
+  const focusTarget = useRef<FocusTarget>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const endRef = useRef<HTMLButtonElement>(null);
+  const firstDrillRef = useRef<HTMLButtonElement>(null);
 
   const scenario = live.scenario;
-  const pending = busy !== null || refreshing;
+  // Only an in-flight request disables the controls; a background page
+  // refresh does not (it would also block moving focus to them).
+  const pending = busy !== null;
 
   // The response sheet stays open after the alarm clears or the drill ends
   // (for the debrief) until it is closed; a new event opens a fresh sheet.
@@ -62,6 +75,21 @@ export function EmergencyConsole({
   useEffect(() => {
     if (confirm) confirmRef.current?.focus();
   }, [confirm]);
+
+  // Keep keyboard / screen-reader focus on the panel when the control that
+  // had it unmounts (start -> "End drill", end/cancel -> the drill buttons).
+  // The request is kept until the target exists and is enabled.
+  useEffect(() => {
+    const el = focusTarget.current === "end" ? endRef.current : focusTarget.current === "buttons" ? firstDrillRef.current : null;
+    if (!el || el.disabled) return;
+    el.focus();
+    focusTarget.current = null;
+  });
+
+  function cancelConfirm() {
+    setConfirm(null);
+    focusTarget.current = "buttons";
+  }
 
   const elapsedS =
     scenario == null
@@ -88,7 +116,13 @@ export function EmergencyConsole({
       }
       setConfirm(null);
       await refetch();
-      startRefresh(() => router.refresh());
+      focusTarget.current = kind === "start" ? "end" : "buttons";
+      setAnnounce(
+        kind === "start"
+          ? `Training scenario started for ${crewName}: ${type ? SCENARIO_NAME[type] : "drill"}. Not a real emergency.`
+          : `Training scenario ended for ${crewName}.`,
+      );
+      refreshPage();
     } catch (e) {
       setError(
         kind === "start"
@@ -100,11 +134,12 @@ export function EmergencyConsole({
     }
   }
 
+  const liveAlarm = sheet?.alarm ? (live.alarms.find((a) => a.id === sheet.alarm?.id) ?? sheet.alarm) : null;
   const protocol = sheet
     ? buildProtocol(sheet.protocol, {
         commDelaySeconds,
         missionName,
-        alarm: sheet.drill ? null : live.alarms.find((a) => a.text === sheet.alarmText) ?? null,
+        alarm: liveAlarm,
       })
     : null;
 
@@ -113,21 +148,21 @@ export function EmergencyConsole({
       <section
         aria-labelledby="drill-heading"
         className={`min-w-0 rounded-2xl border p-5 md:p-6 ${
-          scenario ? "border-critical/70 bg-critical/[0.06]" : "border-border bg-surface"
+          scenario ? "border-[#ffcc00]/70 bg-[#ffcc00]/[0.05]" : "border-border bg-surface"
         }`}
       >
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="drill-heading" className="flex items-center gap-2 text-base font-semibold tracking-tight">
-              <Siren size={18} aria-hidden className={scenario ? "text-critical" : "text-muted"} />
+            <h3 id="drill-heading" className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <Siren size={18} aria-hidden className={scenario ? "text-caution" : "text-muted"} />
               Emergency drill
-            </h2>
+            </h3>
             <p className="mt-1 max-w-xl text-sm text-muted">
               Drills only alter the simulated telemetry of {crewName} so the crew can rehearse; no real reading changes.
             </p>
           </div>
           {scenario ? (
-            <StatusBadge status="critical" label="Drill active" flash size="md" />
+            <DrillTag label="Drill active" />
           ) : (
             <StatusBadge status="unknown" label="No drill" size="md" />
           )}
@@ -135,15 +170,18 @@ export function EmergencyConsole({
 
         {scenario ? (
           <div className="mt-5">
-            <div className="rounded-xl bg-critical-fill px-4 py-3 text-on-critical">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em]">Training scenario · drill · not a real emergency</p>
+            <div className="rounded-xl border border-[#ffcc00]/60 bg-[#ffcc00]/[0.08] px-4 py-3">
+              <p>
+                <DrillTag label="Training scenario · drill · not a real emergency" className="!h-auto min-h-[18px] py-[3px] leading-[1.25]" />
+              </p>
               <p className="mt-1 text-lg font-semibold leading-snug">{scenario.label ?? SCENARIO_NAME[scenario.type]}</p>
-              <p className="mt-1 text-sm tabular" aria-live="off">
+              <p className="mt-1 text-sm tabular text-muted" aria-live="off">
                 Running for <span className="font-semibold">{formatElapsed(elapsedS)}</span> · started{" "}
                 {scenario.startedAt.slice(11, 19)} UTC · ends automatically after 30 min
               </p>
             </div>
             <button
+              ref={endRef}
               type="button"
               disabled={pending}
               onClick={() => call("end")}
@@ -157,6 +195,12 @@ export function EmergencyConsole({
           <div
             role="group"
             aria-labelledby="drill-confirm-title"
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && !pending) {
+                e.stopPropagation();
+                cancelConfirm();
+              }
+            }}
             className="mt-5 rounded-xl border border-caution/60 bg-caution/[0.07] p-4"
           >
             <p id="drill-confirm-title" className="flex items-center gap-2 text-sm font-semibold">
@@ -180,7 +224,7 @@ export function EmergencyConsole({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => setConfirm(null)}
+                onClick={cancelConfirm}
                 className="rounded-lg border border-border px-4 py-2 text-sm text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
               >
                 Cancel
@@ -189,13 +233,15 @@ export function EmergencyConsole({
           </div>
         ) : (
           <div className={`mt-5 grid gap-2 sm:grid-cols-3 ${sheet ? "xl:grid-cols-1" : ""}`}>
-            {DRILL_BUTTONS.map((b) => (
+            {DRILL_BUTTONS.map((b, i) => (
               <button
                 key={b.type}
+                ref={i === 0 ? firstDrillRef : undefined}
                 type="button"
                 disabled={pending}
                 onClick={() => {
                   setError(null);
+                  focusTarget.current = null;
                   setConfirm(b.type);
                 }}
                 className="group flex min-h-11 items-center justify-between gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-left text-sm font-medium transition hover:border-critical/60 hover:bg-critical/[0.08] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -215,6 +261,9 @@ export function EmergencyConsole({
           </p>
         )}
         {refreshing && !busy && <p className="mt-3 text-xs text-muted">Updating the page…</p>}
+        <p className="sr-only" role="status" aria-live="polite">
+          {announce}
+        </p>
       </section>
 
       {sheet && protocol && (
@@ -224,7 +273,7 @@ export function EmergencyConsole({
           drill={sheet.drill}
           drillRunning={sheet.drill && scenario != null}
           alarmActive={!sheet.drill && current?.key === sheet.key}
-          alarmText={sheet.alarmText}
+          alarmText={liveAlarm?.text ?? null}
           drillElapsed={scenario && sheet.drill ? formatElapsed(elapsedS) : null}
           onClose={current?.key === sheet.key ? null : () => setSheet(null)}
         />

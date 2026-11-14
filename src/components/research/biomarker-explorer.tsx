@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { ExternalLink, FileWarning } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -17,7 +17,7 @@ import {
 } from "recharts";
 import type { I4Analyte, I4PanelData, RefRange } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
-import { Provenance, StatusBadge } from "@/components/ui";
+import { Provenance, Segmented, StatusBadge } from "@/components/ui";
 import {
   ANALYTE_INFO,
   DEFAULT_ANALYTE,
@@ -91,27 +91,20 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div role="tablist" aria-label="Blood panel" className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-0.5">
-          {available.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={t.id === panelId}
-              onClick={() => setPanelId(t.id)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                t.id === panelId ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          role="tablist"
+          label="Blood panel"
+          className="max-sm:w-full max-sm:grid-cols-2"
+          value={panelId}
+          onChange={setPanelId}
+          options={available.map((t) => ({ value: t.id, label: t.label }))}
+        />
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted sm:max-w-xs">
           Analyte
           <select
             value={analyte.id}
             onChange={(e) => setAnalyteByPanel((m) => ({ ...m, [panelId]: e.target.value }))}
-            className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-fg"
+            className="h-7 rounded-[3px] border border-border bg-surface-2 px-2 text-sm text-fg"
           >
             <optgroup label="Key spaceflight markers">
               {featured.map((id) => {
@@ -138,7 +131,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
           <Segmented
             label="X axis"
             value={xMode}
-            onChange={(v) => setXMode(v as XMode)}
+            onChange={setXMode}
             options={[
               { value: "draws", label: "Blood draws" },
               { value: "days", label: "Days to scale" },
@@ -148,7 +141,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
           <Segmented
             label="View"
             value={view}
-            onChange={(v) => setView(v as "chart" | "table")}
+            onChange={setView}
             options={[
               { value: "chart", label: "Chart" },
               { value: "table", label: "Table" },
@@ -219,7 +212,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
           {analyte.flags && analyte.flags.length > 0 && (
             <div className="rounded-lg border border-border p-3">
               <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
-                <AlertTriangle size={12} className="text-caution" aria-hidden /> Data-quality notes
+                <FileWarning size={12} aria-hidden /> Data-quality notes
               </p>
               <ul className="mt-1.5 space-y-1.5 text-xs">
                 {dedupeFlags(analyte.flags).map((f) => (
@@ -266,39 +259,6 @@ function fmtRange(r: RefRange) {
   return "—";
 }
 
-function Segmented({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className={`flex rounded-lg border border-border bg-surface-2 p-1 ${disabled ? "opacity-50" : ""}`}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          role="radio"
-          aria-checked={o.value === value}
-          disabled={disabled}
-          onClick={() => onChange(o.value)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            o.value === value ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Legend({ subjects, showRangeKey, showFlagKey }: { subjects: ExplorerProps["subjects"]; showRangeKey: boolean; showFlagKey: boolean }) {
   return (
     <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legend">
@@ -316,7 +276,7 @@ function Legend({ subjects, showRangeKey, showFlagKey }: { subjects: ExplorerPro
       {showRangeKey && (
         <li className="flex items-center gap-1.5">
           <svg width="12" height="12" aria-hidden>
-            <circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--critical)" strokeWidth="1.5" />
+            <circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--caution)" strokeWidth="2" />
           </svg>
           Outside lab range
         </li>
@@ -324,7 +284,7 @@ function Legend({ subjects, showRangeKey, showFlagKey }: { subjects: ExplorerPro
       {showFlagKey && (
         <li className="flex items-center gap-1.5">
           <svg width="12" height="12" aria-hidden>
-            <rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
+            <rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeDasharray="2.5 1.5" />
           </svg>
           Suspect value (see note)
         </li>
@@ -437,8 +397,10 @@ function AnalyteChart({
                   return (
                     <g key={`${s.id}-${t}`}>
                       <circle cx={p.cx} cy={p.cy} r={3.5} fill={st.color} stroke="var(--surface)" strokeWidth={1.5} />
-                      {pos && <circle cx={p.cx} cy={p.cy} r={7} fill="none" stroke="var(--critical)" strokeWidth={1.5} />}
-                      {bad && <rect x={p.cx - 7} y={p.cy - 7} width={14} height={14} fill="none" stroke="var(--caution)" strokeWidth={1.5} />}
+                      {pos && <circle cx={p.cx} cy={p.cy} r={7} fill="none" stroke="var(--caution)" strokeWidth={2} />}
+                      {bad && (
+                        <rect x={p.cx - 8} y={p.cy - 8} width={16} height={16} fill="none" stroke="var(--muted)" strokeWidth={1.5} strokeDasharray="3 2" />
+                      )}
                     </g>
                   );
                 }}
@@ -623,12 +585,28 @@ function AnalyteTable({
                       {fmtValue(v)}
                       {pos && (
                         <>
-                          <StatusBadge status="caution" size="xs" label={pos === "high" ? "H" : "L"} className="ml-1 align-[-2px]" />
-                          <span className="sr-only">{pos === "high" ? " high" : " low"}</span>
+                          <span aria-hidden>
+                            <StatusBadge status="caution" size="xs" label={pos === "high" ? "H" : "L"} className="ml-1 align-[-2px]" />
+                          </span>
+                          <span className="sr-only">{pos === "high" ? " high, outside lab range" : " low, outside lab range"}</span>
                         </>
                       )}
-                      {note?.kind === "suspect" && <span className="ml-0.5 text-caution" aria-label="suspect value">*</span>}
-                      {note?.kind === "range" && <span className="ml-0.5 text-muted" aria-label="range note">†</span>}
+                      {note?.kind === "suspect" && (
+                        <>
+                          <span className="ml-0.5 text-muted" aria-hidden>
+                            *
+                          </span>
+                          <span className="sr-only"> suspect value: {note.note}</span>
+                        </>
+                      )}
+                      {note?.kind === "range" && (
+                        <>
+                          <span className="ml-0.5 text-muted" aria-hidden>
+                            †
+                          </span>
+                          <span className="sr-only"> range note: {note.note}</span>
+                        </>
+                      )}
                     </td>
                   );
                 })}

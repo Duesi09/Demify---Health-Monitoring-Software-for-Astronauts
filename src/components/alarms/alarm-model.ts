@@ -1,8 +1,11 @@
-import type { MonitorAlarm } from "@/lib/types";
+import type { LiveVitals, MonitorAlarm } from "@/lib/types";
 
 /** Pure helpers for the global alarm bar (client- and server-safe, no React). */
 
 export type AlarmLevel = "high" | "medium";
+
+/** Where an alarm's numbers come from (from LiveVitals.source of that crew member). */
+export type TelemetrySource = LiveVitals["source"];
 
 export interface CrewAlarmGroup {
   crewId: string;
@@ -51,15 +54,121 @@ export function groupByCrew(alarms: MonitorAlarm[]): CrewAlarmGroup[] {
   return groups.sort((x, y) => (x.level === y.level ? 0 : x.level === "high" ? -1 : 1));
 }
 
-/** Stable key for the set of crew members in alarm (order-independent). */
-export function crewSetKey(alarms: MonitorAlarm[]): string {
-  return [...new Set(alarms.map((a) => a.crewId))].sort().join(",");
+/** Short honesty label for a crew member's telemetry, or null for real sensor data. */
+export function telemetryLabel(source: TelemetrySource | undefined): string | null {
+  if (source === "simulated") return "Simulated";
+  if (source === "mixed") return "Partly simulated";
+  return null;
 }
 
-/** Alarms whose id was not active in the previous poll. */
-export function newAlarms(prevIds: ReadonlySet<string> | null, alarms: MonitorAlarm[]): MonitorAlarm[] {
-  if (!prevIds) return alarms;
-  return alarms.filter((a) => !prevIds.has(a.id));
+/* ------------------------------------------------------------------------- */
+/* Server-state refresh key                                                   */
+/* ------------------------------------------------------------------------- */
+
+/** Minimal scenario shape needed for the refresh key. */
+export interface ScenarioRef {
+  crewId: string;
+  type: string;
+  startedAt: string;
+}
+
+/**
+ * Stable, order-independent key for what the server-rendered pages show
+ * (overall status, regions, findings, escalation banner): the highest alarm
+ * priority per crew member plus every active training scenario (crew, type,
+ * start time). It changes when a drill starts or ends, or when a crew
+ * member's alarm level escalates or clears, even if that crew member was
+ * already in alarm. Individual alarms flapping within one level do not
+ * change it, so they do not trigger a server re-render each poll.
+ */
+export function serverStateKey(alarms: MonitorAlarm[], scenarios: ScenarioRef[] = []): string {
+  const level = new Map<string, AlarmLevel>();
+  for (const a of alarms) {
+    if (a.priority === "high" || !level.has(a.crewId)) level.set(a.crewId, a.priority);
+  }
+  const lv = [...level].map(([c, l]) => `${c}=${l}`).sort();
+  const sc = scenarios.map((s) => `${s.crewId}~${s.type}@${s.startedAt}`).sort();
+  return `${lv.join(",")}|${sc.join(",")}`;
+}
+
+/* ------------------------------------------------------------------------- */
+/* "New alarm" detection                                                      */
+/* ------------------------------------------------------------------------- */
+
+/** An alarm is the same condition when id AND priority match. */
+export function alarmIdentity(a: Pick<MonitorAlarm, "id" | "priority">): string {
+  return `${a.id}#${a.priority}`;
+}
+
+/** Ids that disappear and come back within this window are not new (flapping). */
+export const FLAP_WINDOW_MS = 15_000;
+
+/**
+ * Memory of recently active alarm conditions: per identity (id + priority)
+ * the last time it was seen active. Treat as immutable.
+ */
+export interface AlarmTracker {
+  lastSeen: ReadonlyMap<string, number>;
+  /** Identities active in the latest poll. */
+  active: ReadonlySet<string>;
+}
+
+export const EMPTY_TRACKER: AlarmTracker = { lastSeen: new Map(), active: new Set() };
+
+/**
+ * Compares a poll with what was recently active and returns the alarms that
+ * count as NEW (they end an active silence and are announced), plus the
+ * updated tracker.
+ *
+ *  - First poll (tracker null): every alarm is new.
+ *  - Escalation (same id, medium -> high) is new: IEC 60601-1-8 treats a
+ *    higher priority as a new alarm condition.
+ *  - De-escalation (high -> medium) is not new: the condition was already
+ *    raised at a higher priority.
+ *  - Flapping: an identity (or the same id at a higher priority) seen within
+ *    the last `windowMs` is not new, so an HR hovering around a limit does
+ *    not keep cancelling Silence or re-announcing.
+ */
+export function trackAlarms(
+  tracker: AlarmTracker | null,
+  alarms: MonitorAlarm[],
+  now: number,
+  windowMs = FLAP_WINDOW_MS,
+): { fresh: MonitorAlarm[]; tracker: AlarmTracker } {
+  const prev = tracker?.lastSeen ?? new Map<string, number>();
+  const recent = (key: string) => {
+    const t = prev.get(key);
+    return t != null && now - t <= windowMs;
+  };
+  const fresh = tracker
+    ? alarms.filter((a) => {
+        if (recent(alarmIdentity(a))) return false;
+        if (a.priority === "medium" && recent(alarmIdentity({ id: a.id, priority: "high" }))) return false;
+        return true;
+      })
+    : [...alarms];
+
+  const lastSeen = new Map<string, number>();
+  for (const [k, t] of prev) if (now - t <= windowMs) lastSeen.set(k, t);
+  const active = new Set<string>();
+  for (const a of alarms) {
+    const k = alarmIdentity(a);
+    lastSeen.set(k, now);
+    active.add(k);
+  }
+  return { fresh, tracker: { lastSeen, active } };
+}
+
+/**
+ * Marks the alarms active at the last poll as still seen at `now`. Call it
+ * when polling resumes after a pause (hidden tab): those alarms were never
+ * observed to clear, so they must not count as new afterwards.
+ */
+export function resumeTracker(tracker: AlarmTracker | null, now: number): AlarmTracker | null {
+  if (!tracker) return null;
+  const lastSeen = new Map(tracker.lastSeen);
+  for (const k of tracker.active) lastSeen.set(k, now);
+  return { lastSeen, active: tracker.active };
 }
 
 /** Screen-reader text for newly raised alarms. */
@@ -77,4 +186,11 @@ export function announce(fresh: MonitorAlarm[]): string {
 export function formatCountdown(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** True when `pathname` is the crew page (or a sub-page) of `crewId`. */
+export function isCrewPage(pathname: string | null, crewId: string): boolean {
+  if (!pathname) return false;
+  const base = `/crew/${encodeURIComponent(crewId)}`;
+  return pathname === base || pathname.startsWith(`${base}/`);
 }

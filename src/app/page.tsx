@@ -69,11 +69,13 @@ export default async function OverviewPage() {
       crewId: a.crew.id,
       crewName: a.crew.name,
       role: a.crew.role,
+      scenarioLabel: a.scenario?.label ?? null,
       findings: [...a.escalations].sort(bySeverity).map((e) => ({
         indicator: e.indicator,
         status: e.status,
         finding: e.finding,
         source: a.sources[e.indicator],
+        ...(e.drill ? { drill: true } : {}),
       })),
     }));
 
@@ -93,6 +95,7 @@ export default async function OverviewPage() {
         status: x.status,
         finding: x.finding,
         source: a.sources[x.indicator],
+        ...(x.drill ? { drill: true } : {}),
       })),
   }));
 

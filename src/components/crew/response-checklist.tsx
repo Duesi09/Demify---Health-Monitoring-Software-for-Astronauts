@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ClipboardList, RotateCcw, X } from "lucide-react";
+import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import type { Protocol } from "./protocols";
 
@@ -36,10 +37,11 @@ export function ResponseChecklist({
   const doneCount = protocol.steps.filter((s) => done[s.id] != null).length;
   const firstAt = Object.values(done).sort((a, b) => a - b)[0];
 
-  function toggle(id: string, checked: boolean) {
+  // The time is read in the event handler: state updaters must stay pure.
+  function toggle(id: string, checked: boolean, at: number) {
     setDone((d) => {
       const next = { ...d };
-      if (checked) next[id] = Date.now();
+      if (checked) next[id] = at;
       else delete next[id];
       return next;
     });
@@ -48,22 +50,22 @@ export function ResponseChecklist({
   return (
     <section
       aria-labelledby="sheet-heading"
-      className="min-w-0 rounded-2xl border border-critical/60 bg-surface p-5 md:p-6"
+      className={`min-w-0 rounded-2xl border bg-surface p-5 md:p-6 ${drill ? "border-[#ffcc00]/60" : "border-critical/60"}`}
     >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {drill ? (
-              <StatusBadge status="critical" label="Drill · training scenario" size="xs" />
+              <DrillTag label="Drill · training scenario" />
             ) : (
               <StatusBadge status="critical" label={alarmActive ? "Alarm active" : "Alarm cleared"} size="xs" flash={alarmActive} />
             )}
             {drill && !drillRunning && <StatusBadge status="unknown" label="Drill ended · debrief" size="xs" />}
           </div>
-          <h2 id="sheet-heading" className="mt-2 flex items-center gap-2 text-base font-semibold tracking-tight">
-            <ClipboardList size={18} aria-hidden className="text-critical" />
+          <h3 id="sheet-heading" className="mt-2 flex items-center gap-2 text-base font-semibold tracking-tight">
+            <ClipboardList size={18} aria-hidden className={drill ? "text-caution" : "text-critical"} />
             Emergency response checklist
-          </h2>
+          </h3>
           <p className="mt-0.5 text-sm text-muted">
             {protocol.title}
             {alarmText && !drill ? ` · triggered by ${alarmText}` : ""}
@@ -108,7 +110,7 @@ export function ResponseChecklist({
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={(e) => toggle(s.id, e.target.checked)}
+                  onChange={(e) => toggle(s.id, e.target.checked, Date.now())}
                   className="mt-0.5 size-5 shrink-0 accent-[var(--nominal)]"
                 />
                 <span className="min-w-0 flex-1">

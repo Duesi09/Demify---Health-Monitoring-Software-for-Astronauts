@@ -89,7 +89,7 @@ export default async function ResearchPage() {
 
       <Card
         title="Inspiration4 crew biomarker explorer"
-        subtitle="Choose a blood panel and marker. One line per crew member; rings mark values outside the lab reference range."
+        subtitle="Choose a blood panel and marker. One line per crew member; amber rings mark values outside the lab reference range, dashed squares mark suspect values."
       >
         {panels.length ? (
           <BiomarkerExplorer

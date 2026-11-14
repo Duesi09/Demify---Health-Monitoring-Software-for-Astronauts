@@ -176,19 +176,37 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
             {cumulative.toFixed(0)}
             <span className="ml-1 text-sm font-normal text-muted">/ {CAREER_LIMIT_MSV} mSv</span>
           </p>
+          {/* Squared gauge with fixed 50 % / 80 % marks (monitor style, not a rounded pill bar). */}
           <div
-            className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-surface-2"
+            className="relative mt-3 h-3 w-full overflow-hidden rounded-[2px] border border-border bg-surface-2"
             role="progressbar"
             aria-valuenow={Math.round(pct)}
             aria-valuemin={0}
             aria-valuemax={100}
+            aria-valuetext={`${Math.round(pct)} % of the career limit`}
             aria-label={`Share of career dose limit used${activeCrew ? ` by ${activeCrew.name}` : ""}`}
           >
             <div
-              className={`h-full rounded-full ${pct > 80 ? "bg-critical" : pct >= 50 ? "bg-caution" : "bg-accent"}`}
+              className={`h-full ${pct > 80 ? "bg-critical-fill" : pct >= 50 ? "bg-caution-fill" : "bg-accent"}`}
               style={{ width: `${pct}%` }}
             />
+            <span className="absolute inset-y-0 left-1/2 w-px bg-fg/35" aria-hidden />
+            <span className="absolute inset-y-0 left-[80%] w-px bg-fg/35" aria-hidden />
           </div>
+          <div className="relative mt-1 h-3 text-[10px] tabular text-muted" aria-hidden>
+            <span className="absolute left-0">0</span>
+            <span className="absolute left-1/2 -translate-x-1/2">50 %</span>
+            <span className="absolute left-[80%] -translate-x-1/2">80 %</span>
+            <span className="absolute right-0">{CAREER_LIMIT_MSV}</span>
+          </div>
+          {pct >= 50 && (
+            <StatusBadge
+              status={pct > 80 ? "critical" : "caution"}
+              size="xs"
+              label={`${Math.round(pct)} % of career limit`}
+              className="mt-2"
+            />
+          )}
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-muted">Basis</dt>

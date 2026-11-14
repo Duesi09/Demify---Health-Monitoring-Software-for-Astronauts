@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { OctagonAlert, PhoneCall } from "lucide-react";
 import { bySeverity, formatDelay } from "@/components/overview/format";
+import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { Assessment, ReadingSource } from "@/lib/types";
@@ -22,6 +23,8 @@ export function Findings({
 }) {
   const open = assessments.filter((a) => a.status === "caution" || a.status === "critical").sort(bySeverity);
   const escalations = open.filter((a) => a.escalate);
+  const drillEsc = escalations.filter((a) => a.drill);
+  const allDrill = drillEsc.length > 0 && drillEsc.length === escalations.length;
 
   return (
     <div className="space-y-4">
@@ -29,7 +32,7 @@ export function Findings({
         <div role="note" className="rounded-2xl border border-critical/70 bg-critical/[0.08] p-4 md:p-5">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status="critical" label="Escalate" size="md" />
-            {drill && <StatusBadge status="critical" label="Drill · training scenario" size="md" className="opacity-90" />}
+            {drillEsc.length > 0 && <DrillTag label="Drill · training scenario" />}
           </div>
           <p className="mt-3 flex items-start gap-2 text-sm">
             <PhoneCall size={16} className="mt-0.5 shrink-0 text-critical" aria-hidden />
@@ -39,7 +42,13 @@ export function Findings({
               <span className="font-semibold">{escalations.map((e) => INDICATORS[e.indicator].short).join(", ")}</span>.
               One-way signal delay {formatDelay(commDelaySeconds)}
               {commDelaySeconds >= 60 ? ": start the onboard checklist first, then report." : "."}
-              {drill && " These values come from a training scenario, not a real emergency."}
+              {allDrill
+                ? " These values come from a training scenario, not a real emergency."
+                : drillEsc.length > 0
+                  ? ` ${drillEsc.map((e) => INDICATORS[e.indicator].short).join(", ")} ${drillEsc.length === 1 ? "comes" : "come"} from the training scenario; the others are not part of the drill.`
+                  : drill
+                    ? " A training scenario is running, but these findings are not part of it."
+                    : ""}
             </span>
           </p>
         </div>
@@ -59,7 +68,8 @@ export function Findings({
                   <Link href={`/guidance#ind-${a.indicator}`} className="font-semibold hover:text-accent hover:underline">
                     {INDICATORS[a.indicator].short}
                   </Link>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {a.drill && <DrillTag label="Drill" />}
                     {a.escalate && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-critical">
                         <OctagonAlert size={11} aria-hidden /> Escalate
@@ -69,7 +79,11 @@ export function Findings({
                   </div>
                 </div>
                 <p className="mt-1.5 text-sm">{a.finding}</p>
-                {src === "simulated" && <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">simulated value</p>}
+                {a.drill ? (
+                  <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">training scenario value · not a real emergency</p>
+                ) : (
+                  src === "simulated" && <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">simulated value</p>
+                )}
                 {a.actions.length > 0 && (
                   <ul className="mt-3 space-y-1 text-sm text-muted">
                     {a.actions.map((x) => (

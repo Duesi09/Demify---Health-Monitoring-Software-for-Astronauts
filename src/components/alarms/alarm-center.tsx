@@ -3,21 +3,33 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowUpRight, BellOff, BellRing, Volume2, VolumeX, WifiOff } from "lucide-react";
-import type { MonitorAlarm } from "@/lib/types";
+import { ArrowUpRight, BellOff, BellRing, ChevronDown, Volume2, VolumeX, WifiOff } from "lucide-react";
+import type { LiveVitals, MonitorAlarm } from "@/lib/types";
 import "./alarm-center.css";
 import { AlarmAudio, BURST_INTERVAL_S, audioSupported } from "./alarm-audio";
 import {
   alarmLevel,
   alarmLine,
   announce,
-  crewSetKey,
   formatCountdown,
   groupByCrew,
-  newAlarms,
+  isCrewPage,
+  resumeTracker,
+  serverStateKey,
+  telemetryLabel,
+  trackAlarms,
+  type AlarmTracker,
+  type ScenarioRef,
+  type TelemetrySource,
 } from "./alarm-model";
 
 const POLL_MS = 2000;
+/** Abort a poll that has not answered after this long, so a hung request cannot stall the feed. */
+const REQUEST_TIMEOUT_MS = 4000;
+/** Minimum gap between two server re-renders (router.refresh) triggered by alarm changes. */
+const REFRESH_MIN_MS = 4000;
+/** Delay before writing a new announcement into the (just cleared) live region. */
+const ANNOUNCE_DELAY_MS = 150;
 const SILENCE_MS = 2 * 60_000;
 /** Show a technical "feed interrupted" notice after this long without a good poll. */
 const FEED_TIMEOUT_MS = 10_000;
@@ -72,17 +84,40 @@ function useSoundPref(): boolean {
 
 type AudioStatus = "unsupported" | "locked" | "running";
 
+/** Fetch with a hard timeout; aborts as well when `outer` aborts (unmount). */
+async function fetchLive(outer: AbortSignal): Promise<LiveVitals[]> {
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  outer.addEventListener("abort", onAbort);
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    // /api/vitals/live carries the alarms plus each crew member's telemetry
+    // source and active scenario, which the bar labels honestly.
+    const res = await fetch("/api/vitals/live", { cache: "no-store", signal: ctrl.signal });
+    if (!res.ok) throw new Error(String(res.status));
+    const j = (await res.json()) as { crew?: LiveVitals[] };
+    return Array.isArray(j.crew) ? j.crew : [];
+  } finally {
+    clearTimeout(timer);
+    outer.removeEventListener("abort", onAbort);
+  }
+}
+
 /**
- * Global alarm center, mounted once in the root layout. Polls GET /api/alarms
- * every 2 s (paused while the tab is hidden) and shows a sticky alarm bar in
- * patient-monitor style while any alarm is active: red and flashing for a
- * high-priority alarm, yellow for medium only. Alarms are grouped per crew
- * member with a link to that member's monitor; drills are tagged
- * "Training scenario".
+ * Global alarm center, mounted once in the root layout. Polls
+ * GET /api/vitals/live every 2 s (paused while the tab is hidden, each
+ * request aborted after 4 s) and shows a sticky alarm bar in patient-monitor
+ * style while any alarm is active: red and flashing for a high-priority
+ * alarm, yellow for medium only. Alarms are grouped per crew member with a
+ * link to that member's monitor; drills are tagged "Training scenario" and
+ * alarms from the demo telemetry generator "Simulated". On phones the list
+ * collapses to a one-line summary that can be expanded.
  *
  * Audio follows IEC 60601-1-8 behaviour: "Silence 2 min" pauses sound only
  * (the visual alarm stays) and sound resumes when the silence expires or a
- * new alarm is raised.
+ * new alarm condition is raised. A new condition is a new alarm id, or an
+ * escalation of an existing one to high priority; an alarm that clears and
+ * returns within 15 s (flapping around a limit) is not new.
  */
 export function AlarmCenter() {
   const router = useRouter();
@@ -90,15 +125,15 @@ export function AlarmCenter() {
   const soundOn = useSoundPref();
 
   const [alarms, setAlarms] = useState<MonitorAlarm[]>([]);
+  const [sources, setSources] = useState<Record<string, TelemetrySource>>({});
   const [feedDown, setFeedDown] = useState(false);
   const [silencedUntil, setSilencedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(0);
   const [audioStatus, setAudioStatus] = useState<AudioStatus>("locked");
   const [announcement, setAnnouncement] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   const audioRef = useRef<AlarmAudio | null>(null);
-  const prevIds = useRef<Set<string> | null>(null);
-  const prevCrewKey = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const level = alarmLevel(alarms);
@@ -108,36 +143,54 @@ export function AlarmCenter() {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let announceTimer: ReturnType<typeof setTimeout> | undefined;
     let inFlight = false;
     let lastOk = Date.now();
+    let tracker: AlarmTracker | null = null;
+    let shownKey: string | null = null;
+    let lastRefresh = 0;
     const ctrl = new AbortController();
+
+    const say = (text: string) => {
+      // Clear first so an identical text is announced again.
+      setAnnouncement("");
+      if (announceTimer) clearTimeout(announceTimer);
+      announceTimer = setTimeout(() => setAnnouncement(text), ANNOUNCE_DELAY_MS);
+    };
 
     const poll = async () => {
       if (inFlight || document.hidden) return;
       inFlight = true;
       try {
-        const res = await fetch("/api/alarms", { cache: "no-store", signal: ctrl.signal });
-        if (!res.ok) throw new Error(String(res.status));
-        const j = (await res.json()) as { alarms?: MonitorAlarm[] };
+        const crew = await fetchLive(ctrl.signal);
         if (cancelled) return;
-        const next = Array.isArray(j.alarms) ? j.alarms : [];
-        lastOk = Date.now();
+        const next = crew.flatMap((v) => (Array.isArray(v.alarms) ? v.alarms : []));
+        const scenarios: ScenarioRef[] = crew.flatMap((v) => (v.scenario ? [v.scenario] : []));
+        const t = Date.now();
+        lastOk = t;
         setFeedDown(false);
 
-        const fresh = newAlarms(prevIds.current, next);
-        prevIds.current = new Set(next.map((a) => a.id));
-        if (fresh.length) {
-          setAnnouncement(announce(fresh));
-          // A new alarm ends an active silence (IEC 60601-1-8).
+        const r = trackAlarms(tracker, next, t);
+        tracker = r.tracker;
+        if (r.fresh.length) {
+          say(announce(r.fresh));
+          // A new alarm condition ends an active silence (IEC 60601-1-8).
           setSilencedUntil(null);
         }
-        if (!next.length) setSilencedUntil(null);
+        // No "clear all" here: an alarm that returns within the flap window
+        // must not sound through the silence; one that returns later is new.
         setAlarms(next);
+        setSources(Object.fromEntries(crew.map((v) => [v.crewId, v.source])));
 
-        // Server-rendered statuses (overview, crew page) follow the alarm set.
-        const key = crewSetKey(next);
-        if (prevCrewKey.current !== null && prevCrewKey.current !== key) router.refresh();
-        prevCrewKey.current = key;
+        // Server-rendered statuses (overview, crew page, escalation banner)
+        // follow alarm levels and drills; throttled so flapping cannot loop.
+        const key = serverStateKey(next, scenarios);
+        if (shownKey === null) shownKey = key;
+        else if (key !== shownKey && t - lastRefresh >= REFRESH_MIN_MS) {
+          shownKey = key;
+          lastRefresh = t;
+          router.refresh();
+        }
       } catch {
         if (cancelled) return;
         if (Date.now() - lastOk > FEED_TIMEOUT_MS) setFeedDown(true);
@@ -152,8 +205,9 @@ export function AlarmCenter() {
     };
     const onVisible = () => {
       if (!document.hidden) {
-        // Do not report the feed as down for time the tab spent hidden.
+        // Do not report the feed as down, or alarms as new, for time the tab spent hidden.
         lastOk = Date.now();
+        tracker = resumeTracker(tracker, lastOk);
         void poll();
       }
     };
@@ -163,6 +217,7 @@ export function AlarmCenter() {
       cancelled = true;
       ctrl.abort();
       if (timer) clearTimeout(timer);
+      if (announceTimer) clearTimeout(announceTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [router]);
@@ -268,6 +323,9 @@ export function AlarmCenter() {
   const groups = groupByCrew(alarms);
   const highCount = alarms.filter((a) => a.priority === "high").length;
   const anyDrill = alarms.some((a) => a.drill);
+  const anySimulated = groups.some((g) => !g.drill && telemetryLabel(sources[g.crewId]) != null);
+  const top = groups[0]?.alarms[0];
+  const more = alarms.length - 1;
 
   return (
     <div ref={wrapRef} className="ac-wrap">
@@ -278,12 +336,12 @@ export function AlarmCenter() {
       {level && (
         <section
           aria-label={`Active alarms: ${alarms.length}${anyDrill ? ", training scenario" : ""}`}
-          className={`ac-bar ${level === "high" ? "ac-high" : "ac-medium"}`}
+          className={`ac-bar ${level === "high" ? "ac-high" : "ac-medium"}${expanded ? " ac-expanded" : ""}`}
         >
-          <div className="px-4 py-2.5 md:px-8 md:py-3">
+          <div className="px-4 py-2 md:px-8 md:py-3">
             {/* Summary + audio controls */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                 <BellRing size={18} strokeWidth={2.25} aria-hidden />
                 <span className="text-[17px] font-semibold tracking-[-0.015em]">
                   {level === "high" ? "Alarm" : "Warning"}
@@ -295,6 +353,7 @@ export function AlarmCenter() {
                 <span className="hidden text-xs font-medium opacity-80 sm:inline">
                   {highCount ? `${highCount} high priority` : "medium priority"}
                   {anyDrill ? " · training scenario" : ""}
+                  {anySimulated ? " · simulated telemetry" : ""}
                 </span>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -311,22 +370,22 @@ export function AlarmCenter() {
                 {silenced ? (
                   <button
                     type="button"
-                    className="ac-btn"
-                    aria-pressed="true"
+                    className="ac-btn ac-on"
                     aria-label={`Alarm sound silenced, ${formatCountdown(silencedUntil - now)} left. Resume sound now`}
                     onClick={() => setSilencedUntil(null)}
                   >
                     <BellOff size={14} aria-hidden />
-                    <span>
-                      Silenced <span className="tabular-nums">{now ? formatCountdown(silencedUntil - now) : "2:00"}</span>
+                    <span className="tabular-nums">
+                      <span className="hidden sm:inline">Silenced </span>
+                      {now ? formatCountdown(silencedUntil - now) : "2:00"}
                     </span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     className="ac-btn"
-                    aria-pressed="false"
                     aria-label="Silence alarm sound for 2 minutes (the visual alarm stays)"
+                    title="Silence alarm sound for 2 minutes"
                     onClick={() => {
                       const t = Date.now();
                       setNow(t);
@@ -342,7 +401,7 @@ export function AlarmCenter() {
                   type="button"
                   className="ac-btn"
                   aria-pressed={soundOn}
-                  aria-label={soundOn ? "Alarm sound is on. Turn sound off" : "Alarm sound is off. Turn sound on"}
+                  aria-label="Alarm sound"
                   onClick={() => writeSoundPref(!soundOn)}
                   title={audioStatus === "unsupported" ? "Audio is not available in this browser" : undefined}
                 >
@@ -352,37 +411,81 @@ export function AlarmCenter() {
               </div>
             </div>
 
-            {/* Alarms per crew member */}
-            <ul
-              className="ac-groups mt-2.5 max-h-[38vh] overflow-y-auto pt-1 sm:max-h-none sm:overflow-visible"
-              aria-label="Alarms by crew member"
-            >
-              {groups.map((g) => (
-                <li
-                  key={g.crewId}
-                  className="ac-group flex flex-col gap-x-4 gap-y-1.5 py-1.5 last:pb-0 sm:flex-row sm:items-center"
+            {/* Phone: one-line summary of the most urgent alarm, list on demand. */}
+            {top && (
+              <div className="ac-summary mt-1.5 flex items-center gap-2 sm:hidden">
+                <p className="ac-line min-w-0 flex-1 truncate text-[13px] leading-snug">
+                  <span className="sr-only">{top.priority === "high" ? "High priority: " : "Medium priority: "}</span>
+                  {alarmLine(top)}
+                </p>
+                {groups[0].drill ? (
+                  <span className="ac-tag ac-drill">Drill</span>
+                ) : (
+                  telemetryLabel(sources[groups[0].crewId]) && (
+                    <span className="ac-tag ac-sim">{telemetryLabel(sources[groups[0].crewId])}</span>
+                  )
+                )}
+                <button
+                  type="button"
+                  className="ac-btn ac-toggle"
+                  aria-expanded={expanded}
+                  aria-controls="ac-groups"
+                  onClick={() => setExpanded((e) => !e)}
                 >
-                  <ul className="flex min-w-0 flex-col gap-x-6 gap-y-0.5 sm:flex-1 lg:flex-row lg:flex-wrap" aria-label={g.crewName}>
-                    {g.alarms.map((a) => (
-                      <li key={a.id} className="ac-line text-[13px] leading-snug md:text-[15px]">
-                        <span className="sr-only">{a.priority === "high" ? "High priority: " : "Medium priority: "}</span>
-                        {alarmLine(a)}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {g.drill && (
-                      <span className="ac-tag ac-drill" title="Training scenario: simulated drill, not a real emergency">
-                        Training scenario
-                      </span>
-                    )}
-                    <Link href={`/crew/${g.crewId}`} className="ac-btn ac-primary">
-                      Open monitor<span className="sr-only"> for {g.crewName}</span>
-                      <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
-                    </Link>
-                  </div>
-                </li>
-              ))}
+                  {expanded ? "Less" : more > 0 ? `+${more}` : "More"}
+                  <span className="sr-only"> alarm details</span>
+                  <ChevronDown size={14} aria-hidden className="ac-chevron" />
+                </button>
+              </div>
+            )}
+
+            {/* Alarms per crew member */}
+            <ul id="ac-groups" className="ac-groups mt-2 pt-1 sm:mt-2.5" aria-label="Alarms by crew member">
+              {groups.map((g) => {
+                const sim = g.drill ? null : telemetryLabel(sources[g.crewId]);
+                const here = isCrewPage(pathname, g.crewId);
+                return (
+                  <li
+                    key={g.crewId}
+                    className="ac-group flex flex-col gap-x-4 gap-y-1.5 py-1.5 last:pb-0 sm:flex-row sm:items-center"
+                  >
+                    <ul
+                      className="flex min-w-0 flex-col gap-x-6 gap-y-0.5 sm:flex-1 lg:flex-row lg:flex-wrap"
+                      aria-label={g.crewName}
+                    >
+                      {g.alarms.map((a) => (
+                        <li key={a.id} className="ac-line text-[13px] leading-snug md:text-[15px]">
+                          <span className="sr-only">{a.priority === "high" ? "High priority: " : "Medium priority: "}</span>
+                          {alarmLine(a)}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {g.drill && (
+                        <span className="ac-tag ac-drill" title="Training scenario: simulated drill, not a real emergency">
+                          Training scenario
+                        </span>
+                      )}
+                      {sim && (
+                        <span
+                          className="ac-tag ac-sim"
+                          title="Values come from the demo telemetry generator, not from a sensor"
+                        >
+                          {sim}
+                        </span>
+                      )}
+                      {here ? (
+                        <span className="text-xs font-medium opacity-80">Shown on this page</span>
+                      ) : (
+                        <Link href={`/crew/${g.crewId}`} className="ac-btn ac-primary">
+                          Open monitor<span className="sr-only"> for {g.crewName}</span>
+                          <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>

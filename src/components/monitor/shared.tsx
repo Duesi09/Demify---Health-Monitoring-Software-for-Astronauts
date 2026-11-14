@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { ALARM_LIMITS } from "@/lib/monitor/alarms";
 import type { IndicatorId, LiveVitals, MonitorAlarm } from "@/lib/types";
 import { mmss } from "./waveform";
 
@@ -42,17 +43,34 @@ export function useReducedMotion(): boolean {
   );
 }
 
+/*
+ * UTC clock store. The snapshot is cached and only changes in the timer
+ * tick, so getSnapshot returns the same string for React's repeated
+ * consistency checks even when a second boundary falls between them.
+ */
+let clockValue: string | null = null;
+const utcNow = () => new Date().toISOString().slice(11, 19);
 function subscribeSecond(cb: () => void) {
-  const id = setInterval(cb, 1000);
-  return () => clearInterval(id);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tick = () => {
+    clockValue = utcNow();
+    cb();
+    // Re-align to just after the next whole second.
+    timer = setTimeout(tick, 1000 - (Date.now() % 1000) + 15);
+  };
+  // Refresh a value left over from an earlier mount; React re-reads the
+  // snapshot after subscribing and re-renders if it changed.
+  clockValue = utcNow();
+  timer = setTimeout(tick, 1000 - (Date.now() % 1000) + 15);
+  return () => clearTimeout(timer);
+}
+function getClockSnapshot(): string | null {
+  if (clockValue == null) clockValue = utcNow();
+  return clockValue;
 }
 /** Current UTC time as "HH:MM:SS", client-only (null during SSR/hydration). */
 export function useUtcClock(): string | null {
-  return useSyncExternalStore(
-    subscribeSecond,
-    () => new Date().toISOString().slice(11, 19),
-    () => null,
-  );
+  return useSyncExternalStore(subscribeSecond, getClockSnapshot, () => null);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -74,6 +92,15 @@ export function alarmPrefix(a: MonitorAlarm): string {
   return a.priority === "high" ? "***" : "**";
 }
 
+/**
+ * Alarm prefix as an element. Under prefers-reduced-motion the band and the
+ * numerics stop flashing, but the high-priority "***" keeps blinking
+ * (IEC 60601-1-8 expects a flashing indicator for high priority).
+ */
+export function AlarmPrefix({ alarm }: { alarm: MonitorAlarm }) {
+  return <span className={alarm.priority === "high" ? "dm-prefix-high" : undefined}>{alarmPrefix(alarm)}</span>;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Tags (squared, uppercase; never rounded pills)                             */
 /* ------------------------------------------------------------------------- */
@@ -89,8 +116,47 @@ export function DemoTag({ className = "" }: { className?: string }) {
   );
 }
 
+const ACTIVITY_LABEL: Record<Exclude<LiveVitals["activity"], "rest">, { text: string; title: string }> = {
+  exercise: { text: "Exercise", title: "Scheduled exercise: higher heart and resp rates are expected; alarm limits adjusted" },
+  sleep: { text: "Sleep", title: "Sleep period: lower heart rate is expected; low limits adjusted" },
+};
+
+/** Small neutral activity tag ("EXERCISE" / "SLEEP"); nothing at rest. */
+export function ActivityTag({ activity, className = "" }: { activity: LiveVitals["activity"]; className?: string }) {
+  if (activity === "rest") return null;
+  const a = ACTIVITY_LABEL[activity];
+  return (
+    <span className={`${TAG} bg-white/[0.08] text-white/75 ${className}`} title={a.title}>
+      {a.text}
+    </span>
+  );
+}
+
+/** Heart-rate / resp alarm limits for the current activity (mirrors computeAlarms). */
+export function activityLimits(activity: LiveVitals["activity"]) {
+  const L = ALARM_LIMITS;
+  return {
+    hrHigh: activity === "exercise" ? L.hrExercise.high : L.hr.high,
+    hrLow: activity === "sleep" ? L.hrSleep.low : L.hr.low,
+    respHigh: activity === "exercise" ? L.respExercise.high : L.resp.high,
+    respLow: L.resp.low,
+  };
+}
+
+const SOURCE_SHORT: Record<LiveVitals["source"], string> = {
+  simulated: "Simulated",
+  sensor: "Sensor",
+  mixed: "Sensor + sim",
+};
+
+/** Data-source tag; shortened when its @container (the monitor stage) is narrow. */
 export function SourceTag({ source, className = "" }: { source: LiveVitals["source"]; className?: string }) {
-  return <span className={`${TAG} text-white/60 ring-1 ring-inset ring-white/15 ${className}`}>{SOURCE_LABEL[source]}</span>;
+  return (
+    <span className={`${TAG} text-white/60 ring-1 ring-inset ring-white/15 ${className}`} title={SOURCE_LABEL[source]}>
+      <span className="@md:hidden">{SOURCE_SHORT[source]}</span>
+      <span className="hidden @md:inline">{SOURCE_LABEL[source]}</span>
+    </span>
+  );
 }
 
 /** Amber training-scenario tag: drills must never look like a real emergency. */

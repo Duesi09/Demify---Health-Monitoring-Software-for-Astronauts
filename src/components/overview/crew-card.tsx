@@ -11,6 +11,8 @@ export interface CrewCardFinding {
   status: Status;
   finding: string;
   source?: ReadingSource;
+  /** The value comes from a training scenario (Assessment.drill). */
+  drill?: boolean;
 }
 
 export interface CrewCardProps {
@@ -122,8 +124,9 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
               <li key={f.indicator} className="flex gap-2">
                 <StatusIcon status={f.status} size={14} className="mt-px" />
                 <span className="min-w-0">
+                  {f.drill && <DrillTag label="Drill" className="mr-1.5 align-[1px]" />}
                   {f.finding}
-                  {f.source === "simulated" && <span className="text-muted"> (simulated)</span>}
+                  {!f.drill && f.source === "simulated" && <span className="text-muted"> (simulated)</span>}
                 </span>
               </li>
             ))}

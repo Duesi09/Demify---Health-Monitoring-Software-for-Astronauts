@@ -3,27 +3,45 @@ import { ArrowUpRight, Stethoscope } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { IndicatorId, ReadingSource } from "@/lib/types";
 import { formatDelay } from "./format";
-import { StatusIcon } from "./status-icon";
+import { DrillTag, StatusIcon } from "./status-icon";
 
 export interface EscalationItem {
   crewId: string;
   crewName: string;
   role: string;
+  /** Active training scenario for this crew member (label, e.g. "Heart attack (STEMI)"), if any. */
+  scenarioLabel?: string | null;
   findings: {
     indicator: IndicatorId;
     status: "caution" | "critical" | "nominal" | "unknown";
     finding: string;
     source?: ReadingSource;
+    /** The value comes from a training scenario (Assessment.drill). */
+    drill?: boolean;
   }[];
+}
+
+/** Every finding of this crew member is drill-driven. */
+function drillOnly(it: EscalationItem): boolean {
+  return it.findings.length > 0 && it.findings.every((f) => f.drill);
 }
 
 /**
  * Top-of-page alert listing every crew member whose data warrants contacting
  * the flight surgeon. With long signal delays the crew acts first.
+ *
+ * Findings driven by a training scenario are tagged DRILL. When every listed
+ * finding comes from a drill, the whole banner is framed as a rehearsal
+ * ("Training scenario · not a real emergency") and never tells the crew to
+ * act now without that label.
  */
 export function EscalationBanner({ items, commDelaySeconds }: { items: EscalationItem[]; commDelaySeconds: number }) {
   if (!items.length) return null;
   const longDelay = commDelaySeconds >= 60;
+  const allDrill = items.every(drillOnly);
+  const anyDrill = items.some((it) => it.scenarioLabel || it.findings.some((f) => f.drill));
+  const n = items.length;
+  const crewText = `${n} crew member${n > 1 ? "s" : ""}`;
   return (
     <section
       aria-labelledby="escalation-heading"
@@ -34,12 +52,27 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
           <Stethoscope size={20} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-critical">Escalation</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-critical">Escalation</p>
+            {anyDrill && <DrillTag label={allDrill ? "Training scenario · drill" : "Includes a drill"} />}
+          </div>
           <h2 id="escalation-heading" className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">
-            Contact the flight surgeon: {items.length} crew member{items.length > 1 ? "s" : ""} need
-            {items.length > 1 ? "" : "s"} medical review
+            {allDrill ? (
+              <>Drill: rehearse contacting the flight surgeon for {crewText}</>
+            ) : (
+              <>
+                Contact the flight surgeon: {crewText} need{n > 1 ? "" : "s"} medical review
+              </>
+            )}
           </h2>
+          {allDrill && (
+            <p className="mt-2 max-w-3xl text-sm font-medium text-fg md:text-[15px]">
+              Training scenario, not a real emergency. These findings come from a drill on simulated telemetry; practise
+              the response below as you would for real.
+            </p>
+          )}
           <p className="mt-2 max-w-3xl text-sm text-fg/85 md:text-[15px]">
+            {allDrill && <strong className="font-semibold">In the drill: </strong>}
             {longDelay ? (
               <>
                 One-way signal delay is <strong>{formatDelay(commDelaySeconds)}</strong>. Do not wait for a reply: start
@@ -56,8 +89,13 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
             {items.map((it) => (
               <li key={it.crewId} className="rounded-2xl border border-critical/25 bg-surface/70 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <h3 className="text-sm font-semibold">
-                    {it.crewName} <span className="font-normal text-muted">· {it.role}</span>
+                  <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                    <span>
+                      {it.crewName} <span className="font-normal text-muted">· {it.role}</span>
+                    </span>
+                    {(it.scenarioLabel || it.findings.some((f) => f.drill)) && (
+                      <DrillTag label={drillOnly(it) ? "Drill" : "Drill active"} />
+                    )}
                   </h3>
                   <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                     <Link
@@ -75,15 +113,22 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
                     </Link>
                   </span>
                 </div>
+                {(it.scenarioLabel || it.findings.some((f) => f.drill)) && (
+                  <p className="mt-1.5 text-xs font-medium text-caution">
+                    Training scenario{it.scenarioLabel ? ` (${it.scenarioLabel})` : ""}, not a real emergency
+                    {drillOnly(it) ? "" : ". Findings without a DRILL tag are not from the drill"}.
+                  </p>
+                )}
                 <ul className="mt-2 space-y-1.5 text-sm">
                   {it.findings.map((f) => (
                     <li key={f.indicator} className="flex gap-2">
                       <StatusIcon status={f.status} className="mt-0.5" />
                       <span className="min-w-0">
+                        {f.drill && <DrillTag label="Drill" className="mr-1.5 align-[1px]" />}
                         {f.finding}{" "}
                         <span className="text-muted">
                           Escalate when: {INDICATORS[f.indicator].escalation}
-                          {f.source === "simulated" && " (simulated demo data)"}
+                          {f.drill ? " (training scenario value)" : f.source === "simulated" && " (simulated demo data)"}
                         </span>
                       </span>
                     </li>

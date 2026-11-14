@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import { RECORD_GROUPS, type RecordRow } from "./record-data";
 import { Sparkline } from "./sparkline";
@@ -21,11 +22,31 @@ function SourceText({ row }: { row: RecordRow }) {
   );
 }
 
+/** How the current value was derived (median vs. drill sample vs. latest reading). */
+function Basis({ row, align = "end" }: { row: RecordRow; align?: "start" | "end" }) {
+  if (row.basis === "drill") {
+    return (
+      <span className={`mt-0.5 flex ${align === "end" ? "justify-end" : ""}`}>
+        <DrillTag label="Drill sample" />
+      </span>
+    );
+  }
+  if (row.basis === "median") return <span className="block text-[10px] text-muted">resting median · 60 min</span>;
+  return null;
+}
+
 function Trend({ row }: { row: RecordRow }) {
   if (!row.spark) return <span className="text-xs text-muted">no trend</span>;
   return (
     <span className="inline-flex flex-col gap-0.5">
-      <Sparkline id={row.id} spark={row.spark} status={row.status} label={`${row.short} trend`} />
+      <Sparkline
+        id={row.id}
+        spark={row.spark}
+        status={row.status}
+        label={`${row.short} trend`}
+        decimals={row.decimals}
+        unit={row.unit}
+      />
       <span className="text-[10px] text-muted">
         {row.spark.window}
         {row.spark.basis === "simulated" ? " · sim." : ""}
@@ -53,13 +74,14 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
       >
         <table className="w-full min-w-[980px] border-collapse text-left text-sm">
           <caption className="sr-only">
-            All health indicators with current value, status, normal range, pre-flight baseline, change, trend, time of
+            All health indicators with current value (continuous vitals: resting median of the last 60 minutes, or the
+            drill sample during a training scenario), status, normal range, pre-flight baseline, change, trend, time of
             last measurement and data source
           </caption>
           <thead className="bg-surface-2 text-[11px] uppercase tracking-[0.08em] text-muted">
             <tr>
               <th scope="col" className="px-3 py-2.5 font-medium">Indicator</th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium">Current</th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium">Current value</th>
               <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
               <th scope="col" className="px-3 py-2.5 font-medium">Normal range</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">Pre-flight</th>
@@ -91,6 +113,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
                   <td className="whitespace-nowrap px-3 py-2.5 text-right tabular">
                     <span className="text-base font-semibold">{fmt(r.value, r.decimals)}</span>{" "}
                     <span className="text-xs text-muted">{r.unit}</span>
+                    <Basis row={r} />
                   </td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={r.status} size="xs" />
@@ -140,10 +163,13 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
                     <StatusBadge status={r.status} size="xs" />
                   </div>
                   <div className="mt-1 flex items-end justify-between gap-3">
-                    <p className="tabular">
-                      <span className="text-2xl font-semibold">{fmt(r.value, r.decimals)}</span>{" "}
-                      <span className="text-xs text-muted">{r.unit}</span>
-                    </p>
+                    <div className="tabular">
+                      <p>
+                        <span className="text-2xl font-semibold">{fmt(r.value, r.decimals)}</span>{" "}
+                        <span className="text-xs text-muted">{r.unit}</span>
+                      </p>
+                      <Basis row={r} align="start" />
+                    </div>
                     <Trend row={r} />
                   </div>
                   <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">

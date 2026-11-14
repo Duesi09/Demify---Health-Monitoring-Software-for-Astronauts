@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Check, Minus, OctagonAlert, TriangleAlert } from "lucide-react";
 import type { SourceResult, Status } from "@/lib/types";
 
@@ -103,6 +103,63 @@ export function tagClass(size: keyof typeof TAG_SIZE = "sm", interactive = false
 
 /** Selected state for a squared filter chip (`aria-pressed`): inverted, not coloured. */
 export const TAG_SELECTED = "border-fg! bg-fg! text-bg!";
+
+/**
+ * Squared segmented control in the monitor style: one bordered strip of
+ * uppercase keys divided by hairlines, the selected key inverted (never a
+ * floating rounded "pill" on a tray). Controlled and hook-free, so it can be
+ * rendered from any client component. `role` picks the ARIA pattern:
+ * "radiogroup" for a view/axis switch, "tablist" for switching content.
+ * It is a grid with one column per option; pass e.g. `max-sm:grid-cols-2`
+ * in `className` to fold long strips on phones (hairlines stay intact).
+ */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  role = "radiogroup",
+  className = "",
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: ReactNode }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+  role?: "radiogroup" | "tablist";
+  className?: string;
+}) {
+  const itemRole = role === "tablist" ? "tab" : "radio";
+  return (
+    <div
+      role={role}
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      style={{ "--seg-cols": `repeat(${options.length}, auto)` } as CSSProperties}
+      className={`grid max-w-full grid-cols-(--seg-cols) gap-px overflow-hidden rounded-[3px] border border-border bg-border ${disabled ? "opacity-45" : ""} ${className}`}
+    >
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role={itemRole}
+            {...(itemRole === "tab" ? { "aria-selected": on } : { "aria-checked": on })}
+            disabled={disabled}
+            onClick={() => onChange(o.value)}
+            className={`inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase leading-none tracking-[0.07em] transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed ${
+              on ? "bg-fg text-bg" : "bg-surface-2 text-muted hover:bg-surface hover:text-fg"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Tag({
   children,

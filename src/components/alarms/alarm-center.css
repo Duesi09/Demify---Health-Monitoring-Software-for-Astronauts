@@ -1,7 +1,8 @@
 /*
  * Global alarm bar (classes prefixed ac-). Keynote look: system font, glassy
  * depth, generous type; alarm colours stay unmistakable. High priority
- * flashes ~1.4 Hz (IEC 60601-1-8: 1.4-2.8 Hz), medium ~0.6 Hz (0.4-0.8 Hz).
+ * flashes ~1.5 Hz (period 0.66 s; IEC 60601-1-8: 1.4-2.8 Hz), medium ~0.6 Hz
+ * (0.4-0.8 Hz).
  * With prefers-reduced-motion both are solid.
  * Reds/yellows are chosen so white (on red) and near-black (on yellow) text
  * keeps >= 4.5:1 contrast in both flash phases.
@@ -37,7 +38,7 @@
 .ac-high {
   color: #fff;
   background: #c9150c;
-  animation: ac-flash-high 0.72s steps(1, end) infinite;
+  animation: ac-flash-high 0.66s steps(1, end) infinite;
 }
 @keyframes ac-flash-high {
   0%,
@@ -110,7 +111,8 @@
 .ac-medium .ac-btn:hover {
   background: rgb(0 0 0 / 0.18);
 }
-.ac-btn[aria-pressed="true"] {
+.ac-btn[aria-pressed="true"],
+.ac-btn.ac-on {
   box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
@@ -153,6 +155,11 @@
   background: #1c1400;
   color: #ffcc00;
 }
+/* Simulated telemetry: dashed outline = synthetic (same language as SimulatedTag). */
+.ac-sim {
+  border: 1px dashed currentColor;
+  background: transparent;
+}
 .ac-demo {
   background: #fff;
   color: #000;
@@ -172,8 +179,27 @@
   border-top: 1px solid rgb(255 255 255 / 0.18);
 }
 .ac-medium .ac-groups,
-.ac-group + .ac-group {
+.ac-medium .ac-group + .ac-group {
   border-top-color: rgb(0 0 0 / 0.14);
+}
+
+/* Phones: the list collapses to a one-line summary (bar stays well under a
+   quarter of the viewport) and expands on demand with its own scroll. */
+@media (max-width: 639.98px) {
+  .ac-bar:not(.ac-expanded) .ac-groups {
+    display: none;
+  }
+  .ac-expanded .ac-groups {
+    max-height: 40vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+.ac-chevron {
+  transition: transform 160ms ease;
+}
+.ac-expanded .ac-chevron {
+  transform: rotate(180deg);
 }
 
 /* Overview crew cards (shared global classes). */
@@ -210,7 +236,8 @@
     animation: none;
     background: #ffcc00;
   }
-  .ac-btn {
+  .ac-btn,
+  .ac-chevron {
     transition: none;
   }
   .ac-btn:active {

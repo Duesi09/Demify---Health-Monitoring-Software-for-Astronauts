@@ -139,26 +139,47 @@ export function vfSignal(t: number): number {
 /* Pressure / pleth / resp shapes                                             */
 /* ------------------------------------------------------------------------- */
 
+/** Normalised pressure at the dicrotic notch (fraction of pulse pressure). */
+export const ABP_NOTCH_LEVEL = 0.65;
+
 /**
- * Arterial pressure pulse, normalised: 0 = diastolic, ~1 = systolic.
- * dt = seconds since the upstroke, rr = interval to the next beat. Rapid
- * upstroke, systolic peak ~0.1 s, dicrotic notch, diastolic run-off that
- * decays back to 0 at the next beat.
+ * Arterial pressure pulse, normalised: 0 = diastolic, 1 = systolic.
+ * dt = seconds since the upstroke foot, rr = interval to the next beat.
+ *
+ * Shaped like a radial / femoral arterial line on a bedside monitor:
+ * a steep upstroke (~100 ms at 60/min) that rounds into a broad systolic
+ * peak, a convex systolic decline into the dicrotic notch at the end of
+ * ejection (~65 % of pulse pressure), a small dicrotic wave, then an
+ * exponential diastolic run-off that reaches diastole at the next upstroke.
+ * Ejection time shortens with rate (~sqrt(RR)).
  */
 export function abpShape(dt: number, rr: number): number {
   if (dt < 0) return 0;
   const rrC = Math.max(0.25, rr);
   if (dt >= rrC) return 0;
-  const rise = smoothstep(0, 0.08, dt);
-  const systolic = 0.5 * rise * gauss(Math.max(dt, 0.1), 0.1, 0.07);
-  const k = 2.5;
-  const tail = Math.max(0, dt - 0.1);
-  const end = Math.max(0.05, rrC - 0.1);
-  const runoff = (0.5 * rise * (Math.exp(-k * tail) - Math.exp(-k * end))) / (1 - Math.exp(-k * end));
-  const notchT = Math.min(0.3, 0.45 * rrC);
-  const notch = -0.1 * gauss(dt, notchT, 0.022) * (1 - smoothstep(rrC * 0.85, rrC, dt));
-  const dicrotic = 0.08 * gauss(dt, notchT + 0.06, 0.04) * (1 - smoothstep(rrC * 0.85, rrC, dt));
-  return clamp(systolic + Math.max(0, runoff) + notch + dicrotic, 0, 1.1);
+  const N = ABP_NOTCH_LEVEL;
+  // End of ejection (notch) and systolic peak time.
+  const te = Math.min(0.31 * Math.sqrt(clamp(rrC, 0.25, 1.6)), 0.55 * rrC);
+  const tp = 0.38 * te;
+  if (dt <= tp) {
+    // Steep foot that rounds into the peak (zero slope at tp).
+    const x = dt / tp;
+    return 1 - Math.pow(1 - x, 2.2);
+  }
+  if (dt <= te) {
+    // Broad, rounded systolic shoulder that steepens into the notch.
+    const u = (dt - tp) / (te - tp);
+    return 1 - (1 - N) * u * u;
+  }
+  // Diastole: run-off from the notch level to 0 at the next beat, plus the
+  // dicrotic wave (starts at zero so the notch is a small rounded V).
+  const w = dt - te;
+  const L = Math.max(0.05, rrC - te);
+  const k = 1.25;
+  const runoff = (N * (Math.exp(-k * w) - Math.exp(-k * L))) / (1 - Math.exp(-k * L));
+  const W = Math.min(0.12, 0.6 * L);
+  const dicrotic = w < W ? 0.1 * Math.sin((Math.PI * w) / W) ** 2 : 0;
+  return clamp(runoff + dicrotic, 0, 1.1);
 }
 
 /** Peripheral plethysmogram pulse: smoother, later peak, small dicrotic bump. */
@@ -266,6 +287,11 @@ export class BeatScheduler {
 
 /** Beats are scheduled this far ahead so P waves can be drawn before R. */
 const LOOKAHEAD_S = 0.4;
+/**
+ * Time constant of the ease after a parameter change: 95 % settled after
+ * 3 tau (~300 ms), so a lost pulse decays instead of dropping vertically.
+ */
+export const TRANSITION_TAU_S = 0.1;
 
 /**
  * Stateful multi-channel synthesiser. Call `sample(t)` with non-decreasing
@@ -278,6 +304,10 @@ export class WaveSynth {
   private respPhase = 0;
   private lastT: number | null = null;
   private lastEventT = -Infinity;
+  /** Parameters before the latest set(), consumed by the next sample. */
+  private prevParams: SynthParams | null = null;
+  /** Per-channel offsets that decay to 0 after a parameter change. */
+  private offset: WaveSample = { ecg: 0, abp: 0, pleth: 0, resp: 0 };
 
   constructor(params: SynthParams, seed = 1) {
     this.rand = mulberry32(seed);
@@ -285,7 +315,9 @@ export class WaveSynth {
     this.params = params;
   }
 
+  /** Update the target numbers; the trace eases into them (see sample). */
   set(params: SynthParams) {
+    if (this.lastT != null && !this.prevParams) this.prevParams = this.params;
     this.params = params;
   }
 
@@ -299,7 +331,12 @@ export class WaveSynth {
 
   sample(t: number): WaveSample {
     const p = this.params;
-    if (this.lastT != null && t - this.lastT > 5) this.lastT = t; // tab was hidden: skip
+    if (this.lastT != null && t - this.lastT > 5) {
+      // Tab was hidden: skip ahead without easing across the gap.
+      this.lastT = t;
+      this.offset = { ecg: 0, abp: 0, pleth: 0, resp: 0 };
+      this.prevParams = null;
+    }
     const dtStep = this.lastT == null ? 0 : Math.max(0, t - this.lastT);
     this.lastT = t;
 
@@ -312,10 +349,43 @@ export class WaveSynth {
       }
     }
 
-    const noise = () => (this.rand() - 0.5) * 2;
+    if (p.resp != null && p.resp > 0) {
+      this.respPhase = (this.respPhase + 2 * Math.PI * (p.resp / 60) * dtStep) % (2 * Math.PI);
+    }
 
+    // Decay the transition offsets, then fold in any step caused by new
+    // numbers arriving (pulse lost at VF onset, a new diastolic baseline
+    // mid-beat, SpO2 probe off...). The trace eases into the new level over
+    // ~300 ms instead of dropping vertically in one sample.
+    const decay = Math.exp(-dtStep / TRANSITION_TAU_S);
+    const off = this.offset;
+    off.ecg *= decay;
+    off.abp *= decay;
+    off.pleth *= decay;
+    off.resp *= decay;
+    const cur = this.clean(t, p, beats);
+    if (this.prevParams) {
+      const old = this.clean(t, this.prevParams, beats);
+      off.ecg += old.ecg - cur.ecg;
+      off.abp += old.abp - cur.abp;
+      off.pleth += old.pleth - cur.pleth;
+      off.resp += old.resp - cur.resp;
+      this.prevParams = null;
+    }
+
+    const noise = () => (this.rand() - 0.5) * 2;
+    return {
+      ecg: cur.ecg + off.ecg + noise() * 0.008,
+      abp: cur.abp + off.abp + noise() * (p.sys == null || p.dia == null ? 0.8 : 0.4),
+      pleth: cur.pleth + off.pleth + noise() * (p.spo2 == null ? 0.012 : 0.006),
+      resp: cur.resp + off.resp + noise() * (p.resp == null || p.resp <= 0 ? 0.015 : 0.01),
+    };
+  }
+
+  /** Noise-free channel values for parameters `p` at time t. */
+  private clean(t: number, p: SynthParams, beats: readonly Beat[]): WaveSample {
     // ECG
-    let ecg = 0.02 * Math.sin(2 * Math.PI * 0.15 * t) + noise() * 0.008;
+    let ecg = 0.02 * Math.sin(2 * Math.PI * 0.15 * t);
     if (p.rhythm === "vf") {
       ecg += vfSignal(t);
     } else {
@@ -327,26 +397,22 @@ export class WaveSynth {
     }
 
     // ABP + pleth: shape of the most recent perfusing beat that has started.
-    const abp = this.pulse(t, ABP_DELAY_S, beats, (dt, rr) => abpShape(dt, rr));
-    const pl = this.pulse(t, PLETH_DELAY_S, beats, (dt, rr) => plethShape(dt, rr));
     let abpV: number;
-    if (p.sys == null || p.dia == null) abpV = 6 + noise() * 0.8;
-    else if (abp == null) abpV = p.dia + noise() * 0.4;
-    else abpV = p.dia + (p.sys - p.dia) * abp.value * abp.gain + noise() * 0.4;
+    if (p.sys == null || p.dia == null) abpV = 6;
+    else {
+      const abp = this.pulse(t, ABP_DELAY_S, beats, abpShape);
+      abpV = abp == null ? p.dia : p.dia + (p.sys - p.dia) * abp.value * abp.gain;
+    }
 
     let plethV: number;
-    if (p.spo2 == null) plethV = 0.05 + noise() * 0.012;
-    else if (pl == null) plethV = 0.1 + noise() * 0.006;
-    else plethV = 0.1 + 0.8 * pl.value * pl.gain + noise() * 0.006;
+    if (p.spo2 == null) plethV = 0.05;
+    else {
+      const pl = this.pulse(t, PLETH_DELAY_S, beats, plethShape);
+      plethV = pl == null ? 0.1 : 0.1 + 0.8 * pl.value * pl.gain;
+    }
 
     // Resp: phase integrates the current rate; flat line when apnoeic.
-    let resp: number;
-    if (p.resp == null || p.resp <= 0) {
-      resp = noise() * 0.015;
-    } else {
-      this.respPhase = (this.respPhase + 2 * Math.PI * (p.resp / 60) * dtStep) % (2 * Math.PI);
-      resp = 0.85 * Math.sin(this.respPhase) + noise() * 0.01;
-    }
+    const resp = p.resp == null || p.resp <= 0 ? 0 : 0.85 * Math.sin(this.respPhase);
 
     return { ecg, abp: abpV, pleth: plethV, resp };
   }

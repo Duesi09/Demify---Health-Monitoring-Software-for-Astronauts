@@ -10,7 +10,7 @@ export type CrewGridItem = Omit<CrewCardProps, "vitals" | "selected">;
 /**
  * Live crew grid for the overview. Assessments come from the server as plain
  * data (refreshed by the global alarm center via router.refresh() when the
- * set of crew members in alarm changes); live vitals and monitor alarms are
+ * crew alarm levels or active drills change); live vitals and monitor alarms are
  * polled for all crew at once every 2 s.
  */
 export function CrewGrid({ crew, initialVitals }: { crew: CrewGridItem[]; initialVitals: LiveVitals[] }) {

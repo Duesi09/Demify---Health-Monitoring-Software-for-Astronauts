@@ -12,7 +12,21 @@ const PAD = 3;
  * indicator's normal range where it overlaps the plotted values; the end dot
  * carries the current status colour (status itself is shown as text nearby).
  */
-export function Sparkline({ id, spark, status, label }: { id: IndicatorId; spark: Spark; status: Status; label: string }) {
+export function Sparkline({
+  id,
+  spark,
+  status,
+  label,
+  decimals,
+  unit,
+}: {
+  id: IndicatorId;
+  spark: Spark;
+  status: Status;
+  label: string;
+  decimals: number;
+  unit: string;
+}) {
   const vs = spark.points.map((p) => p[1]);
   let lo = Math.min(...vs);
   let hi = Math.max(...vs);
@@ -30,13 +44,20 @@ export function Sparkline({ id, spark, status, label }: { id: IndicatorId; spark
   const bandTop = band ? y(Math.min(band.to, hi)) : 0;
   const bandBottom = band ? y(Math.max(band.from, lo)) : 0;
   const last = spark.points[spark.points.length - 1];
+  // Screen readers read every digit: round to the indicator's precision and say the unit.
+  const f = (v: number) => {
+    const t = v.toFixed(decimals);
+    return Number(t) === 0 ? (0).toFixed(decimals) : t;
+  };
+  const u = unit ? ` ${unit}` : "";
+  const aria = `${label}, last ${spark.window}${spark.basis === "simulated" ? " (simulated)" : ""}: from ${f(vs[0])} to ${f(last[1])}${u}, range ${f(Math.min(...vs))} to ${f(Math.max(...vs))}${u}`;
   return (
     <svg
       width={W}
       height={H}
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label={`${label}, last ${spark.window}${spark.basis === "simulated" ? " (simulated)" : ""}: from ${vs[0]} to ${last[1]}, range ${Math.min(...vs)} to ${Math.max(...vs)}`}
+      aria-label={aria}
       className="block overflow-visible"
     >
       {band && bandBottom > bandTop && (

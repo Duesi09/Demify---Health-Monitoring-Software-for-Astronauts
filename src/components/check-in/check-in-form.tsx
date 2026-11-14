@@ -203,7 +203,7 @@ function ScaleField({
                 aria-label={`${n}${labels[n] ? ` (${labels[n]})` : ""}`}
               />
               <span
-                className={`flex h-10 items-center justify-center rounded-lg border text-sm font-medium tabular transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface ${tone}`}
+                className={`flex h-10 items-center justify-center rounded-[3px] border text-sm font-semibold tabular transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface ${tone}`}
                 aria-hidden
               >
                 {n}

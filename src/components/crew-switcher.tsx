@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { CrewMember, Status } from "@/lib/types";
 import { STATUS_LABEL } from "./ui";
-import { StatusIcon } from "./overview/status-icon";
+import { DrillTag, StatusIcon } from "./overview/status-icon";
 
 /**
  * Crew selector rendered as links so it works without JS and keeps state in
  * the URL. By default each link is `<basePath>?crew=<id>`; pass `hrefFor` to
  * build other URLs (e.g. `/crew/<id>`). Pass `statuses` to show each member's
  * overall status as a shape-coded icon (never colour alone), and `tags` for a
- * short extra marker such as "Drill".
+ * short training-scenario marker such as "Drill" (amber DrillTag).
  */
 export function CrewSwitcher({
   crew,
@@ -37,18 +37,15 @@ export function CrewSwitcher({
             href={hrefFor ? hrefFor(c.id) : `${basePath}?crew=${c.id}`}
             aria-current={on ? "true" : undefined}
             title={st ? `${c.name}: ${STATUS_LABEL[st]}${tag ? ` (${tag})` : ""}` : undefined}
-            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
+            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
               on ? "bg-accent/15 text-accent" : "text-muted hover:bg-surface-2 hover:text-fg"
             }`}
           >
             {/* Shape-coded icon (check / triangle / octagon) so status is never conveyed by colour alone. */}
             {st && <StatusIcon status={st} size={13} />}
             {c.name}
-            {tag && (
-              <span className="rounded-[3px] border border-current px-1 text-[9px] font-semibold uppercase leading-[14px] tracking-[0.08em]">
-                {tag}
-              </span>
-            )}
+            {/* Tags (e.g. "Drill") use the amber training-scenario style, never a red alarm look. */}
+            {tag && <DrillTag label={tag} />}
           </Link>
         );
       })}

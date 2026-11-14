@@ -80,7 +80,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
         <button
           type="submit"
           disabled={loading || !q.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-accent px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.07em] text-bg disabled:opacity-50"
         >
           {loading && <Loader2 size={14} className="animate-spin" aria-hidden />}
           Search OSDR
@@ -157,7 +157,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
                 type="button"
                 disabled={loading || from === 0}
                 onClick={() => void run(data.query, Math.max(0, from - PAGE))}
-                className="rounded-lg border border-border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-40"
+                className={`${tagClass("md", true)} disabled:pointer-events-none disabled:opacity-40`}
               >
                 Previous
               </button>
@@ -165,7 +165,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
                 type="button"
                 disabled={loading || from + PAGE >= data.total || from + PAGE > 500}
                 onClick={() => void run(data.query, from + PAGE)}
-                className="rounded-lg border border-border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-40"
+                className={`${tagClass("md", true)} disabled:pointer-events-none disabled:opacity-40`}
               >
                 Next
               </button>
