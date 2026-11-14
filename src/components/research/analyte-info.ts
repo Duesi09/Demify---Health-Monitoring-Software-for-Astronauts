@@ -214,9 +214,3 @@ export const SUBJECT_STYLE: Record<string, { color: string; dashed: boolean }> =
   C004: { color: "var(--series-4)", dashed: false },
 };
 
-/**
- * 4th categorical slot (magenta), validated with the dataviz palette checker
- * against both surfaces (adjacent CVD ΔE ≥ 16). Scoped here until a global
- * --series-4 token exists in globals.css.
- */
-export const SERIES_4_CSS = `.i4-scope{--series-4:#d55181}:root[data-theme="light"] .i4-scope{--series-4:#e87ba4}`;

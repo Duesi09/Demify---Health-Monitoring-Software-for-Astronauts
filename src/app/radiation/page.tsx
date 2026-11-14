@@ -3,6 +3,7 @@ import { AlertTriangle, ShieldCheck, Sun, Zap } from "lucide-react";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { Card, PageHeader, Provenance, StatusBadge } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
+import { getIssDoseReference } from "@/lib/sources/eda";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
 import { listReadings } from "@/lib/store/readings";
 import type { Status } from "@/lib/types";
@@ -38,6 +39,8 @@ export default async function RadiationPage() {
   }
 
   const dose = estimateDoseRate(sw?.data.current.p10 ?? null, mission);
+  // Real ISS area dosimetry from NASA OSDR, used to sanity-check the estimate.
+  const issRef = await getIssDoseReference().catch(() => null);
   // Prefer the crew's logged dosimeter reading over the estimate.
   const dosimeter = (await listReadings({ indicator: "radiationCumulative" })).at(-1);
   const estimatedCumulative = day * mission.baselineDoseRate;
@@ -105,7 +108,10 @@ export default async function RadiationPage() {
         </Card>
       </div>
 
-      <Card className="border-l-4" title="Recommended crew action">
+      <Card
+        className={`border-l-4 ${level >= 3 ? "border-l-critical" : level >= 1 ? "border-l-caution" : "border-l-nominal"}`}
+        title="Recommended crew action"
+      >
         <p className={`text-sm ${level >= 3 ? "text-critical" : level >= 1 ? "text-caution" : "text-fg"}`}>
           {S_LEVEL_TEXT[level].action}
         </p>
@@ -128,6 +134,8 @@ export default async function RadiationPage() {
             unit="pfu"
             log
             yDomain={[0.05, "auto"]}
+            // Keep the S1 threshold in view so crews see their margin to a storm.
+            includeY={[10]}
             xFormat="datetime"
             refLines={[
               { y: 10, label: "S1 · 10 pfu", tone: "caution" },
@@ -173,6 +181,74 @@ export default async function RadiationPage() {
           </dl>
           <p className="mt-4 text-xs text-muted">
             Log your personal dosimeter reading on the Check-in page to replace the estimate.
+          </p>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card
+          className="xl:col-span-2"
+          title="Measured ISS dose (NASA OSDR)"
+          subtitle="Daily absorbed dose inside the ISS from area dosimeters, Rodent Research missions. Cross-check for the estimate above."
+          action={issRef && <Provenance result={issRef} />}
+        >
+          {issRef ? (
+            <>
+              <dl className="mb-3 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted">Mean, {issRef.data.missions.length} missions</dt>
+                  <dd className="text-xl font-semibold tabular">
+                    {issRef.data.meanTotal.toFixed(2)} <span className="text-xs font-normal text-muted">mGy/day</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">≈ dose equivalent (Q ≈ 2)</dt>
+                  <dd className="text-xl font-semibold tabular">
+                    {(issRef.data.meanTotal * 2).toFixed(2)} <span className="text-xs font-normal text-muted">mSv/day</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Range across missions</dt>
+                  <dd className="text-xl font-semibold tabular">
+                    {issRef.data.min.toFixed(2)}–{issRef.data.max.toFixed(2)}
+                  </dd>
+                </div>
+              </dl>
+              <TimeSeriesChart
+                ariaLabel={`Daily ISS absorbed dose during ${issRef.data.latest.name}`}
+                data={issRef.data.latest.points.map((p) => ({ t: p.t, total: p.total, gcr: p.gcr }))}
+                series={[
+                  { key: "total", label: "Total (GCR + SAA)", color: "var(--series-1)" },
+                  { key: "gcr", label: "Galactic cosmic rays", color: "var(--series-3)", dashed: true },
+                ]}
+                unit="mGy/day"
+                xFormat="date"
+                decimals={2}
+                height={200}
+              />
+              <p className="mt-2 text-xs text-muted">
+                Series: {issRef.data.latest.title || issRef.data.latest.name} ({issRef.data.latest.start} to {issRef.data.latest.end}).
+                The South Atlantic Anomaly (SAA), where Earth&apos;s radiation belt dips lowest, contributes about half of the ISS dose.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">ISS dosimetry reference unavailable.</p>
+          )}
+        </Card>
+
+        <Card title="NASA exposure limits" subtitle="NASA-STD-3001 Vol. 1 Rev C">
+          <table className="w-full text-left text-sm">
+            <tbody className="[&_td]:py-1.5 [&_tr]:border-t [&_tr]:border-border [&_tr:first-child]:border-0">
+              <tr><td className="pr-3 text-muted">Career effective dose</td><td className="tabular">&lt; 600 mSv</td></tr>
+              <tr><td className="pr-3 text-muted">Per solar particle event (design)</td><td className="tabular">&lt; 250 mSv</td></tr>
+              <tr><td className="pr-3 text-muted">Blood-forming organs</td><td className="tabular">250 mGy-Eq / 30 d</td></tr>
+              <tr><td className="pr-3 text-muted">Lens of the eye</td><td className="tabular">1,000 mGy-Eq / 30 d</td></tr>
+              <tr><td className="pr-3 text-muted">Habitat GCR rate, free space</td><td className="tabular">&lt; 1.3 mSv/day</td></tr>
+              <tr><td className="pr-3 text-muted">Habitat GCR rate, surface</td><td className="tabular">&lt; 0.9 mSv/day</td></tr>
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-muted">
+            Storm shelter: ~10 cm water-equivalent shielding halves solar-particle dose but cuts cosmic-ray dose by only ~7 %. Always ALARA.
           </p>
         </Card>
       </div>

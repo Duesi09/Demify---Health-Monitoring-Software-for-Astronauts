@@ -76,8 +76,11 @@ const PULSE_ANCHORS: Record<BodyRegionId, Anchor[]> = {
   skin: [[55, 312, 9], [185, 312, 9]],
 };
 
-/** Draw order: big regions first so small ones (heart, eyes) stay on top and clickable. */
-const DRAW_ORDER: BodyRegionId[] = ["skin", "blood", "muscles", "skeleton", "gut", "lungs", "heart", "brain", "eyes"];
+/**
+ * DOM order = keyboard tab order, so it runs head to toe. Shapes barely overlap;
+ * the one rule is that the heart comes after the lungs so it stays clickable.
+ */
+const DRAW_ORDER: BodyRegionId[] = ["brain", "eyes", "lungs", "heart", "blood", "gut", "muscles", "skeleton", "skin"];
 
 function Pair({ children }: { children: ReactNode }) {
   return (
@@ -112,6 +115,7 @@ function RegionArt({ id, beatSeconds }: { id: BodyRegionId; beatSeconds: number 
     case "lungs":
       return (
         <>
+          <rect x="92" y="104" width="56" height="84" rx="12" fill="transparent" />
           <path className={s} d={LUNG_R} />
           <path className={s} d={LUNG_L} />
           <path className={d} d={AIRWAY} />
@@ -251,7 +255,7 @@ export function BodyFigure({
       </g>
 
       {/* Silhouette: a wide stroked pass under a fill pass gives a clean outer outline. */}
-      <g aria-hidden>
+      <g aria-hidden pointerEvents="none">
         <g fill="none" stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="2.4" strokeLinejoin="round">
           <Silhouette />
         </g>
@@ -272,7 +276,7 @@ export function BodyFigure({
             role="button"
             tabIndex={0}
             aria-pressed={selected === id}
-            aria-label={`${name} (${REGION_LOCATION[id]}): ${STATUS_LABEL[status].toLowerCase()}`}
+            aria-label={`${name} (${REGION_LOCATION[id]}) — ${STATUS_LABEL[status].toLowerCase()}`}
             data-hover={hovered === id}
             className="bm-hotspot"
             style={{ color: STATUS_VAR[status] }}

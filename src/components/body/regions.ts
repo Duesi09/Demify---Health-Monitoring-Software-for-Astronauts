@@ -19,7 +19,7 @@ export const REGION_ICON: Record<BodyRegionId, LucideIcon> = {
 /** Where on the figure each region lives, for screen-reader labels and hints. */
 export const REGION_LOCATION: Record<BodyRegionId, string> = {
   brain: "head",
-  eyes: "eyes",
+  eyes: "face",
   heart: "left chest",
   lungs: "chest",
   blood: "forearm vessels",

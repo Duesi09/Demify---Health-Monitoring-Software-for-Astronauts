@@ -22,7 +22,6 @@ import {
   ANALYTE_INFO,
   DEFAULT_ANALYTE,
   FEATURED,
-  SERIES_4_CSS,
   SUBJECT_STYLE,
   fmtTick,
   fmtValue,
@@ -90,8 +89,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
   );
 
   return (
-    <div className="i4-scope space-y-4">
-      <style>{SERIES_4_CSS}</style>
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div role="tablist" aria-label="Blood panel" className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
           {available.map((t) => (

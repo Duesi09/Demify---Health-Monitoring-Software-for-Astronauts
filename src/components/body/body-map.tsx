@@ -76,7 +76,7 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
 
         <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-center">
           <BodyFigure
-            className="h-auto w-[min(100%,240px)] shrink-0 select-none sm:w-[250px]"
+            className="h-auto w-[min(100%,240px)] shrink-0 select-none sm:w-[270px]"
             regions={regions}
             selected={selected}
             hovered={hovered}
@@ -85,7 +85,7 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
             onHover={setHovered}
           />
 
-          <ul className="grid w-full grid-cols-2 gap-1.5 sm:w-[220px] sm:grid-cols-1" aria-label="Body regions">
+          <ul className="grid w-full grid-cols-2 gap-1.5 sm:w-[205px] sm:grid-cols-1" aria-label="Body regions">
             {REGION_ORDER.map((id) => {
               const Icon = REGION_ICON[id];
               const on = selected === id;

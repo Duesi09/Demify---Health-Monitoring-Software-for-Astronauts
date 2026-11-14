@@ -1,5 +1,5 @@
 import type { ChangeRow } from "@/lib/sources/osdr";
-import { ANALYTE_INFO, SERIES_4_CSS, SUBJECT_STYLE, fmtPct, fmtValue, unitLabel } from "./analyte-info";
+import { ANALYTE_INFO, SUBJECT_STYLE, fmtPct, fmtValue, unitLabel } from "./analyte-info";
 
 /**
  * "What changed after flight": % change at R+1 (one day after splashdown)
@@ -8,8 +8,7 @@ import { ANALYTE_INFO, SERIES_4_CSS, SUBJECT_STYLE, fmtPct, fmtValue, unitLabel 
 export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects: { id: string; sex: "M" | "F" }[] }) {
   if (!rows.length) return <p className="text-sm text-muted">No data.</p>;
   return (
-    <div className="i4-scope">
-      <style>{SERIES_4_CSS}</style>
+    <div>
       {/* Phones: one compact block per marker instead of a wide table. */}
       <ul className="space-y-2 md:hidden">
         {rows.map((r) => (

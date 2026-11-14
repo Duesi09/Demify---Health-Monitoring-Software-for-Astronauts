@@ -49,7 +49,7 @@ an air-gapped spacecraft network.
 - Female subjects mostly carry male reference ranges in the CBC table.
 - C003 platelets at L-92 = 12.9, which is probably an entry error.
 - `RANGE_MAX` sometimes contains the text `N/A`.
-- CRP is reported in pg/ml. Divide by 1e9 to get mg/L.
+- CRP is reported in pg/ml. Divide by 1e6 to get mg/L (1 mg/L = 10⁶ pg/mL).
 
 ### Other OSDR APIs
 

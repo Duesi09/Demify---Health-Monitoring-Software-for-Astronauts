@@ -26,6 +26,8 @@ export interface SeriesDef {
   dashed?: boolean;
 }
 
+type DomainBound = number | "auto";
+
 export interface Band {
   from: number;
   to: number;
@@ -44,7 +46,12 @@ export interface TimeSeriesChartProps {
   unit?: string;
   height?: number;
   log?: boolean;
-  yDomain?: [number | "auto", number | "auto"];
+  yDomain?: [DomainBound, DomainBound];
+  /**
+   * Values that must stay visible on the y-axis (e.g. a threshold the data is
+   * far below). Serializable, so server components can pass it.
+   */
+  includeY?: number[];
   /** Shaded "normal" band, drawn in neutral tint. */
   band?: Band;
   refLines?: RefLine[];
@@ -88,8 +95,15 @@ export function TimeSeriesChart({
   xFormat = "time",
   decimals,
   showDots = false,
+  includeY = [],
   ariaLabel,
 }: TimeSeriesChartProps) {
+  const domain: [number | "auto" | ((v: number) => number), number | "auto" | ((v: number) => number)] = includeY.length
+    ? [
+        yDomain[0] === "auto" ? (min: number) => Math.min(min, ...includeY) : yDomain[0],
+        yDomain[1] === "auto" ? (max: number) => Math.max(max, ...includeY) * (log ? 2 : 1.05) : yDomain[1],
+      ]
+    : yDomain;
   if (!data.length) {
     return (
       <div className="flex items-center justify-center text-sm text-muted" style={{ height }}>
@@ -113,7 +127,7 @@ export function TimeSeriesChart({
           />
           <YAxis
             scale={log ? "log" : "auto"}
-            domain={yDomain}
+            domain={domain}
             allowDataOverflow={log}
             stroke="var(--muted)"
             tickLine={false}
