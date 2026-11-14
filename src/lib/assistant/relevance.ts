@@ -5,7 +5,11 @@ import type { LibraryHit, SearchResult } from "@onboard/library.mjs";
  * word or two with the question is not one: the assistant then says the
  * library has no good answer instead of showing it.
  *
- * - vector tier: cosine similarity >= DEMIFY_ASSISTANT_MIN_SCORE (default 0.5);
+ * - vector tier: cosine similarity >= DEMIFY_ASSISTANT_MIN_SCORE (default
+ *   0.5); a hit less than VECTOR_STRONG_MARGIN above it must also contain
+ *   most of the question's words (with nomic-embed-text, passages that
+ *   answer score about 0.75-0.88, off-topic ones such as the kidney-stone
+ *   question about 0.55-0.60);
  * - full-text and bundled tiers: their scores are keyword ranks, not
  *   similarities, so a passage must also contain most of the question's
  *   words (TERM_COVERAGE_MIN); bundled scores (BM25 share of the best
@@ -16,6 +20,8 @@ import type { LibraryHit, SearchResult } from "@onboard/library.mjs";
 export const TERM_COVERAGE_MIN = 0.6;
 /** Minimum normalised BM25 score of a bundled hit. */
 export const BUNDLED_MIN_SCORE = 0.25;
+/** A vector hit this far above DEMIFY_ASSISTANT_MIN_SCORE counts without the word check. */
+export const VECTOR_STRONG_MARGIN = 0.15;
 
 /** Same idea as the library's keyword search: English stopwords and question fillers. */
 const STOPWORDS = new Set(
@@ -72,7 +78,10 @@ export function usableHits(result: SearchResult, question: string, opts: { minSc
   return result.hits
     .filter((h) => {
       if (!h.integrityOk) return false;
-      if (h.tier === "vector") return h.score >= opts.minScore;
+      if (h.tier === "vector") {
+        if (!(h.score >= opts.minScore)) return false;
+        return h.score >= opts.minScore + VECTOR_STRONG_MARGIN || termCoverage(question, `${h.title} ${h.heading} ${h.text}`) >= TERM_COVERAGE_MIN;
+      }
       if (!(h.score > 0)) return false;
       if (h.tier === "bundled" && h.score < BUNDLED_MIN_SCORE) return false;
       return termCoverage(question, `${h.title} ${h.heading} ${h.text}`) >= TERM_COVERAGE_MIN;

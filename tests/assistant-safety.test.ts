@@ -358,6 +358,11 @@ describe("answer check", () => {
       ok: true,
       text: "1. Confirm the rhythm [1].\n2. Attach the AED [2].",
     });
+    expect(checkAnswer("[1], [2], [3] Systolic above 180 mmHg escalates [3]. Repeat the measurement [1].", 3)).toMatchObject({
+      ok: true,
+      text: "Systolic above 180 mmHg escalates [3]. Repeat the measurement [1].",
+    });
+    expect(checkAnswer("Defer EVAs and log dosimeter readings [1]. [1]", 2)).toMatchObject({ ok: true, text: "Defer EVAs and log dosimeter readings [1]." });
     // A run after a full stop that the sentence before needs stays with it.
     expect(checkAnswer("Start CPR. [1] Attach the AED [2].", 2)).toMatchObject({ ok: true, text: "Start CPR. [1] Attach the AED [2].", cited: [1, 2] });
     // A leading run before a statement without markers of its own stays too.
@@ -499,6 +504,16 @@ describe("relevance gate", () => {
   it("vector hits need DEMIFY_ASSISTANT_MIN_SCORE", () => {
     const hits = [hit({ score: 0.71 }), hit({ score: 0.49, docId: "weak" })];
     expect(usableHits(result(hits), EXAMPLES[0], { minScore: 0.5, k: 5 }).map((h) => h.score)).toEqual([0.71]);
+  });
+
+  // Measured with nomic-embed-text on the library: the kidney-stone question's best passages score 0.55-0.56.
+  it("vector hits just above the minimum also need most of the question's words", () => {
+    const bone = hit({ score: 0.5603, heading: "Estimated bone loss rate", text: "Released calcium raises kidney-stone risk, and so does dehydration." });
+    expect(usableHits(result([bone]), NO_ANSWER_QUESTION, { minScore: 0.5, k: 5 })).toEqual([]);
+    // The same passage with a strong similarity counts (a paraphrased question).
+    expect(usableHits(result([{ ...bone, score: 0.66 }]), NO_ANSWER_QUESTION, { minScore: 0.5, k: 5 })).toHaveLength(1);
+    // A weak similarity with the question's words counts too.
+    expect(usableHits(result([hit({ score: 0.55 })]), EXAMPLES[0], { minScore: 0.5, k: 5 })).toHaveLength(1);
   });
 
   it("keyword hits need most of the question's words, bundled hits also a minimum score", () => {

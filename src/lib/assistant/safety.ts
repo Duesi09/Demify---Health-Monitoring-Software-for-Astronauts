@@ -290,7 +290,9 @@ function normaliseMarkers(text: string): string {
         .map((n) => `[${n.trim()}]`)
         .join(""),
     )
-    .replace(/\[\s*(\d+)\s*\]/g, "[$1]");
+    .replace(/\[\s*(\d+)\s*\]/g, "[$1]")
+    // "[1], [2]" -> "[1][2]"
+    .replace(/(\[(?:\d+|C)\])\s*[,;]\s*(?=\[(?:\d+|C)\])/g, "$1");
 }
 
 const MARKER = /\[(\d+|C)\]/g;
@@ -349,6 +351,9 @@ const LEADING_RUN = new RegExp(String.raw`^([ \t]*(?:(?:[-*•–]|\d+[.)])[ \t]
 /** "… [2]. [1] Next sentence [3]." : a run after a cited sentence, before a sentence that is cited too. */
 const MID_RUN = new RegExp(String.raw`(\][ \t]*[.!?…]["'”’)]*[ \t]+)${MARKER_RUN}(?=[\p{Lu}\d][^\n.!?]*\[(?:\d+|C)\])`, "gu");
 
+/** "… S1 or higher [1]. [1]": a run after the full stop of a sentence that is already cited, at the end of a line. */
+const TRAILING_RUN = new RegExp(String.raw`(\][ \t]*[.!?…]["'”’)]*)[ \t]+${MARKER_RUN}$`, "gm");
+
 /**
  * Small models sometimes open a sentence with markers as well as closing it
  * with them ("[1][2] The checklist says … [2]."). The opening run is dropped
@@ -356,7 +361,7 @@ const MID_RUN = new RegExp(String.raw`(\][ \t]*[.!?…]["'”’)]*[ \t]+)${MARK
  * the previous sentence needs stays with it (see statements()).
  */
 function dropLeadingMarkers(text: string): string {
-  return text.replace(LEADING_RUN, "$1").replace(MID_RUN, "$1");
+  return text.replace(LEADING_RUN, "$1").replace(MID_RUN, "$1").replace(TRAILING_RUN, "$1");
 }
 
 /**

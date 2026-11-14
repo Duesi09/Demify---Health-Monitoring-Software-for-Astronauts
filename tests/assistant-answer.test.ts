@@ -451,13 +451,17 @@ describe("model server problems", () => {
 });
 
 describe("retrieval gates and integrity", () => {
-  it("vector hits below DEMIFY_ASSISTANT_MIN_SCORE do not count", async () => {
-    mocks.searchLibrary.mockResolvedValue(vector([hit(1, { score: 0.41 }), hit(2, { score: 0.2 })]));
+  it("vector hits below DEMIFY_ASSISTANT_MIN_SCORE do not count (and weak ones need the question's words)", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1, { score: 0.41, text: "Pulse oximeter: stowed in medical kit A." }), hit(2, { score: 0.2 })]));
     mocks.chat.mockResolvedValue("Answer [1].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
     expect(a).toMatchObject({ status: "no-answer", reason: NO_ANSWER_LINK_UP, citations: [] });
     const lower = await askAssistant({ question: EXAMPLES[3][0] }, onboard({ DEMIFY_ASSISTANT_MIN_SCORE: "0.4" }));
     expect(lower.citations.map((c) => c.docId)).toEqual(["doc-1"]);
+    // Just above the minimum, a passage without the question's words does not count.
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1, { score: 0.56 })]));
+    const offTopic = await askAssistant({ question: NO_ANSWER_QUESTION }, onboard());
+    expect(offTopic).toMatchObject({ status: "no-answer", citations: [] });
   });
 
   it("reports chunks dropped for a checksum mismatch and never cites them", async () => {
