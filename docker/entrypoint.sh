@@ -61,4 +61,19 @@ fi
 log "mission=${DEMIFY_MISSION:-iss} offline=${DEMIFY_OFFLINE:-false}" \
     "data=$DATA_DIR snapshots=${DEMIFY_SNAPSHOT_DIR:-$SNAP_DIR}"
 
+# --- onboard server (docker-compose.spark.yml) -------------------------------
+# Where the database and the model server are: host, port and path only,
+# never the user name, password or query string. Silent without them (the
+# default setup), so the pitch logs stay as they were.
+where() {
+  [ -n "$1" ] || { echo "not set"; return 0; }
+  rest="${1#*://}"
+  rest="${rest##*@}"
+  echo "${rest%%\?*}"
+}
+if [ -n "${DATABASE_URL:-}" ] || [ -n "${DEMIFY_MODEL_URL:-}" ]; then
+  log "onboard: database=$(where "${DATABASE_URL:-}")" \
+      "model=$(where "${DEMIFY_MODEL_URL:-}")"
+fi
+
 exec "$@"

@@ -157,20 +157,20 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
 
   const result = (
     over: Pick<AssistantAnswer, "status" | "answer" | "citations"> & { reason?: string },
-    lib: { freshness: Pick<Freshness, "librarySyncedAt" | "libraryAgeText" | "stale">; retrieval: RetrievalTier; integrityFailures: number },
+    ctx: { freshness: Pick<Freshness, "librarySyncedAt" | "libraryAgeText" | "stale">; retrieval: RetrievalTier; integrityFailures: number },
     model: string | null,
     fallbackReason: string | undefined,
   ): AssistantAnswer => ({
     ...over,
     ...(crew ? { crewContext: crew } : {}),
-    freshness: { ...lib.freshness, crewDataAt: crew?.takenAt ?? null, groundLinkUp },
+    freshness: { ...ctx.freshness, crewDataAt: crew?.takenAt ?? null, groundLinkUp },
     mode: {
-      retrieval: lib.retrieval,
+      retrieval: ctx.retrieval,
       model,
       groundLink: groundLinkUp ? "up" : "down",
       ...(fallbackReason ? { fallbackReason } : {}),
     },
-    integrityFailures: lib.integrityFailures,
+    integrityFailures: ctx.integrityFailures,
     askedAt,
     notice: ASSISTANT_NOTICE,
   });
@@ -190,7 +190,11 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
   // 2. Retrieval.
   const search = await searchOnboardLibrary(question, lib, cfg);
   const freshness = await libraryFreshness(search.source, lib, cfg);
-  maybeAutoSync(lib, { groundLinkUp, stale: (await libraryFreshness("database", lib, cfg)).stale }, cfg);
+  if (groundLinkUp && lib.pool) {
+    // A stale (or still empty) database library syncs in the background; this answer does not wait for it.
+    const dbFreshness = search.source === "database" ? freshness : await libraryFreshness("database", lib, cfg);
+    maybeAutoSync(lib, { groundLinkUp, stale: dbFreshness.stale }, cfg);
+  }
   const hits = usableHits(search, question, { minScore: cfg.minScore, k: cfg.topK });
   const retrieval = { freshness, retrieval: search.tier, integrityFailures: search.integrityFailures };
   const noAnswer = withActNow(groundLinkUp ? NO_ANSWER_LINK_UP : NO_ANSWER_LINK_DOWN, " ");

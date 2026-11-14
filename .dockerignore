@@ -49,3 +49,8 @@ certs
 # Agent / tooling metadata
 .claude
 .vercel
+
+# Onboard server: onboard/ (plain-Node modules) and library/ (the curated
+# library) ARE included on purpose; the image ships both. Dev-only tools
+# such as the fake model server never go into the image.
+scripts/dev
