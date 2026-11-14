@@ -20,7 +20,7 @@ import { ReadinessCard } from './ReadinessCard'
 import { SectionCard, SectionCards } from './SectionCards'
 import { TILES, tileFor } from './tiles'
 import { TriageBanner } from './TriageBanner'
-import { useAddress } from './useAddress'
+import { useAddress, useDayFromAddress } from './useAddress'
 import { VitalsMonitor } from './VitalsMonitor'
 
 interface Props {
@@ -79,6 +79,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
 
   // Keep the day in the address bar so a reload or a shared link opens the same day.
   // Skipped during the time-lapse: browsers limit how often the URL may change.
+  useDayFromAddress(day, setDay)
   useAddress(`?day=${day}`, !playing)
 
   function selectMetric(metric: MetricId) {

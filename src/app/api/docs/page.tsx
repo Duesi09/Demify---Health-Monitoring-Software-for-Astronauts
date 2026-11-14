@@ -152,7 +152,7 @@ function Endpoint({ path, method, described }: Listed) {
       {definition && (
         <>
           <h4 className="eyebrow mt-5">Try it</h4>
-          <pre className={`${block} mt-2`} tabIndex={0}>
+          <pre className={`${block} mt-2`} tabIndex={0} role="region" aria-label="Example request">
             {curlExample(definition)}
           </pre>
         </>
@@ -179,7 +179,7 @@ function Endpoint({ path, method, described }: Listed) {
       {example !== undefined && (
         <details className="mt-4 text-sm">
           <summary className="cursor-pointer text-ink-2">Show an example of the 200 answer</summary>
-          <pre className={`${block} mt-2 max-h-96`} tabIndex={0}>
+          <pre className={`${block} mt-2 max-h-96`} tabIndex={0} role="region" aria-label="Example answer">
             {JSON.stringify(example, null, 2)}
           </pre>
         </details>
@@ -279,7 +279,7 @@ export default function ApiDocsPage() {
             went wrong in this request, and a 400 lists every fault it found under <code className={code}>errors</code>, each with where it
             is (<code className={code}>in</code>, <code className={code}>field</code>) and what is wrong.
           </p>
-          <pre className={`${block} mt-3`} tabIndex={0}>
+          <pre className={`${block} mt-3`} tabIndex={0} role="region" aria-label="Example error">
             {JSON.stringify(faultExample, null, 2)}
           </pre>
           <dl className="mt-4 flex flex-col">

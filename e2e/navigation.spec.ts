@@ -82,10 +82,9 @@ test.describe('Navigation', () => {
     await expect(page).toHaveURL(/\/radiation\?day=41$/)
   })
 
-  // Known defects, kept here so that fixing them is a matter of removing `fixme`.
-  // Both come from the delayed address write in src/ui/useAddress.ts.
+  // Both were defects of the delayed address write in src/ui/useAddress.ts.
 
-  test.fixme('a header link clicked while the address is still being completed is followed', async ({ page }) => {
+  test('a header link clicked while the address is still being completed is followed', async ({ page }) => {
     // A slow link: the next page takes longer to arrive than the address write waits.
     await page.route(/\/radiation\?/, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 400))
@@ -96,7 +95,7 @@ test.describe('Navigation', () => {
     await expect(pageTitle(page)).toHaveText('Radiation')
   })
 
-  test.fixme('Back returns to the day that was last shown', async ({ page }) => {
+  test('Back returns to the day that was last shown', async ({ page }) => {
     await openPage(page, '/?day=50')
     await page.getByRole('button', { name: 'Next day' }).click()
     await expect(page).toHaveURL(/\/\?day=51$/)

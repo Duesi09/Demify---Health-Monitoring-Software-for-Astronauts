@@ -11,7 +11,7 @@ import { EarthKnows } from './EarthKnows'
 import { EarthView } from './EarthView'
 import { LightTimeLedger } from './LightTimeLedger'
 import { SourcesBox } from './SourcesBox'
-import { useAddress } from '../useAddress'
+import { useAddress, useDayFromAddress } from '../useAddress'
 
 interface Props {
   initialReadings: Reading[]
@@ -71,6 +71,7 @@ export function EarthLink({ initialReadings, initialDay, initialProfile, profile
 
   // Keep day and place in the address, so a reload or a shared link opens the same view.
   // Waits for the slider to rest: browsers limit how often the address may change.
+  useDayFromAddress(day, setDay)
   useAddress(`?day=${day}&profile=${profile}`)
 
   return (

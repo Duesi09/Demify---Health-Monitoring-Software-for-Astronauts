@@ -25,7 +25,7 @@ import { MissionDose } from './MissionDose'
 import { SourceLink, Tag, button, primaryButton } from './parts'
 import { ShelterProcedure } from './ShelterProcedure'
 import { newRun, useShelterSession, type ProcedureRun } from './useShelterSession'
-import { useAddress } from '../useAddress'
+import { useAddress, useDayFromAddress } from '../useAddress'
 
 interface Props {
   readings: Reading[]
@@ -212,6 +212,7 @@ export function RadiationView({ readings, initialDay }: Props) {
   // Keep the day in the address bar so a reload or a shared link opens the same day.
   // Written once the day has settled: browsers limit how often the URL may change,
   // and dragging the day control changes it many times a second.
+  useDayFromAddress(day, setDay)
   useAddress(`?day=${day}`)
 
   useEffect(() => {
