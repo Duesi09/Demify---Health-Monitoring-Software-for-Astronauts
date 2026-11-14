@@ -26,7 +26,8 @@ export type IndicatorId =
   | "hydration"
   | "wbc"
   | "cabinCO2"
-  | "visionChange";
+  | "visionChange"
+  | "stDeviation";
 
 /** Five NASA HRP hazards of human spaceflight. */
 export type HazardId =
@@ -119,4 +120,72 @@ export interface SourceResult<T> {
   freshness: "live" | "cache" | "snapshot";
   fetchedAt: string;
   error?: string;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Live patient monitor + emergency training scenarios                        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Training scenarios a crew can trigger to rehearse a medical emergency.
+ * They only change SIMULATED telemetry and are always labelled as drills.
+ *  - stemi: acute ST-elevation myocardial infarction (heart attack)
+ *  - vf: cardiac arrest with ventricular fibrillation
+ *  - hypertensive-crisis: blood pressure > 180/120
+ */
+export type ScenarioType = "stemi" | "vf" | "hypertensive-crisis";
+
+export interface Scenario {
+  crewId: string;
+  type: ScenarioType;
+  /** ISO 8601 */
+  startedAt: string;
+}
+
+/** Heart rhythm the ECG waveform renderer should draw. */
+export type Rhythm = "sinus" | "sinus-tachycardia" | "sinus-bradycardia" | "vt" | "vf";
+
+export type AlarmPriority = "high" | "medium";
+
+/** One active patient-monitor alarm (IEC 60601-1-8 style priorities). */
+export interface MonitorAlarm {
+  /** Stable id, e.g. "plt:hr-high"; used to acknowledge/silence. */
+  id: string;
+  crewId: string;
+  crewName: string;
+  priority: AlarmPriority;
+  /** Monitor-style message, e.g. "HR HIGH 132 > 120" or "VFIB". */
+  text: string;
+  /** Indicator that triggered it, if any. */
+  indicator?: IndicatorId;
+  /** True when produced by a training scenario. */
+  drill: boolean;
+}
+
+/**
+ * Instantaneous vital signs for the live monitor. Numbers are null when the
+ * parameter cannot be measured (e.g. no pulse in VF: no SpO2/pleth, HR "---").
+ */
+export interface LiveVitals {
+  crewId: string;
+  crewName: string;
+  /** ISO 8601 time of this sample. */
+  t: string;
+  hr: number | null;
+  rhythm: Rhythm;
+  /** ST segment deviation in mm (0.1 mV) on lead II; positive = elevation. */
+  stMm: number;
+  /** Premature ventricular contractions per minute (0 = none). */
+  pvcPerMin: number;
+  sys: number | null;
+  dia: number | null;
+  /** Mean arterial pressure. */
+  map: number | null;
+  spo2: number | null;
+  resp: number | null;
+  temp: number | null;
+  /** Where the numbers come from. Waveforms are always synthesised from them. */
+  source: "simulated" | "sensor" | "mixed";
+  scenario: (Scenario & { elapsedS: number; label: string }) | null;
+  alarms: MonitorAlarm[];
 }

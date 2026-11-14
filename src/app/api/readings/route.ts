@@ -2,7 +2,8 @@ import { z } from "zod";
 import { config } from "@/lib/config";
 import { INDICATORS } from "@/lib/health/knowledge";
 import { addReadings, getCrew, listReadings } from "@/lib/store/readings";
-import { simulateDaily, simulateSeries } from "@/lib/sources/simulator";
+import { simulateDaily, simulateLive, simulateSeries } from "@/lib/sources/simulator";
+import { getScenario } from "@/lib/store/scenarios";
 import type { IndicatorId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -147,13 +148,17 @@ export async function GET(req: Request) {
 
   const stored = await listReadings({ crewId, indicator, since });
   let simulated: Awaited<ReturnType<typeof simulateSeries>> = [];
-  if (config.simulateTelemetry && crewId) {
+  const scenario = crewId ? await getScenario(crewId) : null;
+  if ((config.simulateTelemetry || scenario) && crewId) {
     const crew = await getCrew(crewId);
     if (crew) {
       const from = Date.parse(since);
+      const now = Date.now();
       simulated = [
-        ...simulateSeries(crew, Math.max(from, Date.now() - 48 * 3_600_000)),
-        ...simulateDaily(crew, from),
+        ...(config.simulateTelemetry
+          ? [...simulateSeries(crew, Math.max(from, now - 48 * 3_600_000)), ...simulateDaily(crew, from)]
+          : []),
+        ...simulateLive(crew, now, scenario),
       ].filter(
         (r) => !indicator || r.indicator === indicator,
       );

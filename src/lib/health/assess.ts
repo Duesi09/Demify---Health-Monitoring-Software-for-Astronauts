@@ -1,6 +1,7 @@
 import "server-only";
 import { config, currentMission } from "../config";
-import { simulateDaily, simulateSeries } from "../sources/simulator";
+import { simulateDaily, simulateLive, simulateSeries } from "../sources/simulator";
+import { getScenario } from "../store/scenarios";
 import { estimateDoseRate, getSpaceWeather } from "../sources/swpc";
 import { getCrew, listCrew, listReadings } from "../store/readings";
 import type {
@@ -48,9 +49,14 @@ export async function readingsFor(crew: CrewMember, hours = 24): Promise<Reading
   const since = Date.now() - hours * 3_600_000;
   const stored = await listReadings({ crewId: crew.id, since: new Date(since).toISOString() });
   // Continuous telemetry only needs the last day; daily check-ins cover the whole window.
+  const now = Date.now();
+  const scenario = await getScenario(crew.id, now);
   const sim = config.simulateTelemetry
-    ? [...simulateSeries(crew, Math.max(since, Date.now() - 24 * 3_600_000)), ...simulateDaily(crew, since)]
+    ? [...simulateSeries(crew, Math.max(since, now - 24 * 3_600_000)), ...simulateDaily(crew, since)]
     : [];
+  // A live sample at "now" lets assessments react within seconds; during a
+  // training scenario it is produced even when demo telemetry is off.
+  if (config.simulateTelemetry || scenario) sim.push(...simulateLive(crew, now, scenario));
   return [...sim, ...stored].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
 }
 
@@ -82,6 +88,11 @@ export function currentValue(
     return { value: last.value, takenAt: last.takenAt, source: last.source };
   }
   const last = pool[pool.length - 1];
+  // Acute event (training scenario): judge the current sample, not the
+  // 60-minute median, which would hide a heart attack for half an hour.
+  if (last.note?.startsWith("scenario:")) {
+    return { value: last.value, takenAt: last.takenAt, source: last.source };
+  }
   if (!def.continuous || pool === real) {
     return { value: last.value, takenAt: last.takenAt, source: last.source };
   }

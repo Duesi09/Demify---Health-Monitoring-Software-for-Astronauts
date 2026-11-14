@@ -74,6 +74,7 @@ const S = {
   exercise: { label: "NASA: Astronaut Exercise", url: "https://www.nasa.gov/general/astronaut-exercise/" },
   bioMonitor: { label: "CSA Bio-Monitor", url: "https://www.asc-csa.gc.ca/eng/sciences/bio-monitor.asp" },
   csaRad: { label: "CSA: Monitoring radiation for astronaut health", url: "https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp" },
+  udmi: { label: "Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018)", url: "https://www.ahajournals.org/doi/10.1161/CIR.0000000000000617" },
   aha: { label: "AHA blood pressure categories", url: "https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings" },
   ahaHr: { label: "AHA heart rate", url: "https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse" },
   ada: { label: "ADA diagnosis & hypoglycemia levels", url: "https://diabetes.org/about-diabetes/diagnosis" },
@@ -508,6 +509,38 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     escalation: "Any new visual change: OCT and fundoscope exam with ground support.",
     sources: [S.sansTB, S.sansRisk],
   },
+  stDeviation: {
+    id: "stDeviation",
+    label: "ST segment deviation (ECG)",
+    short: "ST segment",
+    unit: "mm",
+    decimals: 1,
+    inputRange: [-10, 10],
+    // New ST elevation >= 1 mm is the STEMI criterion; marked depression
+    // suggests ischaemia.
+    steps: [[-2, "critical"], [-0.5, "caution"], [1, "nominal"]],
+    top: "critical",
+    basis: "CLIN",
+    ranges: {
+      nominal: "−0.5 to +0.9 mm",
+      caution: "−0.5 to −2 mm depression (possible ischaemia)",
+      critical: "≥ 1 mm elevation (STEMI criterion) or > 2 mm depression",
+    },
+    continuous: true,
+    regions: ["heart"],
+    hazards: ["gravity", "radiation", "distance"],
+    spaceflightEffect:
+      "Spaceflight remodels the heart and radiation adds long-term cardiovascular risk. A heart attack far from Earth must be recognised and treated by the crew itself: there is no emergency room and evacuation takes days.",
+    measurement: "Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG transmitted to the flight surgeon.",
+    actions: [
+      "Stop all activity; the crew member rests, monitored, with the Crew Medical Officer.",
+      "Record and transmit a 12-lead ECG to the flight surgeon immediately.",
+      "Follow the onboard medical checklist for chest pain (e.g. aspirin, oxygen if SpO₂ < 90 %).",
+      "Prepare the defibrillator (AED) and advanced cardiac life support kit.",
+    ],
+    escalation: "Any ST elevation ≥ 1 mm or chest pain: medical emergency, contact the flight surgeon now.",
+    sources: [S.udmi, S.cardioRisk, S.bioMonitor],
+  },
 };
 
 export function classify(id: IndicatorId, value: number): Status {
@@ -656,7 +689,7 @@ export const BODY_REGIONS: Record<BodyRegionId, BodyRegionDef> = {
     spaceEffects:
       "The heart becomes rounder and does less work; blood volume drops, causing low blood pressure and fainting at landing. Radiation adds long-term degenerative risk.",
     hazards: ["gravity", "radiation"],
-    indicators: ["heartRate", "systolicBP", "diastolicBP", "exerciseMinutes"],
+    indicators: ["heartRate", "stDeviation", "systolicBP", "diastolicBP", "exerciseMinutes"],
   },
   lungs: {
     id: "lungs",

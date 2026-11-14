@@ -24,6 +24,11 @@
   --series-2: #d95926;
   --series-3: #9085e9;
   --series-4: #d55181;
+  /* Solid alarm fills (monitor style) + the text that sits on them. */
+  --caution-fill: #f5b70a;
+  --on-caution: #1c1400;
+  --critical-fill: #dc2626;
+  --on-critical: #ffffff;
 }
 
 :root[data-theme="light"] {
@@ -43,6 +48,10 @@
   --series-2: #eb6834;
   --series-3: #6250d6;
   --series-4: #e87ba4;
+  --caution-fill: #f2a900;
+  --on-caution: #1c1400;
+  --critical-fill: #c81e1e;
+  --on-critical: #ffffff;
 }
 
 @theme inline {
@@ -62,6 +71,10 @@
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
   --color-series-4: var(--series-4);
+  --color-caution-fill: var(--caution-fill);
+  --color-on-caution: var(--on-caution);
+  --color-critical-fill: var(--critical-fill);
+  --color-on-critical: var(--on-critical);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
@@ -117,4 +130,16 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .pulse-ring { animation: none; }
+}
+
+/* High-priority alarm flash (IEC 60601-1-8 suggests ~2 Hz for high priority). */
+@keyframes alarm-flash {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.35; }
+}
+.alarm-flash {
+  animation: alarm-flash 0.9s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alarm-flash { animation: none; }
 }
