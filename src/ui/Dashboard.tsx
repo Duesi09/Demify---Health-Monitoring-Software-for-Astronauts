@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { resetManualReadings } from '@/app/actions'
 import { regionForMetric, type RegionId } from '@/domain/bodyRegions'
+import { completedDays, planRoutine, streakOf, summariseRoutine } from '@/domain/checkin'
 import { evaluateIndexed, indexReadings, missionStatuses } from '@/domain/engine'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
@@ -16,7 +17,7 @@ import { MetricTile } from './MetricTile'
 import { MissionTimeline } from './MissionTimeline'
 import { PlaybackContext, TIMELAPSE_STEP_MS } from './motion'
 import { ReadinessCard } from './ReadinessCard'
-import { SectionCards } from './SectionCards'
+import { SectionCard, SectionCards } from './SectionCards'
 import { TILES, tileFor } from './tiles'
 import { TriageBanner } from './TriageBanner'
 import { VitalsMonitor } from './VitalsMonitor'
@@ -36,6 +37,10 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
   const index = useMemo(() => indexReadings(readings), [readings])
   const evaluation = useMemo(() => evaluateIndexed(index, day), [index, day])
   const statuses = useMemo(() => missionStatuses(index, MISSION_DAYS), [index])
+  // Worked out once for the whole mission, so moving the day only slices it.
+  const completeDays = useMemo(() => completedDays(index, MISSION_DAYS), [index])
+  const streak = useMemo(() => streakOf(completeDays.slice(0, day)), [completeDays, day])
+  const routine = useMemo(() => summariseRoutine(planRoutine(TILES, evaluation)), [evaluation])
   const manualKeys = useMemo(
     () => new Set(readings.filter((r) => r.source === 'manual').map((r) => `${r.day}:${r.metric}`)),
     [readings],
@@ -128,7 +133,19 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
             <VitalsMonitor evaluation={evaluation} onSelectMetric={selectMetric} />
           </div>
           <ReadinessCard evaluation={evaluation} onSelectMetric={selectMetric} />
-          <SectionCards day={day} evaluation={evaluation} index={index} />
+          <SectionCards day={day} evaluation={evaluation} index={index}>
+            <SectionCard
+              href={`/checkin?day=${day}`}
+              eyebrow="Check-in"
+              headline={
+                routine.due > 0
+                  ? `${routine.due} ${routine.due === 1 ? 'measurement' : 'measurements'} due`
+                  : `${routine.measuredToday} of ${routine.total} measured today`
+              }
+              detail={`Measurement streak: ${streak.current} ${streak.current === 1 ? 'day' : 'days'} in a row.`}
+              action={routine.due > 0 ? 'Start the check-in' : 'Open the check-in and the reaction test'}
+            />
+          </SectionCards>
           <div className="grid gap-5 @4xl:grid-cols-2">
             <BodyMap
               evaluation={evaluation}
