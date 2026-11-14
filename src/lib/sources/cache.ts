@@ -9,9 +9,11 @@ import type { SourceResult } from "../types";
  *
  * Order: in-memory cache (fresh) -> live fetch -> stale memory -> bundled
  * snapshot on disk. Spacecraft have intermittent or no internet, so every
- * source MUST ship a snapshot in data/snapshots/<key>.json and the app must
- * keep working on it. Successful live fetches refresh that snapshot file when
- * the data dir is writable, so the station keeps the latest copy it saw.
+ * source MUST ship a seed snapshot in data/snapshots/<key>.json (committed,
+ * read-only) and the app must keep working on it. Successful live fetches
+ * write a refreshed copy to config.snapshotDir (data/runtime/snapshots
+ * locally, /data/snapshots in Docker), so the station keeps the latest data
+ * it saw. Promote refreshed copies to seeds with `npm run snapshots:promote`.
  */
 
 interface Entry {
@@ -35,20 +37,26 @@ export async function fetchJson<T = unknown>(
   return (await res.json()) as T;
 }
 
-function snapshotPath(key: string) {
-  return path.join(config.snapshotDir, `${key}.json`);
+function snapshotPath(key: string, dir: string = config.snapshotDir) {
+  return path.join(dir, `${key}.json`);
 }
 
+/** Newest of the refreshed snapshot (writable dir) and the bundled seed. */
 async function readSnapshot<T>(
   key: string,
 ): Promise<{ data: T; fetchedAt: string } | null> {
-  try {
-    const raw = await fs.readFile(snapshotPath(key), "utf8");
-    const parsed = JSON.parse(raw) as { fetchedAt: string; data: T };
-    return parsed;
-  } catch {
-    return null;
+  const dirs = [...new Set([config.snapshotDir, config.snapshotSeedDir])];
+  let best: { data: T; fetchedAt: string } | null = null;
+  for (const dir of dirs) {
+    try {
+      const raw = await fs.readFile(snapshotPath(key, dir), "utf8");
+      const parsed = JSON.parse(raw) as { fetchedAt: string; data: T };
+      if (!best || parsed.fetchedAt > best.fetchedAt) best = parsed;
+    } catch {
+      // missing or unreadable: try the next directory
+    }
   }
+  return best;
 }
 
 async function writeSnapshot(key: string, data: unknown) {

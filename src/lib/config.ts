@@ -10,9 +10,20 @@ import type { MissionProfile, MissionProfileId } from "./types";
 export const config = {
   /** Directory for persistent data (crew readings). Mount a volume here. */
   dataDir: process.env.DEMIFY_DATA_DIR ?? path.join(process.cwd(), "data"),
-  /** Directory holding bundled offline snapshots of the external sources. */
+  /**
+   * Writable directory where refreshed snapshots of external sources are
+   * stored after each successful live fetch (Docker: /data/snapshots).
+   */
   snapshotDir:
     process.env.DEMIFY_SNAPSHOT_DIR ??
+    path.join(process.cwd(), "data", "runtime", "snapshots"),
+  /**
+   * Read-only snapshots bundled with the release (committed in
+   * data/snapshots). Used when neither live data nor a refreshed snapshot
+   * exists, e.g. on first start of an air-gapped system.
+   */
+  snapshotSeedDir:
+    process.env.DEMIFY_SNAPSHOT_SEED_DIR ??
     path.join(process.cwd(), "data", "snapshots"),
   /** When true, never call external APIs; serve bundled snapshots only. */
   offline: process.env.DEMIFY_OFFLINE === "true",

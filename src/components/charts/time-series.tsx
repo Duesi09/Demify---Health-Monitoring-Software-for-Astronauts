@@ -51,6 +51,8 @@ export interface TimeSeriesChartProps {
   /** Format for x-axis ticks; default HH:MM UTC. */
   xFormat?: "time" | "date" | "datetime";
   decimals?: number;
+  /** Draw a dot on every point (use for sparse, e.g. manually entered, data). */
+  showDots?: boolean;
   ariaLabel: string;
 }
 
@@ -85,6 +87,7 @@ export function TimeSeriesChart({
   refLines = [],
   xFormat = "time",
   decimals,
+  showDots = false,
   ariaLabel,
 }: TimeSeriesChartProps) {
   if (!data.length) {
@@ -95,7 +98,8 @@ export function TimeSeriesChart({
     );
   }
   return (
-    <div role="img" aria-label={ariaLabel} style={{ height }} className="w-full text-[11px]">
+    <div role="img" aria-label={ariaLabel} style={{ height }} className="flex w-full flex-col text-[11px]">
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
@@ -161,7 +165,7 @@ export function TimeSeriesChart({
               stroke={s.color}
               strokeWidth={2}
               strokeDasharray={s.dashed ? "5 4" : undefined}
-              dot={false}
+              dot={showDots || data.length < 3 ? { r: 3, fill: s.color, strokeWidth: 0 } : false}
               activeDot={{ r: 4, stroke: "var(--surface)", strokeWidth: 2 }}
               connectNulls
               isAnimationActive={false}
@@ -169,8 +173,9 @@ export function TimeSeriesChart({
           ))}
         </LineChart>
       </ResponsiveContainer>
+      </div>
       {series.length > 1 && (
-        <ul className="mt-2 flex flex-wrap gap-4 text-xs text-muted" aria-label="Legend">
+        <ul className="mt-2 flex shrink-0 flex-wrap gap-4 text-xs text-muted" aria-label="Legend">
           {series.map((s) => (
             <li key={s.key} className="flex items-center gap-1.5">
               <span

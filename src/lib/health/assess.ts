@@ -24,6 +24,8 @@ export function worst(statuses: Status[]): Status {
   return statuses.reduce<Status>((w, s) => (RANK[s] > RANK[w] ? s : w), "unknown");
 }
 
+const REAL_CONTINUOUS_MAX_AGE_MS = 6 * 3_600_000;
+
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
@@ -51,9 +53,18 @@ export async function readingsFor(crew: CrewMember, hours = 24): Promise<Reading
 function currentValue(id: IndicatorId, rs: Reading[]): { value: number; takenAt: string; source: Reading["source"] } | null {
   const all = rs.filter((r) => r.indicator === id);
   if (!all.length) return null;
-  const real = all.filter((r) => r.source !== "simulated");
-  const pool = real.length ? real : all;
   const def = INDICATORS[id];
+  // A real (manual/sensor) reading wins over simulated telemetry, but for
+  // continuous vitals only while it is recent: an old spot check must not
+  // mask a week of newer telemetry.
+  const realMaxAgeMs = def.continuous ? REAL_CONTINUOUS_MAX_AGE_MS : Infinity;
+  const now = Date.now();
+  const real = all.filter((r) => r.source !== "simulated" && now - Date.parse(r.takenAt) <= realMaxAgeMs);
+  const pool = real.length ? real : all.filter((r) => r.source === "simulated");
+  if (!pool.length) {
+    const last = all[all.length - 1];
+    return { value: last.value, takenAt: last.takenAt, source: last.source };
+  }
   const last = pool[pool.length - 1];
   if (!def.continuous || pool === real) {
     return { value: last.value, takenAt: last.takenAt, source: last.source };
