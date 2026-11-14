@@ -1,0 +1,51 @@
+# Keep the build context small and free of local state / secrets.
+
+# Dependencies and build output (rebuilt inside the image)
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# VCS / editor / OS
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Local runtime data: never bake crew readings into an image.
+# data/snapshots/ IS included on purpose (offline fallback for air-gapped use).
+data/*
+!data/snapshots
+!data/snapshots/**
+data/snapshots/*.tmp
+
+# Secrets and env files (configure the container via env vars instead)
+.env
+.env.*
+*.pem
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker / deployment files (not needed inside the image except the entrypoint)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+compose*.yml
+docs
+
+# Local CA bundles (passed as a BuildKit secret, never copied into the image)
+certs
+
+# Agent / tooling metadata
+.claude
+.vercel

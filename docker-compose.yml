@@ -1,0 +1,167 @@
+# Demify - astronaut health monitoring
+#
+#   cp .env.example .env            # optional: adjust settings
+#   docker compose up -d --build    # build + start (connected mode)
+#   docker compose ps               # wait for "healthy"
+#   open http://localhost:${DEMIFY_PORT:-3000}
+#
+# Air-gapped variant (no outbound network at all, bundled snapshots only):
+#   docker compose --profile offline up -d --build demify-offline
+#
+# Every setting is an environment variable; see .env.example and
+# docs/DEPLOYMENT.md.
+
+name: demify # fixed project name -> volume is demify_demify-data
+
+x-demify-env: &demify-env
+  # Mission profile: iss | artemis-lunar | mars-transit
+  DEMIFY_MISSION: ${DEMIFY_MISSION:-iss}
+  DEMIFY_OFFLINE: ${DEMIFY_OFFLINE:-false}
+  DEMIFY_CACHE_TTL: ${DEMIFY_CACHE_TTL:-300}
+  DEMIFY_FETCH_TIMEOUT_MS: ${DEMIFY_FETCH_TIMEOUT_MS:-8000}
+  DEMIFY_SIMULATE: ${DEMIFY_SIMULATE:-true}
+  # Persistent data lives on the named volume mounted at /data.
+  DEMIFY_DATA_DIR: /data
+  DEMIFY_SNAPSHOT_DIR: /data/snapshots
+  DEMIFY_RESEED_SNAPSHOTS: ${DEMIFY_RESEED_SNAPSHOTS:-false}
+  # External data sources (override to point at a mirror / ground relay)
+  NASA_API_KEY: ${NASA_API_KEY:-DEMO_KEY}
+  OSDR_BASE_URL: ${OSDR_BASE_URL:-https://osdr.nasa.gov}
+  OSDR_BIODATA_URL: ${OSDR_BIODATA_URL:-https://visualization.osdr.nasa.gov}
+  SWPC_BASE_URL: ${SWPC_BASE_URL:-https://services.swpc.noaa.gov}
+  # Behind a proxy / custom CA (optional; empty = direct connection).
+  # NODE_USE_ENV_PROXY=1 is set in the image so fetch() honours these.
+  # Read from DEMIFY_-prefixed variables on purpose, so a proxy configured in
+  # the operator's own shell (often http://127.0.0.1:...) does not leak into
+  # the container, where 127.0.0.1 would mean the container itself.
+  HTTPS_PROXY: ${DEMIFY_HTTPS_PROXY:-}
+  HTTP_PROXY: ${DEMIFY_HTTP_PROXY:-}
+  NO_PROXY: ${DEMIFY_NO_PROXY:-localhost,127.0.0.1}
+  # Path INSIDE the container, e.g. /etc/demify/ca.crt (see volume below).
+  NODE_EXTRA_CA_CERTS: ${DEMIFY_NODE_EXTRA_CA_CERTS:-}
+
+x-demify-common: &demify-common
+  image: ${DEMIFY_IMAGE:-demify:latest}
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
+    # CA bundle for builds behind a TLS-intercepting proxy (see DEMIFY_BUILD_CA).
+    secrets:
+      - build_ca
+  init: true # tini as PID 1: clean signal forwarding and zombie reaping
+  restart: unless-stopped
+  stop_grace_period: 20s
+  read_only: true # only /data (volume) and /tmp (tmpfs) are writable
+  tmpfs:
+    - /tmp
+    - /app/.next/cache:uid=1001,gid=1001,mode=0755
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  healthcheck:
+    test:
+      - CMD
+      - env
+      - -u
+      - NODE_USE_ENV_PROXY
+      - node
+      - -e
+      - "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    interval: 30s
+    timeout: 5s
+    start_period: 20s
+    retries: 3
+  # Resource limits sized for a small flight/edge computer; tune as needed.
+  deploy:
+    resources:
+      limits:
+        cpus: "${DEMIFY_CPUS:-1.0}"
+        memory: ${DEMIFY_MEMORY:-512M}
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  demify:
+    <<: *demify-common
+    container_name: demify
+    ports:
+      - "${DEMIFY_BIND:-0.0.0.0}:${DEMIFY_PORT:-3000}:3000"
+    environment:
+      <<: *demify-env
+    volumes:
+      - demify-data:/data
+      # Custom CA bundle for a TLS-intercepting proxy (then set
+      # DEMIFY_NODE_EXTRA_CA_CERTS=/etc/demify/ca.crt):
+      # - ./certs/ca.crt:/etc/demify/ca.crt:ro
+
+  # -------------------------------------------------------------------------
+  # Air-gapped profile: never calls external APIs (DEMIFY_OFFLINE=true) AND
+  # has no route to the outside world. `network_mode: none` would also block
+  # the published port, so the app is attached to an `internal` network (no
+  # egress) and the published port is served by a tiny relay that sits on
+  # both the internal and the default network. Uses the same data volume
+  # layout, but its own volume so it does not fight with `demify`.
+  # -------------------------------------------------------------------------
+  demify-offline:
+    <<: *demify-common
+    profiles: ["offline"]
+    container_name: demify-offline
+    environment:
+      <<: *demify-env
+      DEMIFY_OFFLINE: "true"
+      HTTPS_PROXY: ""
+      HTTP_PROXY: ""
+    volumes:
+      - demify-offline-data:/data
+    networks:
+      - airgap
+
+  demify-offline-gateway:
+    profiles: ["offline"]
+    image: ${DEMIFY_IMAGE:-demify:latest}
+    pull_policy: never # same local image, built by the demify-offline service
+    container_name: demify-offline-gateway
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      demify-offline:
+        condition: service_healthy
+    # Plain TCP relay written in Node (no extra image needed): forwards the
+    # published port to the air-gapped app container.
+    entrypoint: ["node", "-e"]
+    command:
+      - >-
+        const net=require('node:net');
+        net.createServer(c=>{const u=net.connect(3000,'demify-offline');
+        c.pipe(u).pipe(c);u.on('error',()=>c.destroy());c.on('error',()=>u.destroy());})
+        .listen(3000,'0.0.0.0',()=>console.log('relay :3000 -> demify-offline:3000'));
+    healthcheck:
+      disable: true
+    ports:
+      - "${DEMIFY_BIND:-0.0.0.0}:${DEMIFY_OFFLINE_PORT:-3001}:3000"
+    networks:
+      - airgap
+      - default
+
+secrets:
+  build_ca:
+    file: ${DEMIFY_BUILD_CA:-./docker/no-extra-ca.pem}
+
+networks:
+  airgap:
+    internal: true # no egress / no internet
+
+volumes:
+  demify-data:
+  demify-offline-data:
