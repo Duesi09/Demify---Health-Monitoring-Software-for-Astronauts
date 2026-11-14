@@ -99,7 +99,7 @@ export function CrewTrends({ a, readings, now }: { a: CrewAssessment; readings: 
       </div>
       <Card
         title="Daily check-in, last 7 days"
-        subtitle="Sleep, mood, stress, hydration and exercise. Bold values are real data: * crew entry, † sensor reading; others are simulated demo data."
+        subtitle="Sleep, mood, stress, hydration and exercise. Bold values are crew entries (*) or DEVICE readings (†); the others are SIMULATED demo data."
       >
         <DailyGrid days={days} rows={rows} />
         <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted" aria-label="Legend">

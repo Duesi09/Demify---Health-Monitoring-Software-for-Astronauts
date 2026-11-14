@@ -4,6 +4,7 @@ import { MiniMonitor } from "@/components/monitor/mini-monitor";
 import { StatusBadge, STATUS_LABEL } from "@/components/ui";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
 import { REGION_ICON } from "@/components/body/regions";
+import { withLink, type LinkProfileId } from "@/lib/link";
 import type { BodyRegionId, LiveVitals, ReadingSource, Status } from "@/lib/types";
 import { DrillTag, StatusIcon } from "./status-icon";
 
@@ -28,6 +29,8 @@ export interface CrewCardProps {
   vitals?: LiveVitals;
   /** @deprecated The overview no longer has a selected crew member; kept for compatibility. */
   selected?: boolean;
+  /** Signal-delay profile chosen with ?link=, carried into the card's links (null: none chosen). */
+  link?: LinkProfileId | null;
 }
 
 const RANK: Record<Status, number> = { unknown: 0, nominal: 1, caution: 2, critical: 3 };
@@ -74,7 +77,7 @@ function RegionChip({ region, status }: { region: BodyRegionId; status: Status }
   );
 }
 
-export function CrewCard({ id, name, role, overall, regions, findings, vitals }: CrewCardProps) {
+export function CrewCard({ id, name, role, overall, regions, findings, vitals, link = null }: CrewCardProps) {
   const alarms = vitals?.alarms ?? [];
   const alarmLevel = alarms.some((a) => a.priority === "high") ? "high" : alarms.length ? "medium" : null;
   // Live alarms can be newer than the server assessment: show the worse of both.
@@ -94,7 +97,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 id={`crew-${id}-name`} className="text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">
-            <Link href={`/crew/${id}`} className="hover:text-accent focus-visible:text-accent">
+            <Link href={withLink(`/crew/${id}`, link)} className="hover:text-accent focus-visible:text-accent">
               {name}
             </Link>
           </h3>
@@ -148,7 +151,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
 
       <footer className="mt-6 flex flex-wrap gap-2 text-[13px]">
         <Link
-          href={`/crew/${id}`}
+          href={withLink(`/crew/${id}`, link)}
           className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 font-medium text-bg transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           Open monitor<span className="sr-only"> for {name}</span>
@@ -161,7 +164,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
           <PersonStanding size={14} aria-hidden /> Body map<span className="sr-only"> for {name}</span>
         </Link>
         <Link
-          href={`/check-in?crew=${id}`}
+          href={withLink(`/check-in?crew=${id}`, link)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 transition-colors hover:bg-surface-2 focus-visible:bg-surface-2"
         >
           <ClipboardPlus size={14} aria-hidden /> Check in<span className="sr-only"> {name}</span>

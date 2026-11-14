@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
+      "@onboard": path.resolve(import.meta.dirname, "onboard"),
       // `server-only` throws outside the React Server bundler; stub it in tests.
       "server-only": path.resolve(import.meta.dirname, "tests/stubs/server-only.ts"),
     },

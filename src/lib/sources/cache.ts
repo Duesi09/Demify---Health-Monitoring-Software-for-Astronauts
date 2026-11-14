@@ -36,6 +36,16 @@ const inflight = new Map<string, Promise<SourceResult<unknown>>>();
 /** Longest time a failed source is left alone before the next live attempt. */
 const MAX_FAILURE_BACKOFF_MS = 60_000;
 
+/** The source answered, but with an HTTP error status (as opposed to a network failure or timeout). */
+export class HttpStatusError extends Error {
+  readonly status: number;
+  constructor(status: number, statusText: string, url: string) {
+    super(`${status} ${statusText} for ${url}`);
+    this.name = "HttpStatusError";
+    this.status = status;
+  }
+}
+
 export async function fetchJson<T = unknown>(
   url: string,
   init?: RequestInit,
@@ -46,7 +56,7 @@ export async function fetchJson<T = unknown>(
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  if (!res.ok) throw new HttpStatusError(res.status, res.statusText, url);
   return (await res.json()) as T;
 }
 

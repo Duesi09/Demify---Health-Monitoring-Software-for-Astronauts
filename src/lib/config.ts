@@ -1,5 +1,6 @@
 import "server-only";
 import path from "node:path";
+import { LINK_PROFILES, MISSION_LINK, resolveLink, type ResolvedLink } from "./link";
 import type { MissionProfile, MissionProfileId } from "./types";
 
 /**
@@ -7,7 +8,16 @@ import type { MissionProfile, MissionProfileId } from "./types";
  * (see src/lib/health/knowledge.ts for sources). commDelaySeconds is the
  * one-way signal delay the app uses for timing; delayBasis says where each
  * number comes from, because they are not all straight-line light time.
+ * Both come from the link profile table in src/lib/link.ts (one source);
+ * a `?link=` search parameter can swap the delay per request (currentLink).
  */
+
+/** One-way delay of a mission's own link profile (every mission link has contact). */
+function missionDelay(id: MissionProfileId): Pick<MissionProfile, "commDelaySeconds" | "delayBasis"> {
+  const link = LINK_PROFILES[MISSION_LINK[id]];
+  return { commDelaySeconds: link.oneWayS ?? 0, delayBasis: link.basis };
+}
+
 export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
   iss: {
     id: "iss",
@@ -16,8 +26,7 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     // Light time from 400 km is only about 1.3 ms; the ISS talks to the
     // ground through TDRS relays in geostationary orbit (~36,000 km up and
     // back down) plus ground-network latency, which is what 0.5 s stands for.
-    commDelaySeconds: 0.5,
-    delayBasis: "relay through TDRS geostationary satellites plus network latency (illustrative)",
+    ...missionDelay("iss"),
     gravity: 0,
     durationDays: 180,
   },
@@ -27,9 +36,8 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     // Chang'e-4 lander, lunar surface: 1,369 µSv/day dose equivalent
     // (Zhang et al. 2020, Science Advances 6(39), eaaz1334), about 1.4 mSv/day.
     baselineDoseRate: 1.4,
-    // 384,400 km / 299,792 km/s = 1.28 s
-    commDelaySeconds: 1.3,
-    delayBasis: "light time at about 384,400 km",
+    // 384,400 km / 299,792.458 km/s = 1.28 s
+    ...missionDelay("artemis-lunar"),
     gravity: 0.166,
     durationDays: 30,
   },
@@ -38,9 +46,8 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     name: "Mars Transit",
     baselineDoseRate: 1.8,
     // Earth-Mars light time ranges from about 3 to 22 minutes one way; 12.5
-    // minutes stands for a mid-transit distance.
-    commDelaySeconds: 750,
-    delayBasis: "fixed 750 s, mid-range Mars transit (illustrative)",
+    // minutes (fixed 750 s) stands for a mid-transit distance.
+    ...missionDelay("mars-transit"),
     gravity: 0,
     durationDays: 900,
   },
@@ -139,4 +146,13 @@ export function missionDay(now = Date.now()): number {
 
 export function currentMission(): MissionProfile {
   return MISSION_PROFILES[config.mission] ?? MISSION_PROFILES.iss;
+}
+
+/**
+ * Link (signal-delay) profile for this request: a valid `?link=` search
+ * parameter, otherwise the DEMIFY_MISSION profile's own link. Only the delay
+ * changes; gravity, duration and dose stay with the mission profile.
+ */
+export function currentLink(param?: string | string[] | null): ResolvedLink {
+  return resolveLink(param, currentMission().id);
 }

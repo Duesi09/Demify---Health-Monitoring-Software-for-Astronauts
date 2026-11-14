@@ -1,7 +1,7 @@
 import "server-only";
 import { config } from "../config";
 import type { SourceResult } from "../types";
-import { cached, fetchJson } from "./cache";
+import { HttpStatusError, cached, fetchJson } from "./cache";
 
 /**
  * NASA Open Science Data Repository (OSDR) adapter.
@@ -729,6 +729,16 @@ async function loadSearch(q: string, size: number, from: number): Promise<StudyS
 
 const SEARCH_SRC = "NASA OSDR study search";
 const searchMemory = new Map<string, { at: number; value: StudySearch }>();
+/** Last failed live search per query, for the same short retry backoff the cached sources use. */
+const searchFailures = new Map<string, { at: number; error: unknown }>();
+const SEARCH_BACKOFF_MS = 60_000;
+const SEARCH_MEMORY_MAX = 50;
+
+function remember<V>(map: Map<string, V>, key: string, value: V) {
+  map.delete(key);
+  if (map.size >= SEARCH_MEMORY_MAX) map.delete(map.keys().next().value!);
+  map.set(key, value);
+}
 
 /**
  * Example queries that ship with a snapshot (data/snapshots/osdr-search-<slug>.json),
@@ -755,7 +765,9 @@ export class SearchOfflineError extends Error {
 /**
  * Full-text search over OSDR studies. The default query and the seeded
  * example queries (first page) are snapshotted; other queries never create
- * files and use a small in-memory cache (1 h) instead.
+ * files and use a small in-memory cache (1 h) instead, with the same
+ * fallbacks as cached(): a failed live search is not retried for 60 s, and
+ * an expired copy in memory is served (with the error) while OSDR fails.
  */
 export async function searchStudies(q: string, size = 10, from = 0): Promise<SourceResult<StudySearch>> {
   const query = q.trim().slice(0, 120) || DEFAULT_SEARCH;
@@ -769,18 +781,57 @@ export async function searchStudies(q: string, size = 10, from = 0): Promise<Sou
   const key = `${query.toLowerCase()}|${n}|${start}`;
   const hit = searchMemory.get(key);
   const now = Date.now();
-  if (hit && now - hit.at < HOUR * 1000) {
-    return { data: hit.value, source: SEARCH_SRC, freshness: "cache", fetchedAt: new Date(hit.at).toISOString() };
-  }
+  const fromMemory = (error?: string): SourceResult<StudySearch> => ({
+    data: hit!.value,
+    source: SEARCH_SRC,
+    freshness: "cache",
+    fetchedAt: new Date(hit!.at).toISOString(),
+    ...(error ? { error } : {}),
+  });
+  if (hit && now - hit.at < HOUR * 1000) return fromMemory();
   if (config.offline) throw new SearchOfflineError();
-  const value = await loadSearch(query, n, start);
-  if (searchMemory.size >= 50) searchMemory.delete(searchMemory.keys().next().value!);
-  searchMemory.set(key, { at: now, value });
+  const failed = searchFailures.get(key);
+  if (failed && now - failed.at < SEARCH_BACKOFF_MS) {
+    // Failed moments ago: answer at once instead of waiting out another timeout.
+    if (hit) return fromMemory(errorText(failed.error));
+    throw failed.error;
+  }
+  let value: StudySearch;
+  try {
+    value = await loadSearch(query, n, start);
+  } catch (e) {
+    remember(searchFailures, key, { at: Date.now(), error: e });
+    if (hit) return fromMemory(errorText(e));
+    throw e;
+  }
+  searchFailures.delete(key);
+  remember(searchMemory, key, { at: now, value });
   return { data: value, source: SEARCH_SRC, freshness: "live", fetchedAt: new Date(now).toISOString() };
 }
 
-/** Shown when a query cannot reach OSDR and the cached default list is returned instead. */
-export const SEARCH_OFFLINE_MESSAGE = "Search needs a connection; showing the cached default list";
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Why a query got the cached default list instead of its own results. */
+export type SearchFallbackReason = "offline-mode" | "unreachable" | "osdr-error";
+
+/** Status line per fallback reason (the cached default list is shown instead). */
+export const SEARCH_FALLBACK_MESSAGE: Record<SearchFallbackReason, string> = {
+  "offline-mode": "Search needs a connection; showing the cached default list",
+  unreachable: "OSDR could not be reached; showing the cached default list",
+  "osdr-error": "OSDR did not answer; showing the cached default list",
+};
+
+/** Shown when a query cannot reach OSDR in offline mode and the cached default list is returned instead. */
+export const SEARCH_OFFLINE_MESSAGE = SEARCH_FALLBACK_MESSAGE["offline-mode"];
+
+/** 503 text per reason, when not even the default list is cached. */
+const NO_LIST_MESSAGE: Record<SearchFallbackReason, string> = {
+  "offline-mode": "Search needs a connection, and no cached list is available yet",
+  unreachable: "OSDR could not be reached, and no cached list is available yet",
+  "osdr-error": "OSDR did not answer, and no cached list is available yet",
+};
 
 /** Body of GET /api/osdr/search. */
 export type StudySearchResponse =
@@ -788,14 +839,18 @@ export type StudySearchResponse =
       provenance: Omit<SourceResult<unknown>, "data">;
       /** Set when the query could not reach OSDR and this is the cached default list instead. */
       offline?: {
-        /** "offline-mode": DEMIFY_OFFLINE=true, search stays off; "unreachable": OSDR failed, retry later. */
-        reason: "offline-mode" | "unreachable";
+        /**
+         * "offline-mode": DEMIFY_OFFLINE=true, search stays off; "unreachable":
+         * network error or timeout; "osdr-error": OSDR answered with an HTTP
+         * error. Retry later for the last two.
+         */
+        reason: SearchFallbackReason;
         /** The query the user asked for. */
         requested: string;
         message: string;
       };
     })
-  | { error: string; query: string; offline?: true };
+  | { error: string; query: string; offline?: true; reason?: SearchFallbackReason };
 
 /**
  * Study search with an offline fallback, for the API route. A query that
@@ -813,8 +868,9 @@ export async function searchStudiesOrDefault(
     const r = await searchStudies(q, size, from);
     return { status: 200, body: { ...r.data, provenance: prov(r) } };
   } catch (e) {
-    const reason = e instanceof SearchOfflineError || config.offline ? "offline-mode" : "unreachable";
-    const error = e instanceof Error ? e.message : String(e);
+    const reason: SearchFallbackReason =
+      e instanceof SearchOfflineError || config.offline ? "offline-mode" : e instanceof HttpStatusError ? "osdr-error" : "unreachable";
+    const error = errorText(e);
     try {
       const d = await searchStudies(DEFAULT_SEARCH);
       return {
@@ -822,13 +878,13 @@ export async function searchStudiesOrDefault(
         body: {
           ...d.data,
           provenance: { ...prov(d), error: d.error ?? error },
-          offline: { reason, requested: q.trim().slice(0, 120), message: SEARCH_OFFLINE_MESSAGE },
+          offline: { reason, requested: q.trim().slice(0, 120), message: SEARCH_FALLBACK_MESSAGE[reason] },
         },
       };
     } catch {
       return {
         status: 503,
-        body: { error: "Search needs a connection, and no cached list is available yet.", query: q, offline: true },
+        body: { error: NO_LIST_MESSAGE[reason], query: q, offline: true, reason },
       };
     }
   }

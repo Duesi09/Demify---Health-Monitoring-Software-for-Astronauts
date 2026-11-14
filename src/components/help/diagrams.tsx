@@ -19,18 +19,18 @@ export function DailyRoutineDiagram() {
   return (
     <DiagramFrame
       minWidth={1000}
-      caption="The daily loop. Steps 1 to 4 happen every morning; step 5 only when Demify raises an escalation."
+      caption="The daily loop. Steps 1 to 4 happen every morning; step 5 is practised only when Demify shows an escalation. Training: in a real mission the escalation prompts a call to the flight surgeon."
     >
       <svg
         viewBox="0 0 1180 350"
         width="100%"
         role="img"
-        aria-label="Daily routine. 1, morning check-in: enter vitals, sleep, mood and symptoms. 2, Demify rates each value as nominal, caution or critical against NASA and clinical ranges and your pre-flight baseline. 3, Overview and Body map show who and which body system needs attention. 4, follow the listed actions. 5, only if Demify escalates, contact the flight surgeon. With no escalation the loop repeats with the next morning's check-in."
+        aria-label="Daily routine. 1, morning check-in: enter vitals, sleep, mood and symptoms. 2, Demify rates each value as nominal, caution or critical against NASA, clinical and project-defined (App) ranges and your pre-flight baseline. 3, Overview and Body map show who and which body system needs attention. 4, follow the listed actions. 5, only if Demify escalates, practise the call: in a real mission the escalation banner prompts a call to the flight surgeon. With no escalation the loop repeats with the next morning's check-in."
       >
         <ArrowDefs id={id} />
 
         <Node x={20} y={y} w={220} h={h} step={1} title="Morning check-in" lines={["Enter vitals, sleep, mood", "and any symptoms"]} />
-        <Node x={320} y={y} w={262} h={h} step={2} title="Demify rates each value" lines={["NASA and clinical ranges", "plus your pre-flight baseline"]}>
+        <Node x={320} y={y} w={262} h={h} step={2} title="Demify rates each value" lines={["NASA, clinical and App ranges", "plus your pre-flight baseline"]}>
           <SvgStatusChip x={334} y={y + 84} status="nominal" label="Nominal" />
           <SvgStatusChip x={334 + chipWidth("Nominal") + 6} y={y + 84} status="caution" label="Caution" />
           <SvgStatusChip x={334 + chipWidth("Nominal") + chipWidth("Caution") + 12} y={y + 84} status="critical" label="Critical" />
@@ -44,8 +44,8 @@ export function DailyRoutineDiagram() {
           h={80}
           step={5}
           emphasis
-          title="Call the flight surgeon"
-          lines={["when the escalation", "banner tells you to"]}
+          title="Practise the call"
+          lines={["in a real mission the banner", "prompts a flight surgeon call"]}
         />
 
         <Arrow id={id} strong d={`M240,${cy} H316`} />
@@ -91,13 +91,13 @@ export function AlarmDecisionDiagram({
   return (
     <DiagramFrame
       minWidth={420}
-      caption={`Decision path for any alarm. Contact rule for the current mission (${missionName}, ${delayText} one-way): ${rule}.`}
+      caption={`Decision path for any alarm. Outside a drill, alarms are training alarms from the simulated monitor: practise the same steps. In a real mission (a future certified version) the same alarm would prompt them. Contact rule for the current mission (${missionName}, ${delayText} one-way): ${rule}.`}
     >
       <svg
         viewBox="0 0 500 722"
         width="100%"
         role="img"
-        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a real alarm: act first, check the crew member and follow the checklist. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, contact the flight surgeon. Current mission ${missionName}, ${delayText} one-way: ${rule}.`}
+        aria-label={`When an alarm sounds. 1, the alarm bar appears on top of every page, red for high priority and yellow for medium. 2, open the crew monitor to see the alarm, the numbers and the response checklist. 3, is a training scenario tag shown? If yes, it is a drill: practise the same steps and end the drill when done. If no, it is a training alarm from the simulated monitor: practise acting first, check the crew member and follow the checklist; in a real mission (a future certified version) the same alarm would prompt these steps. 4, only after acting, silence the sound for 2 minutes if needed; the visual alarm stays. 5, practise the call to the flight surgeon. Current mission ${missionName}, ${delayText} one-way: ${rule}.`}
       >
         <ArrowDefs id={id} />
 
@@ -124,9 +124,9 @@ export function AlarmDecisionDiagram({
         <EdgeLabel x={418} y={392} anchor="start">practise</EdgeLabel>
 
         <Arrow id={id} strong d={`M${cx},346 V384`} />
-        <EdgeLabel x={cx + 10} y={370} anchor="start">no: real alarm</EdgeLabel>
+        <EdgeLabel x={cx + 10} y={370} anchor="start">no: training alarm</EdgeLabel>
 
-        <Node x={20} y={388} w={280} h={80} emphasis title="Act first" lines={["check the crew member,", "follow the response checklist"]} />
+        <Node x={20} y={388} w={280} h={80} emphasis title="Practise: act first" lines={["check the crew member,", "follow the response checklist"]} />
         <Arrow id={id} strong d={`M${cx},468 V502`} />
         <EdgeLabel x={cx + 10} y={490} anchor="start">only after acting</EdgeLabel>
 
@@ -139,7 +139,7 @@ export function AlarmDecisionDiagram({
           w={280}
           h={84}
           emphasis
-          title="Contact the flight surgeon"
+          title="Practise the surgeon call"
           lines={[`${missionName}: ${delayText} one-way`, rule]}
         />
       </svg>
@@ -191,7 +191,7 @@ export function DataFlowDiagram() {
   ];
   const steps: { n: number; head: string; sub?: string }[] = [
     { n: 1, head: "Checks every reading", sub: "(unit, plausible range)" },
-    { n: 2, head: "Rates it: NASA, clinical", sub: "and personal baseline" },
+    { n: 2, head: "Rates it: NASA, clinical,", sub: "App ranges and baseline" },
     { n: 3, head: "Falls back from a fetch", sub: "(REAL) to a SNAPSHOT" },
     { n: 4, head: "Labels SIMULATED values" },
   ];
@@ -216,7 +216,7 @@ export function DataFlowDiagram() {
         viewBox="0 0 1000 412"
         width="100%"
         role="img"
-        aria-label="Where the data comes from. Wearables and devices send vital signs through the device API; these are SIMULATED until a device posts readings, which are labelled DEVICE. The daily check-in sends sleep, mood, stress and exercise; SIMULATED until you enter your own. NOAA SWPC provides space weather and NASA OSDR provides published ISS dose and Inspiration4 blood data, labelled REAL with the fetch time, or SNAPSHOT with its date when served from the offline copy. Demify checks every reading, rates it against tagged reference ranges and the personal baseline, and labels SIMULATED values. The results appear on Overview and Crew monitor, Check-in and Body map, Radiation, and Open data."
+        aria-label="Where the data comes from. Wearables and devices send vital signs through the device API; these are SIMULATED until a device posts readings, which are labelled DEVICE. The daily check-in sends sleep, mood, stress and exercise; SIMULATED until you enter your own. NOAA SWPC provides space weather and NASA OSDR provides published ISS dose and Inspiration4 blood data, labelled REAL with the fetch time, or SNAPSHOT with its date when served from the offline copy. Demify checks every reading, rates it against tagged reference ranges (NASA, clinical or project-defined App ranges) and the personal baseline, and labels SIMULATED values. The results appear on Overview and Crew monitor, Check-in and Body map, Radiation, and Open data."
       >
         <ArrowDefs id={id} />
 

@@ -10,6 +10,8 @@ beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "demify-readings-"));
   vi.stubEnv("DEMIFY_DATA_DIR", dir);
   vi.stubEnv("DEMIFY_SIMULATE", "false");
+  // A token exported in the shell (docs/OPERATIONS.md) must not turn these into 401s.
+  vi.stubEnv("DEMIFY_ADMIN_TOKEN", "");
   vi.resetModules();
 });
 

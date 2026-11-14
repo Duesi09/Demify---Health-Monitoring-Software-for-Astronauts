@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { CircleStop, Siren, TriangleAlert } from "lucide-react";
 import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
@@ -48,13 +49,17 @@ export function EmergencyConsole({
 }: {
   crewId: string;
   crewName: string;
-  commDelaySeconds: number;
+  /** One-way signal delay in seconds; null means no contact (blackout). */
+  commDelaySeconds: number | null;
+  /** Name of the signal-delay profile, used in the flight-surgeon step. */
   missionName: string;
 }) {
   const { live, receivedAt, nowMs, refetch, refreshing, refreshPage } = useCrewLiveContext();
   const [confirm, setConfirm] = useState<ScenarioType | null>(null);
   const [busy, setBusy] = useState<"start" | "end" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The server has an admin token and this browser is not unlocked (HTTP 401).
+  const [locked, setLocked] = useState(false);
   const [announce, setAnnounce] = useState("");
   const focusTarget = useRef<FocusTarget>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -101,6 +106,7 @@ export function EmergencyConsole({
   async function call(kind: "start" | "end", type?: ScenarioType) {
     setBusy(kind);
     setError(null);
+    setLocked(false);
     try {
       const res =
         kind === "start"
@@ -112,6 +118,7 @@ export function EmergencyConsole({
           : await fetch(`/api/scenarios?crewId=${encodeURIComponent(crewId)}`, { method: "DELETE" });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (res.status === 401) setLocked(true);
         throw new Error(body?.error ?? `Request failed (HTTP ${res.status})`);
       }
       setConfirm(null);
@@ -256,9 +263,17 @@ export function EmergencyConsole({
         )}
 
         {error && (
-          <p role="alert" className="mt-3 rounded-lg border border-critical/60 bg-critical/10 px-3 py-2 text-sm text-critical">
-            {error}
-          </p>
+          <div role="alert" className="mt-3 rounded-lg border border-critical/60 bg-critical/10 px-3 py-2 text-sm text-critical">
+            <p>{error}</p>
+            {locked && (
+              <p className="mt-1 text-fg/85">
+                This server protects drills with an admin token.{" "}
+                <Link href="/help#admin-token" className="font-medium text-accent underline underline-offset-2">
+                  How to unlock this browser
+                </Link>
+              </p>
+            )}
+          </div>
         )}
         {refreshing && !busy && <p className="mt-3 text-xs text-muted">Updating the page…</p>}
         <p className="sr-only" role="status" aria-live="polite">

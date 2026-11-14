@@ -5,8 +5,8 @@ import { INDICATORS, classify } from "@/lib/health/knowledge";
 import type { Reading } from "@/lib/types";
 
 /**
- * Recent crew-entered check-ins, grouped by submission time. Only manual and
- * sensor readings are listed: simulated demo values never appear here.
+ * Recent crew entries and DEVICE readings, grouped by submission time. Only
+ * manual and sensor readings are listed: SIMULATED demo values never appear here.
  */
 export function RecentEntries({ readings, limit = 8 }: { readings: Reading[]; limit?: number }) {
   const groups = new Map<string, Reading[]>();
@@ -35,7 +35,7 @@ export function RecentEntries({ readings, limit = 8 }: { readings: Reading[]; li
             <p className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted">
               <time dateTime={takenAt}>{formatUtc(takenAt)}</time>
               <span>
-                {rs.length} value{rs.length === 1 ? "" : "s"} · {source === "manual" ? "crew entry" : source}
+                {rs.length} value{rs.length === 1 ? "" : "s"} · {source === "manual" ? "crew entry" : source === "sensor" ? "DEVICE" : source}
               </span>
             </p>
             <ul className="mt-2 flex flex-wrap gap-1.5">

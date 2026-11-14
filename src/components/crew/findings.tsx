@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { OctagonAlert, PhoneCall } from "lucide-react";
-import { bySeverity, formatDelay } from "@/components/overview/format";
+import { bySeverity } from "@/components/overview/format";
 import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import { INDICATORS } from "@/lib/health/knowledge";
+import { linkPolicy } from "@/lib/link";
 import type { Assessment, ReadingSource } from "@/lib/types";
 
 /** Non-nominal findings with their actions, plus an escalation callout. */
@@ -17,7 +18,8 @@ export function Findings({
   assessments: Assessment[];
   sources: Partial<Record<string, ReadingSource>>;
   crewName: string;
-  commDelaySeconds: number;
+  /** One-way signal delay in seconds; null means no contact (blackout). */
+  commDelaySeconds: number | null;
   /** A training scenario is running: findings partly come from drill telemetry. */
   drill: boolean;
 }) {
@@ -25,6 +27,7 @@ export function Findings({
   const escalations = open.filter((a) => a.escalate);
   const drillEsc = escalations.filter((a) => a.drill);
   const allDrill = drillEsc.length > 0 && drillEsc.length === escalations.length;
+  const policy = linkPolicy(commDelaySeconds);
 
   return (
     <div className="space-y-4">
@@ -39,9 +42,10 @@ export function Findings({
             <span>
               {escalations.length === 1 ? "One finding meets" : `${escalations.length} findings meet`} the criteria to
               contact the flight surgeon for {crewName}:{" "}
-              <span className="font-semibold">{escalations.map((e) => INDICATORS[e.indicator].short).join(", ")}</span>.
-              One-way signal delay {formatDelay(commDelaySeconds)}
-              {commDelaySeconds >= 60 ? ": start the onboard checklist first, then report." : "."}
+              <span className="font-semibold">{escalations.map((e) => INDICATORS[e.indicator].short).join(", ")}</span>.{" "}
+              {policy.mode === "blackout"
+                ? "No contact with the ground (blackout): act on the onboard procedures; transmit when contact returns."
+                : `One-way signal delay ${policy.label}${policy.mode === "delayed" ? ": start the onboard checklist first, then report." : "."}`}
               {allDrill
                 ? " These values come from a training scenario, not a real emergency."
                 : drillEsc.length > 0

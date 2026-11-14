@@ -19,10 +19,20 @@ const S_LEVEL_TEXT: Record<number, { name: string; action: string }> = {
   0: { name: "None", action: "Normal operations. Keep personal dosimeter worn." },
   1: { name: "Minor (S1)", action: "Heightened awareness. Review shelter plan; plan EVAs with caution." },
   2: { name: "Moderate (S2)", action: "Defer EVAs. Prepare storm shelter; crew in deep-space vehicles should be ready to shelter." },
-  3: { name: "Strong (S3)", action: "Shelter in the most shielded area (water/stowage wall). Ground flight surgeons notified." },
+  3: { name: "Strong (S3)", action: "Shelter in the most shielded area (water/stowage wall). In a real mission this prompts a call to the flight surgeon." },
   4: { name: "Severe (S4)", action: "Shelter immediately and remain until all-clear. Track dosimeters every hour." },
-  5: { name: "Extreme (S5)", action: "Shelter immediately. Unshielded exposure may cause acute radiation effects. Emergency protocol." },
+  5: { name: "Extreme (S5)", action: "Shelter immediately. Unshielded exposure may cause acute radiation effects. In a real mission: emergency protocol." },
 };
+
+/** NASA-STD-3001 Vol. 1 Rev C rows, with the requirement or table each comes from. */
+const EXPOSURE_LIMITS: { label: string; ref: string; value: string }[] = [
+  { label: "Career effective dose", ref: "V1 4030", value: "< 600 mSv" },
+  { label: "Per solar particle event, design reference", ref: "V1 4031", value: "< 250 mSv" },
+  { label: "Blood-forming organs", ref: "Table 4.8-1", value: "250 mGy-Eq / 30 d" },
+  { label: "Lens of the eye", ref: "Table 4.8-1", value: "1,000 mGy-Eq / 30 d" },
+  { label: "Habitat GCR rate, free space", ref: "V1 4033", value: "< 1.3 mSv/day" },
+  { label: "Habitat GCR rate, surface", ref: "V1 4033", value: "< 0.9 mSv/day" },
+];
 
 /** Shown instead of an S-level action when current conditions are unknown. Never fall back to "Normal operations". */
 const UNKNOWN_ACTION =
@@ -148,6 +158,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
 
       <Card
         title="Recommended crew action"
+        subtitle="Training reference: what this NOAA level would mean for a crew in a real mission"
         action={<StatusBadge status={sStatus(level)} size="md" label={level != null ? `S${level}` : "S –"} />}
       >
         <p className={`text-[15px] leading-relaxed ${level != null && level >= 1 ? "font-medium" : ""}`}>
@@ -297,12 +308,14 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         <Card title="NASA exposure limits" subtitle="NASA-STD-3001 Vol. 1 Rev C">
           <table className="w-full text-left text-sm">
             <tbody className="[&_td]:py-1.5 [&_tr]:border-t [&_tr]:border-border [&_tr:first-child]:border-0">
-              <tr><td className="pr-3 text-muted">Career effective dose</td><td className="tabular whitespace-nowrap">&lt; 600 mSv</td></tr>
-              <tr><td className="pr-3 text-muted">Per solar particle event (design)</td><td className="tabular whitespace-nowrap">&lt; 250 mSv</td></tr>
-              <tr><td className="pr-3 text-muted">Blood-forming organs</td><td className="tabular whitespace-nowrap">250 mGy-Eq / 30 d</td></tr>
-              <tr><td className="pr-3 text-muted">Lens of the eye</td><td className="tabular whitespace-nowrap">1,000 mGy-Eq / 30 d</td></tr>
-              <tr><td className="pr-3 text-muted">Habitat GCR rate, free space</td><td className="tabular whitespace-nowrap">&lt; 1.3 mSv/day</td></tr>
-              <tr><td className="pr-3 text-muted">Habitat GCR rate, surface</td><td className="tabular whitespace-nowrap">&lt; 0.9 mSv/day</td></tr>
+              {EXPOSURE_LIMITS.map((l) => (
+                <tr key={l.label}>
+                  <td className="pr-3 text-muted">
+                    {l.label} <span className="whitespace-nowrap text-[11px]">({l.ref})</span>
+                  </td>
+                  <td className="tabular whitespace-nowrap">{l.value}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <p className="mt-3 text-xs text-muted">

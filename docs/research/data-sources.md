@@ -10,7 +10,7 @@ an air-gapped spacecraft network.
 
 | Health indicator | Real public source? | What Demify does |
 |---|---|---|
-| Heart rate, blood pressure, SpO₂, temperature, respiration | **None.** Crew medical data is protected, and OSDR holds no human vitals. | Devices push readings to `POST /api/readings`. Until a device is connected, a deterministic demo generator (`src/lib/sources/simulator.ts`) fills in. Its values are labelled "simulated" in the UI and can be turned off with `DEMIFY_SIMULATE=false`. |
+| Heart rate, blood pressure, SpO₂, temperature, respiration | **None.** Crew medical data is protected, and OSDR holds no human vitals. | Devices push readings to `POST /api/readings` with `"source":"sensor"`; they are labelled **DEVICE**. Until a device is connected, a deterministic demo generator (`src/lib/sources/simulator.ts`) fills in. Its values are labelled **SIMULATED** in the UI (a monitor fed partly by a device shows **DEVICE + SIMULATED**) and can be turned off with `DEMIFY_SIMULATE=false`. |
 | Blood chemistry (glucose, calcium, ALP …) | OSDR **OSD-575** (Inspiration4 CMP) | `/research` explorer and reference values |
 | Blood counts, immune (WBC, lymphocytes …) | OSDR **OSD-569** (Inspiration4 CBC) | `/research` explorer |
 | Inflammation and heart markers (CRP, fibrinogen, cytokines) | OSDR **OSD-575** Eve panels | `/research` explorer |

@@ -8,10 +8,16 @@ Every value carries one of these source tags:
 - **CLIN**: a standard clinical range, used where NASA publishes nothing specific.
 - **APP**: a band derived for this app. It is not an official limit, and the UI says so.
 
+Some rules are ours even on a NASA or CLIN indicator: the persistence rules,
+the trend rules, the personal-baseline rule and a few limits noted below. This
+file marks each of them as a **project rule**, and the app labels them App or
+"project rule".
+
 > Research prototype, not a certified medical device. The ranges below show
 > how published and project-defined thresholds would flag values in a
 > research and training simulation; see the intended purpose in the
-> [README](../../README.md#intended-purpose).
+> [README](../../README.md#intended-purpose). Training: in a real mission an
+> escalation prompts a call to the flight surgeon.
 
 ## The five hazards (NASA HRP, "RIDGE")
 
@@ -51,44 +57,97 @@ must not be used as a dosimeter:
 | Indicator | Source tag | Key sources |
 |---|---|---|
 | Heart rate | CLIN | AHA; NASA HRP cardiovascular risk; OCHMO-TB-019 |
-| Blood pressure | CLIN | AHA categories; in-flight BP runs about 8–10 mmHg lower (Norsk 2015) |
-| SpO₂ | CLIN | MedlinePlus; NASA hypoxia risk |
-| Temperature | CLIN | NEWS2; core temperature rises about 1 °C in flight (Stahn 2017) |
-| Respiratory rate | CLIN | NEWS2; OCHMO-TB-004 (CO₂) |
+| ST segment deviation (ECG) | CLIN | Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018): new ST elevation ≥ 1 mm is the STEMI criterion; NASA HRP cardiovascular risk; CSA Bio-Monitor (continuous ECG). The app reads one value, not two contiguous leads, and rating > 2 mm depression critical is a project rule |
+| Blood pressure | CLIN | AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg (stage 2) are caution with a re-check in 15 minutes (the 15 minutes are a project rule); above 180 / 120 mmHg (AHA hypertensive crisis) escalates, as does below 80 / 40 mmHg. In-flight BP runs about 8–10 mmHg lower (Norsk 2015) |
+| SpO₂ | CLIN | MedlinePlus; NASA hypoxia risk; CSA Bio-Monitor |
+| Temperature | CLIN | NEWS2 bands: 36.1–38.0 °C nominal (0 points), 35.1–36.0 or 38.1–39.0 °C caution (1 point), ≤ 35.0 °C (3 points) or ≥ 39.1 °C (2 points) critical; rating ≥ 39.1 °C critical is a project rule. Core temperature rises about 1 °C in flight (Stahn 2017) |
+| Respiratory rate | CLIN | NEWS2; OCHMO-TB-004 (CO₂); CSA Bio-Monitor |
 | Glucose | CLIN | ADA hypoglycaemia levels 1 and 2 |
 | Sleep | NASA | OCHMO-TB-041: an 8.5 h sleep period; < 6 h for 7 days is equivalent to 24–36 h without sleep |
 | Mood / stress | APP | OCHMO-TB-016; NASA HRP behavioural risk |
-| Radiation | NASA / APP | NASA-STD-3001; OCHMO-TB-020 |
+| Radiation | NASA / APP | NASA-STD-3001; OCHMO-TB-020; CSA radiation monitoring; NOAA S-scale for storms |
 | Bone loss | APP | NASA HRP bone risk; OCHMO-MTB-013; BMD must stay ≥ 95 % of pre-flight |
 | Body mass | APP | OCHMO-TB-013; ISS crews typically lose 2–5 % |
 | Hydration | NASA | OCHMO-TB-027: ≥ 2.5 L/day |
 | WBC | CLIN | MedlinePlus; NASA HRP immune risk |
-| Cabin CO₂ | NASA | OCHMO-TB-004 / NASA-STD-3001: ≤ 3 mmHg as a 1-hour average |
+| Cabin CO₂ | NASA | NASA-STD-3001 Vol. 2, V2 6004: ≤ 3 mmHg as a 1-hour average, above it escalates (the app treats a single reading as a breach); OCHMO-TB-004: < 2.5 mmHg (< 3,300 ppm) as the 7-day average target, the nominal band; headache odds roughly double per +1 mmHg (Law 2014, cited in OCHMO-TB-004) |
 | Vision (SANS) | APP | OCHMO-MTB-001; signs in about 70 % of crew, clinically significant in 18 % |
 | Exercise | NASA | 1.5–2 h/day; VO₂max and strength must stay ≥ 80 % of pre-flight |
+
+## When a value escalates
+
+The critical band alone does **not** escalate: unless one of the rules below
+matches, a critical value gets the finding "in the critical band: re-check and
+log". An escalation (training: in a real mission this prompts a call to the
+flight surgeon) comes only from these explicit rules in `knowledge.ts`:
+
+1. **Escalation limits** (`escalateAbove`, `escalateBelow`): one value strictly
+   beyond the limit.
+2. **Escalating bands** (`escalateFromBand`): any value in the stated band
+   escalates on its own. This applies to the symptom-type indicators (ST
+   segment, SpO₂, vision) and to the critical temperature band.
+3. **Persistence rules** (`persistence`): the condition holds on several days
+   in a row, or for several hours. One value alone never escalates by this
+   rule; the finding counts the days or hours so far. All persistence rules
+   are project rules.
+4. **Solar radiation storm** (`stormAlert`): any current NOAA S1 or higher
+   storm.
+
+| Indicator | Escalates when | Basis |
+|---|---|---|
+| Heart rate | < 40 or > 130 bpm | CLIN |
+| ST segment | Any critical value: elevation ≥ 1 mm or depression > 2 mm (symptom-type) | CLIN; > 2 mm depression is a project rule |
+| Blood pressure | Systolic > 180 or < 80 mmHg; diastolic > 120 or < 40 mmHg | CLIN (AHA hypertensive crisis) |
+| SpO₂ | Any value ≤ 90 % (symptom-type) | CLIN |
+| Temperature | Any critical value: ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h | CLIN (NEWS2 bands); rating ≥ 39.1 °C critical and the 24 h rule are project rules |
+| Respiratory rate | > 24 or < 9 /min | CLIN (NEWS2 3-point bands) |
+| Glucose | < 54 mg/dL; > 400 mg/dL; > 250 mg/dL on 2 days in a row | CLIN (ADA level 2); the 400 mg/dL ceiling and the 2-day rule are project rules |
+| Sleep | < 6 h on 7 days in a row ("sleep debt", also rated critical) | Project rule, based on OCHMO-TB-041 |
+| Mood | ≤ 2 on 2 days in a row | Project rule |
+| Stress | ≥ 8 on 2 days in a row | Project rule |
+| Exercise | < 60 min on 3 days in a row | Project rule |
+| Radiation dose rate | > 10 mSv/day; any current S1+ solar radiation storm | APP / project rule |
+| Cumulative dose | > 480 mSv (80 % of the NASA 600 mSv career limit) | NASA limit; the 80 % trigger is a project rule |
+| Body mass | Loss > 5 % | APP |
+| Bone loss | > 1.5 %/month | APP |
+| WBC | < 2.0 or > 30 ×10⁹/L | CLIN; > 30 is a project rule |
+| Cabin CO₂ | > 3 mmHg | NASA (V2 6004, a 1-hour average limit); Demify does not average, so one reading above 3 mmHg counts as a breach (prototype simplification) |
+| Vision | Any new symptom, score ≥ 1 (symptom-type) | APP, based on OCHMO-MTB-001 |
+| Hydration | No automatic flag; the crew escalates on symptoms | NASA |
+
+The Guidance page ("When to call the flight surgeon") generates its
+"Automatic flag" column from the same fields (`escalationFlags`), so the stated
+rules and the code cannot drift apart.
 
 ## How the app assesses health (`src/lib/health/assess.ts`)
 
 1. **Continuous signals** (from wearables): the app takes the median of the last 60 minutes at rest and skips readings taken during exercise.
 2. **Discrete check-ins:** the app uses the most recent value.
-3. **Real versus simulated data:** a manual or sensor reading always overrides a simulated one.
-4. **Personal baseline:** a change of 25 % or more from the person's own pre-flight baseline raises a continuous signal to caution, even when the value is still inside the population range. In a 3-year mission, change within one person matters more than population norms.
-5. **Escalation:** an escalation is raised when a value is critical or crosses the indicator's escalation limit.
-6. **Body regions:** each body region takes the worst status among its mapped indicators.
+3. **Real versus simulated data:** a crew entry or DEVICE reading always overrides a SIMULATED one.
+4. **Personal baseline (project rule):** a change of 25 % or more from the person's own pre-flight baseline raises a continuous signal to caution, even when the value is still inside the population range. It never escalates. In a 3-year mission, change within one person matters more than population norms.
+5. **Trends (project rule):** a mood drop or a stress rise of 2 points or more over 3 days raises the value to caution. It never escalates.
+6. **Escalation:** only by the rules in [When a value escalates](#when-a-value-escalates). Persistence rules use one value per UTC day (crew entries and DEVICE readings win over SIMULATED ones) or, for temperature, every reading at rest over the last 24 h. A storm escalates only on current NOAA data: with an offline snapshot or data older than 3 hours the finding asks the crew to verify with the onboard dosimeters instead.
+7. **Body regions:** each body region takes the worst status among its mapped indicators.
 
 ## References
 
 - NASA HRP hazards: https://www.nasa.gov/hrp/hazards/
 - NASA HRP risks: https://www.nasa.gov/hrp/risks/
 - NASA HRP ongoing research: https://www.nasa.gov/hrp/ongoing-hrp-research/
+- NASA HRP, Risk of Cardiovascular Adaptations: https://www.nasa.gov/reference/risk-of-cardiovascular-adaptations/
 - NASA-STD-3001 Vol 1 Rev C: https://www.nasa.gov/wp-content/uploads/2023/11/nasa-std-3001-vol-1-rev-c-with-signature.pdf
+- NASA-STD-3001 Vol 2 (V2 6004, CO₂): https://standards.nasa.gov/standard/NASA/NASA-STD-3001-VOL-2
 - OCHMO technical briefs (radiation, CO₂, SANS, bone, sleep, circadian, water, nutrition, behavioural health, orthostatic intolerance): linked individually in `knowledge.ts`
 - CSA, radiation monitoring: https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp
 - CSA Bio-Monitor: https://www.asc-csa.gc.ca/eng/sciences/bio-monitor.asp
+- Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018), Circulation: https://www.ahajournals.org/doi/10.1161/CIR.0000000000000617
+- RCP NEWS2: https://www.rcp.ac.uk/improving-care/resources/national-early-warning-score-news-2/
+- Literature, checked:
+  - Zhang 2020, Science Advances 6(39), eaaz1334, doi:10.1126/sciadv.aaz1334
 - Literature. These DOIs were not checked against the publisher; verify them before citing:
   - Zeitlin 2013, Science, doi:10.1126/science.1235989
   - Hassler 2014, Science, doi:10.1126/science.1244797
-  - Zhang 2020, Science Advances, doi:10.1126/sciadv.aaz1334
   - Zwart 2014, Aviation, Space, and Environmental Medicine 85(12):1229
   - Stahn 2017, Scientific Reports, doi:10.1038/s41598-017-15560-w
   - Norsk 2015, Journal of Physiology, doi:10.1113/jphysiol.2014.284869
+  - Law 2014, Journal of Occupational and Environmental Medicine 56(5):477, doi:10.1097/JOM.0000000000000158

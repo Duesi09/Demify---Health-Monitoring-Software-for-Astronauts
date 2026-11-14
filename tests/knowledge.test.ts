@@ -91,6 +91,19 @@ describe("needsEscalation", () => {
     expect(needsEscalation("spo2", 89)).toBe(true);
   });
 
+  it("keeps a single-value glucose ceiling above 400 mg/dL next to the 2-day rule", () => {
+    expect(needsEscalation("glucose", 400)).toBe(false);
+    expect(needsEscalation("glucose", 401)).toBe(true);
+    expect(evaluateValue("glucose", 300)).toMatchObject({ status: "critical", escalate: false, repeatRule: "> 250 mg/dL on 2 days in a row" });
+  });
+
+  it("escalates every NEWS2-critical temperature, low and high", () => {
+    expect(needsEscalation("bodyTemp", 35.0)).toBe(true);
+    expect(needsEscalation("bodyTemp", 35.1)).toBe(false);
+    expect(needsEscalation("bodyTemp", 39.0)).toBe(false);
+    expect(needsEscalation("bodyTemp", 39.1)).toBe(true);
+  });
+
   it("does not escalate on a critical band alone", () => {
     expect(evaluateValue("stress", 9)).toMatchObject({ status: "critical", escalate: false });
     expect(evaluateValue("mood", 1)).toMatchObject({ status: "critical", escalate: false });
@@ -104,10 +117,13 @@ describe("needsEscalation", () => {
 describe("escalationFlags", () => {
   it("describes every automatic rule from the rule fields", () => {
     expect(escalationFlags(INDICATORS.systolicBP)).toEqual(["< 80 mmHg", "> 180 mmHg"]);
-    expect(escalationFlags(INDICATORS.bodyTemp)).toEqual(["< 35 °C", "> 39 °C", "≥ 38.1 °C persisting 24 h"]);
+    expect(escalationFlags(INDICATORS.bodyTemp)).toEqual(["Any value ≤ 35.0 °C or ≥ 39.1 °C", "≥ 38.1 °C persisting 24 h"]);
+    expect(escalationFlags(INDICATORS.glucose)).toEqual(["< 54 mg/dL", "> 400 mg/dL", "> 250 mg/dL on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.stress)).toEqual(["≥ 8 /10 on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.spo2)).toEqual(["Any value ≤ 90 %"]);
-    expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any caution or critical value"]);
+    expect(escalationFlags(INDICATORS.stDeviation)).toEqual(["Any value ≥ 1 mm elevation or > 2 mm depression"]);
+    expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any value ≥ 1 /3"]);
+    expect(escalationFlags(INDICATORS.radiationDoseRate)).toEqual(["> 10 mSv/day", "Any current S1+ solar radiation storm"]);
     expect(escalationFlags(INDICATORS.hydration)).toEqual([]);
   });
 });

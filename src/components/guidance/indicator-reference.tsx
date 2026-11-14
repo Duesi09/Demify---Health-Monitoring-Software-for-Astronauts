@@ -201,7 +201,7 @@ export function IndicatorReference() {
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="text-sm font-medium">{def.label}</span>
                         <span className="text-xs text-muted">{def.unit}</span>
-                        <BasisTag basis={def.basis} />
+                        <BasisTag basis={def.basis} source={def.sources[0]?.label} />
                       </span>
                       <span className="mt-0.5 block text-xs text-muted">
                         <span className="font-medium text-fg/80">Nominal</span> {def.ranges.nominal}

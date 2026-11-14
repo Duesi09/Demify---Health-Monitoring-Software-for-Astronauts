@@ -263,7 +263,7 @@ describe("EscalationBanner drill labelling", () => {
 
   it("keeps the real escalation wording for real findings and tags the drill item", () => {
     const t = text(html([realItem, drillItem]));
-    expect(t).toMatch(/Contact the flight surgeon: 2 crew members are past an escalation limit/);
+    expect(t).toMatch(/Contact the flight surgeon: 2 crew members meet an escalation rule/);
     expect(t).toMatch(/Includes a drill/);
     expect(t).toMatch(/Drill ST segment/);
     expect(t).not.toMatch(/Drill Systolic BP/);

@@ -190,12 +190,36 @@ describe("GET /api/osdr/search offline (P0.10)", () => {
     expect(body.hits[0].accession).toBe("OSD-1");
   });
 
+  it("OSDR answering with an HTTP error: says OSDR did not answer, and backs off before the next try", async () => {
+    writeSnap("osdr-search-default", "human health", ["OSD-1"]);
+    const fetchSpy = vi.fn<(url: string | URL | Request) => Promise<Response>>(
+      async () => new Response("bad gateway", { status: 502, statusText: "Bad Gateway" }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { status, body } = await search("muscle atrophy");
+    expect(status).toBe(200);
+    expect(body.offline).toEqual({
+      reason: "osdr-error",
+      requested: "muscle atrophy",
+      message: "OSDR did not answer; showing the cached default list",
+    });
+    expect(body.hits[0].accession).toBe("OSD-1");
+    const calls = fetchSpy.mock.calls.length;
+    const again = await search("muscle atrophy");
+    expect(again.body.offline).toMatchObject({ reason: "osdr-error" });
+    // The failed query is not retried live within the backoff window.
+    expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("term=muscle%20atrophy"))).toBe(true);
+    expect(fetchSpy.mock.calls.slice(calls).some(([u]) => String(u).includes("term=muscle%20atrophy"))).toBe(false);
+  });
+
   it("answers 503 with a friendly message only when no list is cached at all", async () => {
     process.env.DEMIFY_OFFLINE = "true";
     const { status, body } = await search("astronaut sleep");
     expect(status).toBe(503);
     expect(body.offline).toBe(true);
+    expect(body.reason).toBe("offline-mode");
     expect(body.error).toMatch(/needs a connection/);
+    expect(body.error).not.toMatch(/\.$/);
   });
 
   it("ships seed snapshots for the default list and the example queries", async () => {

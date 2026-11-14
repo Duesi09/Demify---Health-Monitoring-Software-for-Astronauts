@@ -16,8 +16,8 @@ import type { BodyRegionId, HazardId, IndicatorId, Status } from "../types";
  * Escalation (contact the flight surgeon) is NOT implied by a critical band.
  * It comes only from the explicit rules on each indicator:
  *   escalateAbove / escalateBelow  one value strictly beyond the limit
- *   escalateFromBand               symptom-type indicators (ST segment, SpO2,
- *                                  vision): any value in that band
+ *   escalateFromBand               band-type indicators (ST segment, SpO2,
+ *                                  temperature, vision): any value in that band
  *   persistence                    repeated values (evaluated with history in
  *                                  assess.ts); one value alone never escalates
  *   stormAlert                     a current NOAA solar radiation storm
@@ -76,8 +76,9 @@ export interface IndicatorDef {
   /** One value strictly below this escalates. */
   escalateBelow?: number;
   /**
-   * Symptom-type indicators: any value classified in this band or worse
-   * escalates on its own (ST elevation, SpO2 <= 90 %, a new vision change).
+   * Band-type indicators: any value classified in this band or worse
+   * escalates on its own (ST elevation, SpO2 <= 90 %, a NEWS2 critical
+   * temperature, a new vision change).
    */
   escalateFromBand?: "caution" | "critical";
   /** Escalation that needs repeated values (see PersistenceRule). */
@@ -260,8 +261,9 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       caution: "35.1–36.0 or 38.1–39.0 °C (NEWS2 1 point)",
       critical: "≤ 35.0 °C (NEWS2 3 points) or ≥ 39.1 °C (NEWS2 2 points; rating it critical is our project rule)",
     },
-    escalateAbove: 39,
-    escalateBelow: 35,
+    // Any critical value (<= 35.0 or >= 39.1 °C) escalates; a fever of
+    // 38.1 °C or more escalates once it persists 24 h (project rule).
+    escalateFromBand: "critical",
     persistence: { op: ">=", value: 38.1, hours: 24 },
     continuous: true,
     regions: ["blood", "skin"],
@@ -270,7 +272,8 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Core temperature rises up to ~1 °C over long missions (impaired heat loss without convection), so compare against your own in-flight baseline.",
     measurement: "Thermometer; CSA Bio-Monitor skin temperature.",
     actions: ["Drink fluids and rest.", "Check for signs of infection (sore throat, rash, cough).", "Reduce exercise intensity while elevated."],
-    escalation: "Above 39 °C, below 35 °C, 38.1 °C or more persisting 24 h, or fever with rash, stiff neck or low WBC.",
+    escalation:
+      "35.0 °C or below, 39.1 °C or above, 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.",
     sources: [S.news2, S.immuneRisk, S.bioMonitor],
   },
   respRate: {
@@ -308,7 +311,10 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     basis: "CLIN",
     ranges: { nominal: "70–99 mg/dL", caution: "54–69 (level 1 low) or 100–250 mg/dL", critical: "< 54 (level 2 low) or > 250 mg/dL" },
     escalateBelow: 54,
-    // A single high value is re-tested first (meter error, sugar on the finger).
+    // Project rule: a single value above 400 mg/dL escalates at once (safety
+    // ceiling). Below it a high value is re-tested first (meter error, sugar
+    // on the finger) and escalates only on two days in a row (project rule).
+    escalateAbove: 400,
     persistence: { op: ">", value: 250, days: 2 },
     regions: ["gut", "blood"],
     hazards: ["gravity", "distance"],
@@ -319,7 +325,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "If low: follow the onboard low-blood-sugar procedure.",
       "If high: drink water and review recent food intake; re-test fasting next morning.",
     ],
-    escalation: "Below 54 mg/dL, or above 250 mg/dL on two days in a row.",
+    escalation: "Below 54 mg/dL, above 400 mg/dL (project rule), or above 250 mg/dL on two days in a row (project rule).",
     sources: [S.ada, S.nutritionTB],
   },
   sleepHours: {
@@ -437,7 +443,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     spaceflightEffect: "NASA's career limit of 600 mSv effective dose keeps the added risk of cancer death below 3 %. ALARA applies at all times.",
     measurement: "Dosimetry log.",
     actions: ["Keep EVA and shelter discipline to stay ALARA.", "Review planned high-exposure activities with ground."],
-    escalation: "Above 480 mSv (80 % of the career limit), or projected to exceed 80 % of any limit.",
+    escalation: "Above 480 mSv (80 % of the career limit; the 80 % mark is a project rule), or projected to exceed 80 % of any limit.",
     sources: [S.std3001, S.radTB],
   },
   bodyMassChange: {
@@ -499,7 +505,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Without exercise crews lose 10–12 % of strength and aerobic fitness on average. NASA requires VO₂max and strength ≥ 80 % of pre-flight.",
     measurement: "ARED, T2 treadmill and CEVIS cycle logs.",
     actions: ["Complete the prescribed ARED + treadmill/cycle session.", "Make up missed sessions within the week."],
-    escalation: "Under 60 min/day on 3 days in a row.",
+    escalation: "Under 60 min/day on 3 days in a row (project rule).",
     sources: [S.exercise, S.fitnessRisk, S.std3001],
   },
   hydration: {
@@ -540,7 +546,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Spaceflight dysregulates the immune system: latent viruses reactivate (shingles, cold sores), rashes and allergies become more common.",
     measurement: "Blood sample (usually returned to Earth); saliva samples in flight.",
     actions: ["Strict hand hygiene; limit shared items.", "Report rashes, cold sores or fever."],
-    escalation: "Below 2.0 or above 30 ×10⁹/L, fever together with low WBC, or a shingles-type rash.",
+    escalation: "Below 2.0 ×10⁹/L, above 30 ×10⁹/L (project rule), fever together with low WBC, or a shingles-type rash.",
     sources: [S.wbc, S.immuneRisk, S.std3001],
   },
   cabinCO2: {
@@ -558,15 +564,17 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       caution: "2.5–3.0 mmHg",
       critical: "> 3.0 mmHg as a 1-hour average (NASA-STD-3001 V2 6004 limit)",
     },
-    // Exceeding the 1-hour average limit escalates.
+    // The NASA limit is a 1-hour average. Demify does not average: one
+    // reading above 3 mmHg is treated as a breach (prototype simplification).
     escalateAbove: 3,
     regions: ["lungs", "brain", "eyes"],
     hazards: ["environment"],
     spaceflightEffect:
-      "Without convection CO₂ pools around the face. Headache odds roughly double per +1 mmHg (Law 2014); CO₂ may contribute to SANS.",
-    measurement: "ECLSS cabin monitors, personal CO₂ monitors; values are read as 1-hour averages.",
+      "Without convection CO₂ pools around the face. Headache odds roughly double per +1 mmHg (Law 2014, cited in OCHMO-TB-004); CO₂ may contribute to SANS.",
+    measurement:
+      "ECLSS cabin monitors, personal CO₂ monitors. The NASA limit is defined as a 1-hour average; this prototype treats a single high reading as a breach.",
     actions: ["Move to a well-ventilated module; position a fan.", "Check CO₂ scrubbers (CDRA).", "Reduce exercise while CO₂ is high."],
-    escalation: "1-hour average above 3 mmHg (NASA limit), or headache or vision change with high CO₂.",
+    escalation: "Above 3 mmHg (NASA 1-hour average limit; here a single reading counts), or headache or vision change with high CO₂.",
     sources: [S.std3001co2, S.co2TB],
   },
   visionChange: {
@@ -687,6 +695,22 @@ export function persistenceLabel(def: IndicatorDef): string | null {
 }
 
 /**
+ * The values an escalateFromBand rule covers, in words: the critical range
+ * text without its notes ("≤ 35.0 °C or ≥ 39.1 °C"), or for a caution band
+ * that starts above a single nominal step, "≥ 1 /3".
+ */
+export function bandEscalationLabel(def: IndicatorDef): string | null {
+  if (def.escalateFromBand === "critical") return def.ranges.critical.replace(/\s*\([^)]*\)/g, "").trim();
+  if (def.escalateFromBand === "caution") {
+    const [first, ...rest] = def.steps;
+    const allAbove = rest.every(([, s]) => RANK[s] >= RANK.caution) && RANK[def.top] >= RANK.caution;
+    if (first && first[1] === "nominal" && allAbove) return `≥ ${formatLimit(def, first[0])}`;
+    return "any caution or critical value";
+  }
+  return null;
+}
+
+/**
  * Every automatic escalation rule of an indicator in words, generated from
  * the same fields the code evaluates (Guidance "Automatic flag" column).
  */
@@ -694,8 +718,8 @@ export function escalationFlags(def: IndicatorDef): string[] {
   const out: string[] = [];
   if (def.escalateBelow != null) out.push(`< ${formatLimit(def, def.escalateBelow)}`);
   if (def.escalateAbove != null) out.push(`> ${formatLimit(def, def.escalateAbove)}`);
-  if (def.escalateFromBand === "critical") out.push(`Any value ${def.ranges.critical}`);
-  if (def.escalateFromBand === "caution") out.push("Any caution or critical value");
+  const band = bandEscalationLabel(def);
+  if (band) out.push(band.startsWith("any ") ? `A${band.slice(1)}` : `Any value ${band}`);
   const p = persistenceLabel(def);
   if (p) out.push(p);
   if (def.stormAlert) out.push("Any current S1+ solar radiation storm");
@@ -775,7 +799,7 @@ export function judgement(
           ? "large change from your baseline"
           : "outside normal range"
         : "within normal range";
-  if (ev.repeatRule) return `${band}: ${progress ?? "single value"}; repeated values escalate (${ev.repeatRule})`;
+  if (ev.repeatRule) return `${band}, ${progress ?? "single value"}; repeated values escalate (${ev.repeatRule})`;
   if (ev.status === "critical") return `${band}: re-check and log`;
   if (ev.status === "caution") return `${band}, ${ev.baselineShift ? "monitor closely" : (def.cautionAdvice ?? "monitor closely")}`;
   return ev.status === "nominal" ? band : "no data";

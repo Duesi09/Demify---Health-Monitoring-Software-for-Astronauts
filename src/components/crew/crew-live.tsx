@@ -106,6 +106,13 @@ export function StageGlow() {
   );
 }
 
+/** Data label of the monitor numbers (same wording as the monitor's own source tag). */
+const STAGE_SOURCE: Record<LiveVitals["source"], string> = {
+  simulated: "SIMULATED (demo telemetry generator)",
+  sensor: "DEVICE (posted by a sensor or gateway)",
+  mixed: "DEVICE + SIMULATED",
+};
+
 /** Footnote under the monitor stage. */
 export function StageFootnote() {
   const { live } = useCrewLiveContext();
@@ -117,7 +124,7 @@ export function StageFootnote() {
           className="!h-auto min-h-[18px] max-w-full py-[3px] leading-[1.25]"
         />
       )}
-      <span>Data: NASA OSDR · NOAA SWPC</span>
+      <span>Monitor data: {STAGE_SOURCE[live.source]}</span>
     </p>
   );
 }

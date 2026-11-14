@@ -69,8 +69,8 @@ export default async function ResearchPage() {
               <p>
                 <span className="font-medium">Honest scope:</span> public OSDR contains no real-time astronaut vital signs (heart rate,
                 blood pressure, SpO₂). Those stay private medical data. What it does publish are real crew blood tests. Below are the
-                blood biomarkers of the four SpaceX Inspiration4 crew, measured before and after flight. They show the kind of
-                changes Demify&apos;s in-flight self-checks are designed to catch early.
+                blood biomarkers of the four SpaceX Inspiration4 crew, measured before and after flight: published reference
+                data on how even a short flight changes blood values.
               </p>
             </div>
           </div>
@@ -217,7 +217,12 @@ export default async function ResearchPage() {
         subtitle="Find spaceflight studies by topic, organism, tissue or mission. Results open on osdr.nasa.gov."
         action={<Database size={16} className="text-muted" aria-hidden />}
       >
-        <StudySearch initial={search ? { data: search.data, meta: meta(search) } : null} offlineMode={config.offline} seeded={SEEDED_SEARCHES} />
+        <StudySearch
+          initial={search ? { data: search.data, meta: meta(search) } : null}
+          offlineMode={config.offline}
+          seeded={SEEDED_SEARCHES}
+          defaultQuery={DEFAULT_SEARCH}
+        />
       </Card>
     </div>
   );

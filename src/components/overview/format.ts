@@ -1,13 +1,10 @@
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { IndicatorId, ReadingSource, Status } from "@/lib/types";
 
-/** Shared formatting helpers for the Overview and Check-in pages (server + client safe). */
-
-/** One-way light time as a short human string: "0.5 s", "12.5 min". */
-export function formatDelay(seconds: number): string {
-  if (seconds < 60) return `${seconds} s`;
-  return `${(seconds / 60).toFixed(1)} min`;
-}
+/**
+ * Shared formatting helpers for the Overview and Check-in pages (server +
+ * client safe). Signal delays are formatted by formatDelay in src/lib/link.ts.
+ */
 
 /** Value with the indicator's decimals and unit, e.g. "36.7 °C". */
 export function formatValue(id: IndicatorId, value: number | null | undefined, withUnit = true): string {
@@ -33,15 +30,17 @@ export function nominalBand(id: IndicatorId): { from: number; to: number } | nul
 
 /**
  * Data label per reading source, shown wherever a value appears: SIMULATED
- * (demo generator), DEVICE (posted by a sensor or gateway), REAL for crew
- * entries. External feeds use REAL / SNAPSHOT <date> via Provenance.
+ * (demo generator), DEVICE (posted by a sensor or gateway), Crew entry (the
+ * check-in; analog crews may enter training values, so it is not REAL). The
+ * dose-rate fallback is Demify's own estimate from NOAA data. External feeds
+ * themselves use REAL / SNAPSHOT <date> via Provenance.
  */
 export const SOURCE_LABEL: Record<ReadingSource, string> = {
-  manual: "REAL · crew entry",
+  manual: "Crew entry",
   sensor: "DEVICE",
   simulated: "SIMULATED",
   osdr: "NASA OSDR",
-  "noaa-swpc": "NOAA SWPC",
+  "noaa-swpc": "NOAA SWPC estimate (App, illustrative)",
 };
 
 const RANK: Record<Status, number> = { unknown: 0, nominal: 1, caution: 2, critical: 3 };

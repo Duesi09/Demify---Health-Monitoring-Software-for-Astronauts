@@ -17,12 +17,13 @@ import { EmergencyConsole } from "@/components/crew/emergency-console";
 import { Findings } from "@/components/crew/findings";
 import { HealthRecord } from "@/components/crew/health-record";
 import { buildRecord } from "@/components/crew/record-data";
+import { LinkSwitch } from "@/components/link-switch";
 import { PatientMonitor } from "@/components/monitor/patient-monitor";
-import { formatDelay } from "@/components/overview/format";
 import { StatusBadge } from "@/components/ui";
-import { currentMission } from "@/lib/config";
+import { currentLink } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
+import { linkPolicy, withLink } from "@/lib/link";
 import { getLiveVitals } from "@/lib/monitor/live";
 import { getCrew } from "@/lib/store/readings";
 import { listScenarios } from "@/lib/store/scenarios";
@@ -61,14 +62,16 @@ function SectionTitle({ id, title, children }: { id: string; title: string; chil
 }
 
 export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
-  const { id } = await props.params;
+  const [{ id }, sp] = await Promise.all([props.params, props.searchParams]);
   const now = requestTime();
   const [all, live, scenarios] = await Promise.all([assessAllCrew(), getLiveVitals(id, now), listScenarios(now)]);
   const a = all.find((x) => x.crew.id === id);
   if (!a || !live) notFound();
 
   const crew = a.crew;
-  const mission = currentMission();
+  // ?link= swaps the signal delay for every delay string on this page.
+  const { profile: link, selected } = currentLink(sp.link);
+  const policy = linkPolicy(link.oneWayS);
   const readings = await readingsFor(crew, 24 * 7);
   const rows = buildRecord(a, readings, now);
   // Server view of the drill; the client poll (CrewLiveProvider) refreshes the
@@ -87,7 +90,10 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
               <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">{crew.name}</h1>
               <p className="mt-2 text-base text-muted md:text-lg">
                 {sameRole ? "Crew role: " : ""}
-                {crew.role} · signal delay to Earth {formatDelay(mission.commDelaySeconds)} one way
+                {crew.role} ·{" "}
+                {policy.mode === "blackout"
+                  ? "no contact with Earth (blackout)"
+                  : `signal delay to Earth ${policy.label} one way`}
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <StatusBadge status={a.overall} size="md" flash={a.overall === "critical"} />
@@ -97,26 +103,29 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
-                href={`/body?crew=${encodeURIComponent(crew.id)}`}
+                href={withLink(`/body?crew=${encodeURIComponent(crew.id)}`, selected)}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <PersonStanding size={16} aria-hidden /> Body map
               </Link>
               <Link
-                href={`/check-in?crew=${encodeURIComponent(crew.id)}`}
+                href={withLink(`/check-in?crew=${encodeURIComponent(crew.id)}`, selected)}
                 className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <ClipboardPlus size={16} aria-hidden /> Daily check-in
               </Link>
             </div>
           </div>
-          <CrewSwitcher
-            crew={all.map((x) => x.crew)}
-            active={crew.id}
-            statuses={Object.fromEntries(all.map((x) => [x.crew.id, x.overall]))}
-            hrefFor={(cid) => `/crew/${encodeURIComponent(cid)}`}
-            tags={drillTags}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <CrewSwitcher
+              crew={all.map((x) => x.crew)}
+              active={crew.id}
+              statuses={Object.fromEntries(all.map((x) => [x.crew.id, x.overall]))}
+              hrefFor={(cid) => withLink(`/crew/${encodeURIComponent(cid)}`, selected)}
+              tags={drillTags}
+            />
+            <LinkSwitch active={link.id} path={`/crew/${encodeURIComponent(crew.id)}`} />
+          </div>
         </header>
 
         {/* Keynote-style stage for the live monitor */}
@@ -146,8 +155,8 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
           <EmergencyConsole
             crewId={crew.id}
             crewName={crew.name}
-            commDelaySeconds={mission.commDelaySeconds}
-            missionName={mission.name}
+            commDelaySeconds={link.oneWayS}
+            missionName={link.name}
           />
         </section>
 
@@ -161,7 +170,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
             assessments={a.assessments}
             sources={a.sources}
             crewName={crew.name}
-            commDelaySeconds={mission.commDelaySeconds}
+            commDelaySeconds={link.oneWayS}
             drill={drill != null}
           />
         </section>
@@ -169,7 +178,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
         {/* Health record */}
         <section aria-labelledby="record-heading">
           <SectionTitle id="record-heading" title={`Every indicator for ${crew.name}`}>
-            <Link href="/guidance" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
+            <Link href={withLink("/guidance", selected)} className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
               How values are judged <ArrowUpRight size={14} aria-hidden />
             </Link>
           </SectionTitle>

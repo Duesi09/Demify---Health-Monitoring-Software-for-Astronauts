@@ -1,5 +1,5 @@
 import { Apple, Bone, Brain, Droplet, Dumbbell, Eye, Hand, HeartPulse, Wind, type LucideIcon } from "lucide-react";
-import type { BodyRegionId, Reading, Status } from "@/lib/types";
+import type { BodyRegionId, Status } from "@/lib/types";
 
 /** Head-to-toe order used by lists and the default selection tie-break. */
 export const REGION_ORDER: BodyRegionId[] = ["brain", "eyes", "heart", "lungs", "blood", "gut", "muscles", "skeleton", "skin"];
@@ -37,11 +37,3 @@ export const STATUS_VAR: Record<Status, string> = {
 };
 
 export const STATUS_RANK: Record<Status, number> = { unknown: 0, nominal: 1, caution: 2, critical: 3 };
-
-export const SOURCE_LABEL: Record<Reading["source"], string> = {
-  manual: "crew check-in",
-  sensor: "sensor",
-  simulated: "simulated telemetry",
-  osdr: "NASA OSDR",
-  "noaa-swpc": "NOAA SWPC estimate",
-};

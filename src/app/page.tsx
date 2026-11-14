@@ -3,13 +3,15 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight, CalendarDays, ClipboardPlus, Orbit, RadioTower, ShieldCheck } from "lucide-react";
 import { CrewGrid, type CrewGridItem } from "@/components/overview/crew-grid";
 import { CrewTrends } from "@/components/overview/crew-trends";
-import { EscalationBanner, type EscalationItem } from "@/components/overview/escalation-banner";
-import { bySeverity, formatDelay } from "@/components/overview/format";
+import { EscalationBanner, escalationItems } from "@/components/overview/escalation-banner";
+import { LinkSwitch } from "@/components/link-switch";
+import { bySeverity } from "@/components/overview/format";
 import { SimulatedTag } from "@/components/overview/status-icon";
 import { buildCrewTrends } from "@/components/overview/trends-data";
 import { Provenance, StatusBadge } from "@/components/ui";
-import { currentMission, missionDay } from "@/lib/config";
+import { currentLink, currentMission, missionDay } from "@/lib/config";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
+import { MARS_DELAY_RANGE, linkPolicy, withLink } from "@/lib/link";
 import { getAllLiveVitals } from "@/lib/monitor/live";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
 
@@ -49,10 +51,16 @@ function Stat({
   );
 }
 
-export default async function OverviewPage() {
+export default async function OverviewPage(props: PageProps<"/">) {
+  const sp = await props.searchParams;
   const now = requestTime();
   const mission = currentMission();
   const day = missionDay(now);
+  // ?link= swaps the signal delay only (gravity, duration and dose stay with
+  // the mission); every delay string on this page follows `link`.
+  const { profile: link, selected } = currentLink(sp.link);
+  const policy = linkPolicy(link.oneWayS);
+  const crewParam = typeof sp.crew === "string" ? sp.crew : undefined;
 
   const [all, initialVitals] = await Promise.all([assessAllCrew(), getAllLiveVitals(now)]);
 
@@ -74,25 +82,12 @@ export default async function OverviewPage() {
   const sLevel = sw && sw.data.current.p10 != null ? sw.data.sLevel : null;
   const dose = estimateDoseRate(sw?.data.current.p10 ?? null, mission);
 
-  const escalations: EscalationItem[] = all
-    .filter((a) => a.escalations.length)
-    .map((a) => ({
-      crewId: a.crew.id,
-      crewName: a.crew.name,
-      role: a.crew.role,
-      scenarioLabel: a.scenario?.label ?? null,
-      findings: [...a.escalations].sort(bySeverity).map((e) => ({
-        indicator: e.indicator,
-        status: e.status,
-        finding: e.finding,
-        source: a.sources[e.indicator],
-        ...(e.drill ? { drill: true } : {}),
-      })),
-    }));
+  const escalations = escalationItems(all);
 
   // Plain, serialisable data for the live (client) crew grid.
   const crew: CrewGridItem[] = all.map((a) => ({
     id: a.crew.id,
+    link: selected,
     name: a.crew.name,
     role: a.crew.role,
     overall: a.overall,
@@ -110,8 +105,6 @@ export default async function OverviewPage() {
       })),
   }));
 
-  const longDelay = mission.commDelaySeconds >= 60;
-
   return (
     <div className="mx-auto max-w-[1400px] space-y-12 pb-10 md:space-y-16">
       {/* Header */}
@@ -119,25 +112,28 @@ export default async function OverviewPage() {
         <div className="min-w-0 max-w-3xl">
           <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">Crew health.</h1>
           <p className="mt-3 text-base leading-relaxed text-muted md:text-lg">
-            {longDelay
-              ? `At ${formatDelay(mission.commDelaySeconds)} one-way signal delay, ground support cannot respond in real time. The crew assesses itself first: every crew member's status, what needs attention and what to do.`
-              : "Every crew member's status at a glance. Distance from Earth is one of NASA's five hazards of human spaceflight: the further out, the more the crew must assess and treat itself."}
+            {policy.mode === "blackout"
+              ? "No contact with the ground (blackout): act on the onboard procedures; transmit when contact returns. The crew assesses itself: every crew member's status, what needs attention and what to do."
+              : policy.mode === "delayed"
+                ? `At ${policy.label} one-way signal delay, ground support cannot respond in real time. The crew assesses itself first: every crew member's status, what needs attention and what to do.`
+                : "Every crew member's status at a glance. Distance from Earth is one of NASA's five hazards of human spaceflight: the further out, the more the crew must assess and treat itself."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/crew"
+            href={selected && all.length ? withLink(`/crew/${encodeURIComponent(all[0].crew.id)}`, selected) : "/crew"}
             className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm transition-colors hover:bg-surface-2 focus-visible:bg-surface-2"
           >
             Crew monitor <ArrowUpRight size={15} aria-hidden />
           </Link>
           <Link
-            href="/check-in"
+            href={withLink("/check-in", selected)}
             className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <ClipboardPlus size={15} aria-hidden /> Daily check-in
           </Link>
         </div>
+        <LinkSwitch active={link.id} path="/" query={{ crew: crewParam }} className="basis-full" />
       </header>
 
       {/* Crew grid */}
@@ -145,7 +141,7 @@ export default async function OverviewPage() {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
-              Heart and blood pressure, live.
+              Heart and blood pressure monitors
             </h2>
             <p className="mt-1 text-sm text-muted">
               Simulated training monitors: SIMULATED telemetry unless a sensor or gateway posts DEVICE readings.
@@ -155,7 +151,7 @@ export default async function OverviewPage() {
         <CrewGrid crew={crew} initialVitals={initialVitals} />
       </section>
 
-      <EscalationBanner items={escalations} commDelaySeconds={mission.commDelaySeconds} />
+      <EscalationBanner items={escalations} commDelaySeconds={link.oneWayS} link={selected} />
 
       {/* Mission context */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -173,10 +169,18 @@ export default async function OverviewPage() {
         <Stat
           label="Signal delay to Earth"
           icon={<RadioTower size={16} aria-hidden />}
-          value={formatDelay(mission.commDelaySeconds)}
-          unit="one way"
+          value={policy.mode === "blackout" ? <span className="text-3xl md:text-[34px]">No contact</span> : policy.label}
+          unit={policy.mode === "blackout" ? "(blackout)" : "one way"}
         >
-          {formatDelay(mission.commDelaySeconds * 2)} round trip{longDelay ? " · act first, then report" : ""}
+          <p>
+            {policy.mode === "blackout"
+              ? "Act on the onboard procedures; transmit when contact returns."
+              : `${policy.roundTripLabel} round trip${policy.mode === "delayed" ? " · act first, then report" : ""}`}
+          </p>
+          <p className="mt-1">
+            {link.label}: {link.basis}.
+            {link.id.startsWith("mars") || link.id === "conjunction" ? ` Mars in general: ${MARS_DELAY_RANGE}.` : ""}
+          </p>
         </Stat>
         <Stat
           label="Radiation"

@@ -1,4 +1,5 @@
 import { INDICATORS } from "@/lib/health/knowledge";
+import { linkPolicy } from "@/lib/link";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 
 /**
@@ -51,26 +52,34 @@ export interface Protocol {
   steps: ProtocolStep[];
 }
 
-export function formatCommDelay(seconds: number): string {
-  if (seconds < 60) return `${seconds} s one way`;
-  const min = seconds / 60;
-  return `${min.toFixed(1)} min one way, ${(min * 2).toFixed(1)} min round trip`;
-}
-
-function surgeonStep(commDelaySeconds: number, missionName: string): ProtocolStep {
-  const long = commDelaySeconds >= 60;
+/**
+ * The flight-surgeon step, timed by the signal-delay policy (linkPolicy in
+ * src/lib/link.ts): call while acting on a near real-time link, act first and
+ * send updates on a delayed one, prepare the report during a blackout.
+ */
+function surgeonStep(commDelaySeconds: number | null, missionName: string): ProtocolStep {
+  const policy = linkPolicy(commDelaySeconds);
+  if (policy.mode === "blackout") {
+    return {
+      id: "surgeon",
+      text: "Prepare the report for the flight surgeon: time of onset, rhythm, vital signs, actions taken.",
+      detail: `${missionName}: ${policy.label}. Act on the onboard procedures; transmit when contact returns.`,
+    };
+  }
   return {
     id: "surgeon",
     text: "Contact the flight surgeon and report: time of onset, rhythm, vital signs, actions taken.",
-    detail: long
-      ? `${missionName}: signal delay ${formatCommDelay(commDelaySeconds)}. Do not wait for an answer before acting; follow the onboard checklist and send updates.`
-      : `${missionName}: signal delay ${formatCommDelay(commDelaySeconds)}, near real-time consultation is possible.`,
+    detail:
+      policy.mode === "delayed"
+        ? `${missionName}: signal delay ${policy.summary}. Do not wait for an answer before acting; follow the onboard checklist and send updates.`
+        : `${missionName}: signal delay ${policy.summary}, near real-time consultation is possible.`,
   };
 }
 
 export function buildProtocol(
   id: ProtocolId,
-  opts: { commDelaySeconds: number; missionName: string; alarm?: MonitorAlarm | null },
+  /** commDelaySeconds: one-way delay in seconds, null for no contact (blackout); missionName names the link in the step text. */
+  opts: { commDelaySeconds: number | null; missionName: string; alarm?: MonitorAlarm | null },
 ): Protocol {
   const surgeon = surgeonStep(opts.commDelaySeconds, opts.missionName);
   const st = INDICATORS.stDeviation.actions;

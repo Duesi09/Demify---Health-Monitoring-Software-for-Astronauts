@@ -13,6 +13,43 @@ type OfflineInfo = NonNullable<Extract<StudySearchResponse, { provenance: unknow
 const SUGGESTIONS = ["Inspiration4", "bone loss", "muscle atrophy", "space radiation", "immune", "cardiovascular", "astronaut"];
 const PAGE = 10;
 
+/** Drops a trailing full stop so a sentence can be continued. */
+function sentence(text: string): string {
+  return text.replace(/[.\s]+$/, "");
+}
+
+/**
+ * Status line under the search box, or null when nothing needs saying:
+ *  - the server answered with the cached default list instead (`offline`),
+ *  - offline mode, showing the default list or a seeded example's snapshot,
+ *  - online, but OSDR failed and a cached copy of this query is shown.
+ */
+function statusText(
+  offline: OfflineInfo | null,
+  result: Result | null,
+  searchOff: boolean,
+  defaultQuery: string,
+): string | null {
+  const data = result?.data;
+  if (offline) {
+    const other = offline.requested && offline.requested.toLowerCase() !== data?.query.toLowerCase();
+    const later =
+      offline.reason === "offline-mode"
+        ? `“${offline.requested}” can be searched when the connection is back`
+        : `try “${offline.requested}” again later`;
+    return `${sentence(offline.message)}${other ? ` (${later})` : ""}.`;
+  }
+  const isDefault = !data || data.query.toLowerCase() === defaultQuery.toLowerCase();
+  const shown = isDefault ? "the cached default list" : `the cached results for “${data.query}”`;
+  if (searchOff) {
+    return `Search needs a connection; showing ${shown}. Example searches that are not greyed out also work offline.`;
+  }
+  if (result && result.meta.error && result.meta.freshness !== "live") {
+    return `OSDR did not answer; showing ${shown}.`;
+  }
+  return null;
+}
+
 /**
  * OSDR full-text study search; queries go through our server (/api/osdr/search)
  * because OSDR has no CORS. Without a connection the server answers with the
@@ -24,12 +61,15 @@ export function StudySearch({
   initial,
   offlineMode = false,
   seeded = [],
+  defaultQuery,
 }: {
   initial: Result | null;
   /** Server runs with DEMIFY_OFFLINE=true. */
   offlineMode?: boolean;
   /** Lower-case example queries that have a bundled snapshot. */
   seeded?: readonly string[];
+  /** The query of the cached default list (DEFAULT_SEARCH on the server). */
+  defaultQuery: string;
 }) {
   const [q, setQ] = useState(initial?.data.query ?? "");
   const [result, setResult] = useState<Result | null>(initial);
@@ -60,7 +100,10 @@ export function StudySearch({
       if (!isLatest()) return;
       if (!res.ok || "error" in body) {
         if ("error" in body && body.offline) {
-          setOffline({ reason: "unreachable", requested: term, message: body.error });
+          // Not even the default list is cached: clear the old results so the
+          // page never shows a list next to "no cached list is available".
+          setResult(null);
+          setOffline({ reason: body.reason ?? "unreachable", requested: term, message: body.error });
           return;
         }
         throw new Error("error" in body ? body.error : `HTTP ${res.status}`);
@@ -86,6 +129,7 @@ export function StudySearch({
 
   const data = result?.data;
   const from = data?.from ?? 0;
+  const status = statusText(offline, result, searchOff, defaultQuery);
 
   return (
     <div className="space-y-4">
@@ -102,7 +146,7 @@ export function StudySearch({
             placeholder={searchOff ? "Search needs a connection" : "e.g. bone loss, Inspiration4, radiation…"}
             maxLength={120}
             disabled={searchOff}
-            aria-describedby={offline || searchOff ? "osdr-offline" : undefined}
+            aria-describedby={status ? "osdr-offline" : undefined}
             className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           />
         </div>
@@ -136,22 +180,10 @@ export function StudySearch({
         })}
       </div>
 
-      {(offline || searchOff) && (
+      {status && (
         <p id="osdr-offline" role="status" className="flex items-start gap-2 text-sm text-muted">
           <WifiOff size={15} className="mt-0.5 shrink-0" aria-hidden />
-          <span>
-            {offline ? (
-              <>
-                {offline.message}
-                {offline.requested && offline.requested.toLowerCase() !== data?.query.toLowerCase() && (
-                  <> (“{offline.requested}” can be searched when the connection is back)</>
-                )}
-                .
-              </>
-            ) : (
-              "Search needs a connection; showing the cached default list. Example searches that are not greyed out also work offline."
-            )}
-          </span>
+          <span>{status}</span>
         </p>
       )}
       {error && <p className="text-sm text-critical">Search failed: {error}</p>}

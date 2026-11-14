@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ArrowUpRight, Stethoscope } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
+import type { CrewAssessment } from "@/lib/health/assess";
+import { linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import type { IndicatorId, ReadingSource } from "@/lib/types";
-import { formatDelay } from "./format";
+import { bySeverity } from "./format";
 import { DrillTag, SimulatedTag, StatusIcon } from "./status-icon";
 
 export interface EscalationItem {
@@ -21,6 +23,30 @@ export interface EscalationItem {
   }[];
 }
 
+/**
+ * Banner items from the crew assessments: one per crew member with at least
+ * one met escalation rule (Assessment.escalate), most severe finding first.
+ */
+export function escalationItems(
+  all: Pick<CrewAssessment, "crew" | "escalations" | "sources" | "scenario">[],
+): EscalationItem[] {
+  return all
+    .filter((a) => a.escalations.length)
+    .map((a) => ({
+      crewId: a.crew.id,
+      crewName: a.crew.name,
+      role: a.crew.role,
+      scenarioLabel: a.scenario?.label ?? null,
+      findings: [...a.escalations].sort(bySeverity).map((e) => ({
+        indicator: e.indicator,
+        status: e.status,
+        finding: e.finding,
+        source: a.sources[e.indicator],
+        ...(e.drill ? { drill: true } : {}),
+      })),
+    }));
+}
+
 /** Every finding of this crew member is drill-driven. */
 function drillOnly(it: EscalationItem): boolean {
   return it.findings.length > 0 && it.findings.every((f) => f.drill);
@@ -33,7 +59,9 @@ function simulatedOnly(it: EscalationItem): boolean {
 
 /**
  * Top-of-page alert listing every crew member whose data warrants contacting
- * the flight surgeon. With long signal delays the crew acts first.
+ * the flight surgeon. With long signal delays the crew acts first; in a
+ * blackout (no contact) it acts on the onboard procedures and transmits when
+ * contact returns (linkPolicy in src/lib/link.ts).
  *
  * Findings driven by a training scenario are tagged DRILL. When every listed
  * finding comes from a drill, the whole banner is framed as a rehearsal
@@ -42,9 +70,19 @@ function simulatedOnly(it: EscalationItem): boolean {
  * telemetry (no drill, no crew entry or DEVICE reading), the banner says it
  * is training: in a real mission this prompts a call to the flight surgeon.
  */
-export function EscalationBanner({ items, commDelaySeconds }: { items: EscalationItem[]; commDelaySeconds: number }) {
+export function EscalationBanner({
+  items,
+  commDelaySeconds,
+  link = null,
+}: {
+  items: EscalationItem[];
+  /** One-way signal delay in seconds; null means no contact (blackout). */
+  commDelaySeconds: number | null;
+  /** Signal-delay profile chosen with ?link=, carried into the links (null: none chosen). */
+  link?: LinkProfileId | null;
+}) {
   if (!items.length) return null;
-  const longDelay = commDelaySeconds >= 60;
+  const policy = linkPolicy(commDelaySeconds);
   const allDrill = items.every(drillOnly);
   // Escalations raised from simulated data: show what would happen, framed as training.
   const training = !allDrill && items.every(simulatedOnly);
@@ -72,9 +110,13 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
               <>Drill: rehearse contacting the flight surgeon for {crewText}</>
             ) : training ? (
               <>Training: in a real mission this prompts a call to the flight surgeon</>
+            ) : policy.mode === "blackout" ? (
+              <>
+                Escalation rule met for {crewText}: no contact (blackout)
+              </>
             ) : (
               <>
-                Contact the flight surgeon: {crewText} {n > 1 ? "are" : "is"} past an escalation limit
+                Contact the flight surgeon: {crewText} {n > 1 ? "meet" : "meets"} an escalation rule
               </>
             )}
           </h2>
@@ -86,22 +128,27 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
           )}
           {training && (
             <p className="mt-2 max-w-3xl text-sm font-medium text-fg md:text-[15px]">
-              {crewText} {n > 1 ? "are" : "is"} past an escalation limit on SIMULATED telemetry. Practise the steps
+              {crewText} {n > 1 ? "meet" : "meets"} an escalation rule on SIMULATED telemetry. Practise the steps
               below as you would in a real mission.
             </p>
           )}
           <p className="mt-2 max-w-3xl text-sm text-fg/85 md:text-[15px]">
             {allDrill && <strong className="font-semibold">In the drill: </strong>}
             {training && <strong className="font-semibold">In a real mission: </strong>}
-            {longDelay ? (
+            {policy.mode === "blackout" ? (
               <>
-                One-way signal delay is <strong>{formatDelay(commDelaySeconds)}</strong>. Do not wait for a reply: start
-                the crew actions on the Body map now, then send the data and your notes to the ground.
+                <strong>No contact with the ground (blackout).</strong> Act on the onboard procedures: start the crew
+                actions on the Body map now and log every value and action; transmit when contact returns.
+              </>
+            ) : policy.mode === "delayed" ? (
+              <>
+                One-way signal delay is <strong>{policy.label}</strong>. Do not wait for a reply: start the crew actions on
+                the Body map now, then send the data and your notes to the ground.
               </>
             ) : (
               <>
-                Request a private medical conference with the flight surgeon now (signal delay{" "}
-                {formatDelay(commDelaySeconds)}). Start the listed crew actions while you connect.
+                Request a private medical conference with the flight surgeon now (signal delay {policy.label}). Start the
+                listed crew actions while you connect.
               </>
             )}
           </p>
@@ -120,7 +167,7 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
                   </h3>
                   <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                     <Link
-                      href={`/crew/${it.crewId}`}
+                      href={withLink(`/crew/${it.crewId}`, link)}
                       className="inline-flex items-center gap-0.5 text-accent underline-offset-2 hover:underline focus-visible:underline"
                     >
                       Open monitor<span className="sr-only"> for {it.crewName}</span>

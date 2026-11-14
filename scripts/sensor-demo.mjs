@@ -10,6 +10,8 @@
 // resting values). They are demo data, not measurements. They are stored with
 // source "sensor", so the live monitor shows them instead of the simulator
 // for as long as they keep arriving (fresh = newer than 2 minutes).
+// When the server has an admin token, export the same DEMIFY_ADMIN_TOKEN
+// before running this script; it is sent in the x-demify-admin header.
 // Stop with Ctrl+C.
 
 const HELP = `Usage: node scripts/sensor-demo.mjs [options]
@@ -19,7 +21,11 @@ Options
   --crew <id>         Crew id: cdr, plt, ms1, ms2 (default cdr)
   --interval <s>      Seconds between batches    (default 5, minimum 0.5)
   --count <n>         Number of batches to send  (default: until Ctrl+C)
-  -h, --help          Show this help`;
+  -h, --help          Show this help
+
+Environment
+  DEMIFY_ADMIN_TOKEN  Sent as the x-demify-admin header when set (needed
+                      when the server has an admin token).`;
 
 function parseArgs(argv) {
   const opts = { url: "http://localhost:3000", crew: "cdr", interval: 5, count: Infinity };
@@ -115,10 +121,13 @@ process.on("SIGINT", () => {
   wake?.();
 });
 
+/** Admin token for servers with write protection; empty or unset sends no header. */
+const ADMIN_TOKEN = process.env.DEMIFY_ADMIN_TOKEN?.trim() ?? "";
+
 async function post(endpoint, batch) {
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(ADMIN_TOKEN ? { "x-demify-admin": ADMIN_TOKEN } : {}) },
     body: JSON.stringify(batch),
     signal: AbortSignal.timeout(10_000),
   });
@@ -134,7 +143,8 @@ async function post(endpoint, batch) {
 const opts = parseArgs(process.argv.slice(2));
 console.log(
   `sensor-demo: posting demo vitals for crew "${opts.crew}" to ${opts.endpoint} ` +
-    `every ${opts.interval} s${Number.isFinite(opts.count) ? `, ${opts.count} batch(es)` : ""}. Ctrl+C stops.`,
+    `every ${opts.interval} s${Number.isFinite(opts.count) ? `, ${opts.count} batch(es)` : ""}` +
+    `${ADMIN_TOKEN ? ", with the admin token header" : ""}. Ctrl+C stops.`,
 );
 
 let sent = 0;
@@ -160,6 +170,13 @@ while (!stopping && sent < opts.count) {
     } else {
       const message = body?.error ?? res.statusText;
       console.error(`${time}  ${res.status} ${message}`);
+      if (res.status === 401) {
+        console.error(
+          ADMIN_TOKEN
+            ? "          the server rejected DEMIFY_ADMIN_TOKEN: export the token the server was started with"
+            : "          the server has an admin token: export DEMIFY_ADMIN_TOKEN and run again",
+        );
+      }
       // A 4xx other than 429 will not fix itself: wrong crew id, unit or URL.
       if (res.status >= 400 && res.status < 500) process.exit(1);
       failures++;

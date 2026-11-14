@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { CheckInForm } from "@/components/check-in/check-in-form";
 import { RecentEntries } from "@/components/check-in/recent-entries";
-import { formatDelay } from "@/components/overview/format";
 import { CrewSwitcher } from "@/components/crew-switcher";
 import { Card, PageHeader, StatusBadge } from "@/components/ui";
-import { currentMission, missionDay } from "@/lib/config";
+import { currentLink, currentMission, missionDay } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { linkPolicy, withLink } from "@/lib/link";
 import { listCrew, listReadings } from "@/lib/store/readings";
 import { submitCheckIn } from "./actions";
 
@@ -23,6 +23,15 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
   const crew = await listCrew();
   const member = crew.find((c) => c.id === crewParam) ?? crew[0];
   const mission = currentMission();
+  // ?link= swaps the signal delay; ?crew= picks the crew member. Both work together.
+  const { profile: link, selected } = currentLink(sp.link);
+  const policy = linkPolicy(link.oneWayS);
+  const delayText =
+    policy.mode === "blackout"
+      ? `Signal delay profile ${link.label}: no contact (blackout); act on the onboard procedures and transmit when contact returns.`
+      : selected
+        ? `Signal delay profile ${link.label}: ${policy.label} one way.`
+        : `Current mission ${mission.name}: ${policy.label} one-way signal delay.`;
 
   const since = daysAgoIso(14);
   const recent = member
@@ -33,9 +42,13 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
     <div className="space-y-6">
       <PageHeader
         title="Daily check-in"
-        description={`Your self-assessment for mission day ${missionDay()}. Enter what you measured; every value is checked against tagged reference ranges as you type, and saved values replace the SIMULATED demo data. With a ${formatDelay(mission.commDelaySeconds)} one-way signal delay, you are the first responder for your own health.`}
+        description={`Your self-assessment for mission day ${missionDay()}. Enter what you measured; every value is checked against tagged reference ranges as you type, and saved values replace the SIMULATED demo data. ${delayText}`}
       >
-        <CrewSwitcher crew={crew} active={member?.id ?? ""} basePath="/check-in" />
+        <CrewSwitcher
+          crew={crew}
+          active={member?.id ?? ""}
+          hrefFor={(cid) => withLink(`/check-in?crew=${encodeURIComponent(cid)}`, selected)}
+        />
       </PageHeader>
 
       {member ? (
@@ -45,13 +58,14 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
               key={member.id}
               crewId={member.id}
               crewName={member.name}
-              commDelaySeconds={mission.commDelaySeconds}
+              commDelaySeconds={link.oneWayS}
+              link={selected}
               baselines={member.baseline}
               submit={submitCheckIn}
             />
           </div>
           <aside className="space-y-4" aria-label="Check-in history and help">
-            <Card title={`Recent entries · ${member.name}`} subtitle="Crew and sensor entries from the last 14 days">
+            <Card title={`Recent entries · ${member.name}`} subtitle="Crew and device entries from the last 14 days">
               <RecentEntries readings={recent} />
             </Card>
             <Card title="How to read the feedback">
@@ -66,7 +80,10 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
                 </li>
                 <li className="flex items-start gap-2">
                   <StatusBadge status="critical" size="xs" className="mt-px w-[74px]" />
-                  <span>Past an escalation limit. In a real mission, act now and contact the flight surgeon.</span>
+                  <span>
+                    In the critical band: re-check and log. Escalation only when Demify shows “contact the flight
+                    surgeon”. Training: in a real mission this prompts a call to the flight surgeon.
+                  </span>
                 </li>
                 <li>
                   Ranges come from NASA standards, clinical guidelines or our own project rules, and each carries its

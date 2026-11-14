@@ -22,7 +22,7 @@ These texts live in [`src/lib/disclaimer.ts`](src/lib/disclaimer.ts); the app sh
 
 | Page | What it does |
 |---|---|
-| **Overview** `/` | Crew board for the mission profile: mission day and one-way signal delay to Earth. Each crew card shows body-region status. Vital signs have 24 h charts with the reference band shaded, plus a 7-day check-in history. An escalation banner appears when a value crosses an indicator's escalation limit; it is framed as training and says when, in a real mission, the flight surgeon would be contacted. |
+| **Overview** `/` | Crew board for the mission profile: mission day and one-way signal delay to Earth. Each crew card shows body-region status. Vital signs have 24 h charts with the reference band shaded, plus a 7-day check-in history. An escalation banner appears when an escalation rule is met (see [How the assessment works](#how-the-assessment-works)); it is framed as training and says when, in a real mission, the flight surgeon would be contacted. |
 | **Crew monitor** `/crew/<id>` | One page per crew member, switchable. The **Simulated training monitor**: bedside-style ECG, arterial pressure, pleth and respiration waveforms with large numerics, each value with its data label. Below it are the emergency drills and the complete health record with trends. |
 | **Drills** (on the crew monitor) | Training scenarios (simulated heart attack/STEMI, cardiac arrest/VF, hypertensive crisis). They change only SIMULATED telemetry, are labelled DRILL on every screen, show a timed response checklist and end on their own after 30 minutes. |
 | **Training alarms** (every page) | Alarm bar for the simulated training monitor, styled after IEC 60601-1-8 (red for high priority, amber for medium), with optional sound, a two-minute silence and activity-aware limits. |
@@ -31,14 +31,14 @@ These texts live in [`src/lib/disclaimer.ts`](src/lib/disclaimer.ts); the app sh
 | **Radiation** `/radiation` | Solar radiation storm level and proton flux from NOAA GOES satellites, solar flare class, an illustrative dose-rate estimate for the mission profile and a mission dose budget against NASA's 600 mSv career limit (NASA-STD-3001 Vol. 1 Rev C). Measured ISS dosimetry from NASA OSDR serves as a cross-check, alongside the NOAA 3-day outlook. |
 | **Open data (NASA OSDR)** `/research` | Blood biomarkers of the SpaceX Inspiration4 crew from NASA OSDR: blood counts, metabolic panel, inflammation and cytokines, before, during and after flight, with a "what changed after flight" summary and a search over all OSDR studies. |
 | **Guidance** `/guidance` | NASA's five hazards of spaceflight (RIDGE), a searchable reference for all 20 indicators (ranges with their source tags, effects in space, how each is measured on the ISS, procedure steps and sources) and the escalation protocol with the signal delay of each mission profile. |
-| **Help** `/help` | How to use Demify, with diagrams: the daily routine, what the colours, badges and data labels mean, what to do when a training alarm sounds, running a drill, where the data comes from, how to connect a sensor, and the intended purpose. |
+| **Help** `/help` | How to use Demify, with diagrams: the daily routine, what the colours, badges and data labels mean, what to do when a training alarm sounds, running a drill, where the data comes from, how to connect a sensor, and the intended purpose. Download the user guide (PDF) on the Help page. |
 
 ### How the assessment works
 
-- **Thresholds.** Every indicator has normal, caution and critical bands with a basis tag. **NASA** means NASA-STD-3001 or the NASA OCHMO technical briefs. **Clinical** means AHA, ADA or NEWS2 guidelines. **App** means a band we derived and is labelled as such in the UI. Sources: [`src/lib/health/knowledge.ts`](src/lib/health/knowledge.ts) and [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md).
-- **Personal baseline.** A shift of 25 % or more from your own pre-flight value raises a caution, even if the value is still inside the population range.
+- **Thresholds.** Every indicator has normal, caution and critical bands with a basis tag. **NASA** means NASA-STD-3001 or the NASA OCHMO technical briefs. **Clinical** means AHA, ADA, NEWS2 or MedlinePlus ranges, or the Fourth Universal Definition of Myocardial Infarction for the ST segment. **App** means a band or rule we defined ourselves (a project rule) and is labelled as such in the UI. Sources: [`src/lib/health/knowledge.ts`](src/lib/health/knowledge.ts) and [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md).
+- **Personal baseline (project rule).** A shift of 25 % or more from your own pre-flight value raises a caution, even if the value is still inside the population range. It never escalates on its own.
 - **Resting vitals only.** Continuous vitals use the median of the last hour at rest. Exercise readings are never judged as resting values.
-- **Escalation.** A critical value, or a value past an indicator's escalation limit, raises an escalation. The simulation shows how a pre-approved procedure would be timed under the mission's signal delay: with a long delay the onboard checklist starts first and the data is transmitted afterwards.
+- **Escalation.** The critical band alone does not escalate: without a matching rule, a critical value asks for a re-check. An escalation comes only from explicit rules on each indicator: one value strictly beyond an escalation limit (for example blood pressure above 180/120 mmHg; 140–180/90–120 mmHg is caution with a re-check in 15 minutes, a project rule), any critical ST segment, SpO₂ or temperature value or any new vision symptom, a value that persists (stress 8 or more on 2 days in a row, mood 2 or less on 2 days, sleep under 6 h on 7 days, temperature 38.1 °C or more for 24 h, glucose above 250 mg/dL on 2 days, exercise under 60 min on 3 days: all project rules), or a current NOAA S1+ solar radiation storm. Training: in a real mission this prompts a call to the flight surgeon. The simulation shows how a pre-approved procedure would be timed under the mission's signal delay: with a long delay the onboard checklist starts first and the data is transmitted afterwards. Every rule with its basis: [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md#when-a-value-escalates).
 - **Signal delay.** The one-way delay comes from the mission profile (`DEMIFY_MISSION`), and each profile states its basis: ISS 0.5 s (relay through TDRS geostationary satellites plus network latency, illustrative; straight-line light time from 400 km would be about 1.3 ms), Moon 1.3 s (light time at about 384,400 km), Mars transit a fixed 750 s (mid-range of about 3 to 22 minutes one way, illustrative).
 
 ## Data labels: what is real and what is simulated
@@ -69,16 +69,15 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 
 | Document | For whom | What is in it |
 |---|---|---|
-| **Help page** `/help` in the app | Crew and anyone using the app | Daily routine, colours and badges, alarms, drills, data sources, with diagrams |
+| **Help page** `/help` in the app | Crew and anyone using the app | Daily routine, colours and badges, alarms, drills, data sources, with diagrams; the user guide (PDF) on the Help page |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Team and station operators | Architecture diagrams (today and target), quick start for Windows and Linux, start/stop/update, backup and restore, connecting sensors, drills, offline mode, troubleshooting |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Whoever deploys the container | Image layout, full configuration reference, proxies and custom CAs, air-gapped operation, ARM builds, TLS, scaling |
 | [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md) | Reviewers, flight-surgeon liaison | Thresholds, actions and sources behind every indicator |
 | [`docs/research/data-sources.md`](docs/research/data-sources.md) | Developers | Every external data source, what is real and what is simulated |
 | [`.env.example`](.env.example) | Operators | Every setting, with comments |
-| [`docs/pitch/PROGRESS.md`](docs/pitch/PROGRESS.md) | Team | Pitch progress log: what is done, how it was verified, open decisions |
 | [`LICENSE`](LICENSE) | Everyone | MIT |
 
-To try the device API without hardware, run `npm run sensor:demo` while Demify is up. It posts demo vital signs as a wearable would (see [`docs/OPERATIONS.md` §4.6](docs/OPERATIONS.md#46-sensor-demo-script)).
+To try the device API without hardware, run `npm run sensor:demo` while Demify is up. It posts demo vital signs as a wearable would, and the monitor switches from SIMULATED to DEVICE (see [`docs/OPERATIONS.md` §4.6](docs/OPERATIONS.md#46-sensor-demo-script)). It does not send the `x-demify-admin` header yet, so leave `DEMIFY_ADMIN_TOKEN` empty while you use it.
 
 ## Quick start
 
@@ -133,7 +132,7 @@ Deployment, configuration, multi-arch builds (ARM flight computers), proxies and
 Anyone who can reach Demify over the network can start a drill or post readings unless you lock the write APIs. Two settings handle that:
 
 - **Loopback by default.** `docker-compose.yml` binds the published ports to `${DEMIFY_BIND:-127.0.0.1}`, so on a stage laptop only that laptop can open the app. For crew tablets or sensor hubs on a LAN, set `DEMIFY_BIND=0.0.0.0` in `.env`, and then also set a token.
-- **Optional admin token.** With `DEMIFY_ADMIN_TOKEN` set (for example `openssl rand -hex 24`), `POST`/`DELETE /api/scenarios` (drills) and `POST /api/readings` (devices) answer `401` unless the request carries the token: devices and scripts send the header `x-demify-admin: <token>`; a browser is unlocked once by opening `http://<host>:3000/unlock?token=<token>`, which sets an httpOnly, `SameSite=Strict` cookie for 7 days and redirects to the overview. Pages and `GET` APIs stay open. Without the variable nothing changes.
+- **Optional admin token.** With `DEMIFY_ADMIN_TOKEN` set (for example `openssl rand -hex 24`), `POST`/`DELETE /api/scenarios` (drills) and `POST /api/readings` (devices) answer `401` unless the request carries the token: devices and scripts send the header `x-demify-admin: <token>`; a browser is unlocked once by opening `http://<host>:3000/unlock?token=<token>`, which sets an httpOnly, `SameSite=Strict` cookie and redirects to the overview. The cookie stays valid for 7 days or until the token changes; changing the token is the only way to revoke it. Unlock before you share your screen: the token is in the address bar until the redirect, and the dev server (`npm run dev`) logs the request with it. Pages and `GET` APIs stay open. Without the variable nothing changes.
 
 The daily check-in form saves through the app itself and is not covered by the token, so keep the loopback default on a stage. Details: [`docs/OPERATIONS.md` §3.7](docs/OPERATIONS.md#37-stage-and-shared-networks).
 
@@ -150,7 +149,7 @@ curl -X POST http://localhost:3000/api/readings \
 
 With `DEMIFY_ADMIN_TOKEN` set, add `-H 'x-demify-admin: <token>'`. `unit` must match the indicator's unit exactly, and `value` must lie in the indicator's plausible range (otherwise 400). Requests must be `application/json`, at most 1 MB, and readings dated more than 5 minutes in the future are rejected. Each crew member can receive up to 600 readings per minute (`DEMIFY_RATE_LIMIT_PER_MIN`, 429 with `Retry-After` above). Request fields, all error codes and a step-by-step guide: [`docs/OPERATIONS.md` §4](docs/OPERATIONS.md#4-connecting-a-sensor).
 
-Demo wearable without hardware (Node 20+, no packages):
+Demo wearable without hardware (Node 20+, no packages). It does not send the `x-demify-admin` header yet: with `DEMIFY_ADMIN_TOKEN` set it gets `401` and stops, so leave the token empty while you use it or post with `curl` and the header:
 
 ```bash
 npm run sensor:demo -- --crew cdr --interval 5

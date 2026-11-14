@@ -10,7 +10,8 @@ function fmt(v: number | null, decimals: number): string {
 
 function SourceText({ row }: { row: RecordRow }) {
   if (!row.sourceLabel) return <span className="text-muted">—</span>;
-  const real = row.source !== "simulated";
+  // Solid outline for measured values (crew entry, DEVICE); dashed for SIMULATED and the App estimate.
+  const real = row.source === "manual" || row.source === "sensor";
   return (
     <span
       className={`inline-flex items-center rounded-[3px] px-1.5 py-px text-[10px] font-medium ${

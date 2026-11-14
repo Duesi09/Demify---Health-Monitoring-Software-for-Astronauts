@@ -4,7 +4,7 @@ import { CommDelay, EscalationProtocol, PrivateConferences } from "@/components/
 import { HazardCards } from "@/components/guidance/hazards";
 import { IndicatorReference } from "@/components/guidance/indicator-reference";
 import { PageHeader, tagClass } from "@/components/ui";
-import { MISSION_PROFILES, currentMission } from "@/lib/config";
+import { currentLink, currentMission } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 
 export const metadata: Metadata = { title: "Guidance" };
@@ -27,8 +27,11 @@ const TOC = [
   { href: "#reference", label: "Indicator reference" },
 ];
 
-export default function GuidancePage() {
+export default async function GuidancePage(props: PageProps<"/guidance">) {
+  const sp = await props.searchParams;
   const mission = currentMission();
+  // ?link= swaps the signal delay shown in the communication-delay card.
+  const { profile: link } = currentLink(sp.link);
   return (
     <div className="space-y-12">
       <div>
@@ -82,7 +85,7 @@ export default function GuidancePage() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <EscalationProtocol />
           <div className="space-y-4">
-            <CommDelay mission={mission} profiles={Object.values(MISSION_PROFILES)} />
+            <CommDelay link={link} missionName={mission.name} />
             <PrivateConferences />
           </div>
         </div>

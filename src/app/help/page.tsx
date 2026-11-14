@@ -18,6 +18,7 @@ import { PageHeader, StatusBadge, Tag, tagClass } from "@/components/ui";
 import { currentMission } from "@/lib/config";
 import { INTENDED_PURPOSE } from "@/lib/disclaimer";
 import type { Basis } from "@/lib/health/knowledge";
+import { ADMIN_HEADER, adminToken } from "@/lib/http";
 import { MAX_SCENARIO_MS } from "@/lib/store/scenarios";
 import type { Status } from "@/lib/types";
 
@@ -36,10 +37,20 @@ const TOC = [
   { href: "#about", label: "About Demify" },
 ];
 
-const SENSOR_EXAMPLE = `curl -X POST http://localhost:3000/api/readings \\
-  -H 'content-type: application/json' \\
-  -d '[{"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"},
-       {"crewId":"cdr","indicator":"systolicBP","value":118,"unit":"mmHg","source":"sensor"}]'`;
+/**
+ * curl example for the device API. With an admin token configured on this
+ * server the request also needs the x-demify-admin header; the example names
+ * the environment variable, never the token itself.
+ */
+function sensorExample(withToken: boolean): string {
+  return [
+    "curl -X POST http://localhost:3000/api/readings \\",
+    "  -H 'content-type: application/json' \\",
+    ...(withToken ? [`  -H "${ADMIN_HEADER}: $DEMIFY_ADMIN_TOKEN" \\`] : []),
+    `  -d '[{"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"},`,
+    `       {"crewId":"cdr","indicator":"systolicBP","value":118,"unit":"mmHg","source":"sensor"}]'`,
+  ].join("\n");
+}
 
 function Section({
   id,
@@ -131,8 +142,8 @@ const STATUS_ROWS: { status: Status; meaning: string; todo: string }[] = [
   },
   {
     status: "critical",
-    meaning: "Outside the safe range, or past an indicator's escalation limit.",
-    todo: "Demify raises an escalation: in a real mission, act now and contact the flight surgeon.",
+    meaning: "In the critical band of the reference range.",
+    todo: "Re-check and log. Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
   },
   {
     status: "unknown",
@@ -203,8 +214,8 @@ const FAQ: { q: string; a: ReactNode }[] = [
     a: "The bedside-style monitor on the Crew monitor page is a simulated training monitor and is permanently tagged Demo. It shows how a bedside monitor would look; its numbers are SIMULATED unless a sensor or gateway has posted DEVICE readings in the last two minutes.",
   },
   {
-    q: "What is the difference between a drill and a real alarm?",
-    a: "A drill always carries the yellow Training scenario or Drill tag and only changes simulated telemetry. A real alarm has no such tag. If you are unsure, treat it as real.",
+    q: "What is the difference between a drill and other alarms?",
+    a: "A drill (training scenario) always carries the yellow Training scenario or Drill tag and only changes simulated telemetry. Every other alarm is a training alarm from the simulated monitor, raised by the values it shows. Practise the same steps for both. In a real mission (a future certified version) the same alarm would prompt these steps; in a real situation, if you are unsure, treat an alarm as real.",
   },
 ];
 
@@ -212,6 +223,7 @@ const FAQ: { q: string; a: ReactNode }[] = [
 
 export default function HelpPage() {
   const mission = currentMission();
+  const tokenSet = adminToken() != null;
   const autonomous = mission.commDelaySeconds >= 60;
   const autoEndMin = Math.round(MAX_SCENARIO_MS / 60_000);
 
@@ -235,7 +247,7 @@ export default function HelpPage() {
       <Section
         id="routine"
         title="Your daily routine"
-        description="Five steps, most of them in the morning. Demify does the rating; you act on what it shows."
+        description="Five steps, most of them in the morning. Demify rates the values; you practise acting on what it shows."
       >
         <DailyRoutineDiagram />
         <ol className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -371,8 +383,8 @@ export default function HelpPage() {
               <p className="mt-1 leading-relaxed text-muted">
                 Current mission {mission.name}: signal delay {formatDelay(mission.commDelaySeconds)} one-way.{" "}
                 {autonomous
-                  ? "Stabilise with the checklist, log readings and actions, then send everything in one message. Do not wait for the reply before treating."
-                  : "The link is almost live. Start the onboard emergency procedure first; the call must never delay treatment."}
+                  ? "In a real mission: stabilise with the checklist, log readings and actions, then send everything in one message. Do not wait for the reply before treating."
+                  : "The link is almost live. In a real mission, start the onboard emergency procedure first; the call must never delay treatment."}
               </p>
               <p className="mt-2">
                 <PageLink href="/guidance#escalation">Escalation protocol</PageLink>
@@ -454,7 +466,7 @@ export default function HelpPage() {
         description="Any device or ground relay can send readings to Demify. DEVICE readings replace the SIMULATED ones straight away."
       >
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <CopyCode code={SENSOR_EXAMPLE} label="Send two readings for the commander" />
+          <CopyCode code={sensorExample(tokenSet)} label="Send two readings for the commander" />
           <div className="rounded-xl border border-border bg-surface p-4 text-sm">
             <ul className="list-disc space-y-1.5 pl-5 leading-relaxed text-muted marker:text-muted">
               <li>
@@ -463,6 +475,13 @@ export default function HelpPage() {
               </li>
               <li>Send JSON, up to 500 readings and 1 MB per request.</li>
               <li>Readings dated more than 5 minutes in the future are rejected.</li>
+              <li id="admin-token" className="scroll-mt-20">
+                {tokenSet ? "This server has an admin token set" : "If the server has an admin token set"} (
+                <span className="text-fg">DEMIFY_ADMIN_TOKEN</span>): scripts and devices send it in the{" "}
+                <span className="text-fg">{ADMIN_HEADER}</span> header
+                {tokenSet ? " (included in the example)" : ""}. To start drills from a browser, open{" "}
+                <span className="text-fg">/unlock?token=…</span> once in that browser; ask the operator for the token.
+              </li>
             </ul>
             <p className="mt-3 leading-relaxed">
               Replace <code className="rounded-[3px] bg-surface-2 px-1 py-0.5 font-mono text-[12.5px]">localhost:3000</code>{" "}

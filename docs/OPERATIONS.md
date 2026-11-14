@@ -143,6 +143,7 @@ sequenceDiagram
         M->>A: GET /api/vitals/live
         A->>S: Sensor readings of the last 2 minutes
         A-->>M: Vitals, source sensor, mixed or simulated, and alarms
+        Note over M: Shows DEVICE, DEVICE + SIMULATED or SIMULATED
     end
 ```
 
@@ -222,14 +223,16 @@ The first build takes a few minutes. Later starts take seconds.
 - [ ] http://localhost:3000 shows the **Overview** with four crew members.
 - [ ] Open a crew member's monitor (**Crew monitor** in the navigation, or a
       crew card). The waveforms move, the monitor is labelled **Simulated
-      training monitor**, and vitals are labelled **SIMULATED** until a sensor
-      is connected.
+      training monitor**, and vitals are labelled **SIMULATED** until a device
+      posts readings (then **DEVICE**).
 - [ ] **Enable alarm sound.** Browsers block sound until you interact with
       the page. When an alarm bar appears, click **Enable alarm sound** in it.
       Check that the computer's volume is up.
 - [ ] Optional: send test readings with `npm run sensor:demo` (needs Node 20
       or newer on the machine, see [§4.6](#46-sensor-demo-script)) and watch
-      the monitor switch from simulated to sensor values.
+      the monitor switch from **SIMULATED** to **DEVICE**. With
+      `DEMIFY_ADMIN_TOKEN` set the script gets `401` and stops, because it
+      does not send the `x-demify-admin` header yet.
 - [ ] For a real mission, set `DEMIFY_MISSION` and `DEMIFY_MISSION_START` in
       `.env` (see [§8](#8-configuration-reference)) and restart.
 
@@ -405,11 +408,15 @@ How each client sends the token:
 - **Browser** (to start and end drills from the crew monitor): open
   `http://<host>:3000/unlock?token=<token>` once. Demify compares the token
   in constant time, sets an httpOnly, `SameSite=Strict` cookie that holds a
-  value derived from the token (not the token itself), valid for 7 days, and
-  redirects to the overview. Behind a TLS proxy that sends
+  value derived from the token (not the token itself), and redirects to the
+  overview. The cookie stays valid for 7 days or until the token changes,
+  whichever comes first. Behind a TLS proxy that sends
   `X-Forwarded-Proto: https`, the cookie is also marked `Secure`. A wrong
   token answers `401` and sets nothing. Without a configured token, `/unlock`
   only redirects to the overview.
+  **Unlock before you share your screen** or start a stage demo: the token is
+  in the address bar until the redirect, and the dev server (`npm run dev`)
+  prints every request, `/unlock?token=...` included, in its terminal.
 - **Devices, gateways and scripts:** send the header
   `x-demify-admin: <token>`:
 
@@ -420,19 +427,26 @@ How each client sends the token:
     -d '{"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"}'
   ```
 
-To lock every browser out again, change the token and run
-`docker compose up -d`: cookies issued for the old token stop working. The
-browser shows a drill error starting with `Admin token required` when it is
-not unlocked.
+There is no lock button and no per-browser revoke. Changing the token is the
+only way to revoke unlocked browsers: change it in `.env` and run
+`docker compose up -d` (with `npm run dev`, restart it); cookies issued for
+the old token stop working at once. A browser that is not unlocked shows this
+error under **Emergency drill** on the crew monitor:
+
+```text
+Could not start the drill: Admin token required. Open /unlock?token=<token> once in this browser, or send the x-demify-admin header.
+```
+
+(`Could not end the drill: ...` when ending one.)
 
 Limits, so nobody is surprised on stage:
 
 - The daily **check-in** form saves through the app itself (a server action),
   not through `POST /api/readings`, so the token does not cover it. Keep the
   loopback default wherever check-ins must stay private.
-- `npm run sensor:demo` does not send the token yet. Leave
-  `DEMIFY_ADMIN_TOKEN` empty while you use it, or post with `curl` and the
-  header as shown above.
+- `npm run sensor:demo` does not send the `x-demify-admin` header yet: with
+  a token set it gets `401` and stops. Leave `DEMIFY_ADMIN_TOKEN` empty while
+  you use it, or post with `curl` and the header as shown above.
 - The token is not a user login and does not encrypt anything. On a real
   network put Demify behind a reverse proxy with TLS
   ([`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls)).
@@ -516,6 +530,10 @@ them, use JSON escapes: `"°C"` is `"\u00b0C"` and `"×10⁹/L"` is
 
 ### 4.4 Examples
 
+With `DEMIFY_ADMIN_TOKEN` set, add `-H "x-demify-admin: $DEMIFY_ADMIN_TOKEN"`
+to every example below ([§3.7](#37-stage-and-shared-networks)); without it
+the API answers `401`.
+
 One reading:
 
 ```bash
@@ -563,10 +581,16 @@ Good to know:
 - Demify does **not** deduplicate yet. If a device resends a request after a
   timeout, the readings are stored twice. Send each batch once, and keep
   `takenAt` set to the real measurement time.
-- The live monitor uses sensor readings of heart rate, blood pressure, SpO₂,
-  respiration and temperature that are **less than 2 minutes old**. If all six
-  are fresh, the monitor source is `sensor`; if only some are, it is `mixed`
-  and the rest stay simulated. Send at least every 60 seconds.
+- The live monitor uses readings posted with `"source":"sensor"` for heart
+  rate, systolic and diastolic blood pressure, SpO₂, respiration and
+  temperature that are **less than 2 minutes old**. If all six are fresh,
+  `GET /api/vitals/live` reports source `sensor` and the monitor shows
+  **DEVICE**; if only some are, it reports `mixed`, the monitor shows
+  **DEVICE + SIMULATED** and the rest stay simulated. With none it reports
+  `simulated` and shows **SIMULATED**. Send at least every 60 seconds.
+- Readings posted with `"source":"manual"` (the default) are stored and
+  assessed, and are labelled **REAL · crew entry**, but they do not drive the
+  live monitor. Devices should send `"source":"sensor"`.
 - While a drill runs for a crew member, the monitor shows the drill, not the
   sensor values. Sensor readings are still stored.
 - With real sensors in use, set `DEMIFY_SIMULATE=false` so no simulated values
@@ -607,8 +631,13 @@ sensor-demo: 2 batch(es) accepted.
 ```
 
 Open that crew member's monitor while it runs: the vitals switch from
-simulated to sensor. About 2 minutes after you stop the script they fall back
-to simulated.
+**SIMULATED** to **DEVICE**. About 2 minutes after you stop the script they
+fall back to **SIMULATED**.
+
+With `DEMIFY_ADMIN_TOKEN` set, the script gets `401` and stops, because it
+does not send the `x-demify-admin` header yet. Leave the token empty while you
+use it, or post with `curl` and the header
+([§3.7](#37-stage-and-shared-networks)).
 
 ---
 
@@ -727,7 +756,7 @@ with `DEMIFY_RESEED_SNAPSHOTS=true`. Details:
 | `permission denied ... docker.sock` (Linux) | User not in the `docker` group | `sudo usermod -aG docker "$USER"`, then log out and in |
 | `port is already allocated` / `address already in use` | Another program uses port 3000 | Add `DEMIFY_PORT=3010` to `.env`, run `docker compose up -d`, open http://localhost:3010 |
 | Demify works on the host, but tablets or sensors on the LAN cannot connect | Compose binds to `127.0.0.1` by default | Set `DEMIFY_BIND=0.0.0.0` (and a `DEMIFY_ADMIN_TOKEN`) in `.env`, run `docker compose up -d` ([§3.7](#37-stage-and-shared-networks)) |
-| Starting a drill shows `Admin token required`, or a sensor gets `401` | `DEMIFY_ADMIN_TOKEN` is set | Browser: open `/unlock?token=<token>` once. Device: send `x-demify-admin: <token>`. A changed token needs a new unlock |
+| Starting a drill shows `Could not start the drill: Admin token required. ...`, or a sensor or `npm run sensor:demo` gets `401` | `DEMIFY_ADMIN_TOKEN` is set and this browser or device has no valid token | Browser: open `/unlock?token=<token>` once (before you share your screen). Device or `curl`: send `x-demify-admin: <token>`. Sensor demo: leave the token empty. A changed token needs a new unlock |
 | `/bin/sh^M: bad interpreter` or `exec ... no such file or directory` at container start | Old checkout with Windows line endings | Current `.gitattributes` and `Dockerfile` handle this. Run `git pull`, then re-checkout with LF (stash your changes first): `git rm -r -q --cached . && git reset --hard`, then `docker compose build --no-cache && docker compose up -d` |
 | Container stays `unhealthy` | Server failed to start, or the data volume is not writable | `docker compose logs demify`. For a bind mount, make it owned by uid 1001 ([`DEPLOYMENT.md` §2](DEPLOYMENT.md#2-what-is-in-the-image)) |
 | No alarm sound | The browser blocks audio until you interact, or sound was silenced | Click **Enable alarm sound** in the alarm bar. Check the system volume. A silence lasts 2 minutes |
@@ -736,8 +765,8 @@ with `DEMIFY_RESEED_SNAPSHOTS=true`. Details:
 | Behind a reverse proxy, starting a drill gives `403 Cross-origin requests are not allowed`, or a check-in does not save (the log mentions `origin` not matching the host) | The proxy does not pass the original `Host` header, so the browser's `Origin` looks foreign | nginx: `proxy_set_header Host $host;` (Caddy does this by default). See [`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls) |
 | `403` / `407` from a corporate proxy during `docker compose build` | Build needs the proxy or its CA | See [`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca) |
 | Sensor readings return `400` | Wrong unit, value out of range, unknown crew id or indicator | Read the `error` text; compare with [§4.3](#43-indicator-ids-and-units) |
-| Monitor stays **simulated** although a sensor posts | Readings older than 2 minutes, `takenAt` in the past, or a drill is running | Send at least every 60 s with the current time, end the drill |
-| Monitor says **mixed** | Only some of the six vitals are sent | Send heart rate, both blood pressures, SpO₂, respiration and temperature |
+| Monitor stays **SIMULATED** although a sensor posts | Readings older than 2 minutes, `takenAt` in the past, `source` missing or `"manual"`, or a drill is running | Send at least every 60 s with the current time and `"source":"sensor"`, end the drill |
+| Monitor shows **DEVICE + SIMULATED** (API source `mixed`) | Only some of the six vitals are sent | Send heart rate, both blood pressures, SpO₂, respiration and temperature |
 | Mission day looks wrong or changes after a restart | `DEMIFY_MISSION_START` not set; the default is "92 days before start-up" | Set `DEMIFY_MISSION_START=2026-09-01` (your date) in `.env` and restart |
 | `npm run dev`: every external chart fails with `fetch failed` | Behind a proxy without `NODE_USE_ENV_PROXY=1` | `NODE_USE_ENV_PROXY=1 npm run dev` |
 | Backup or restore in Git Bash fails with a path like `C:/Program Files/Git/data` | Git Bash path conversion | `export MSYS_NO_PATHCONV=1`, then run the command again |

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Save, Stethoscope } from "lucide-react";
 import { StatusBadge } from "@/components/ui";
 import { StatusIcon } from "@/components/overview/status-icon";
-import { bySeverity, formatDelay, formatUtc, formatValue } from "@/components/overview/format";
+import { bySeverity, formatUtc, formatValue } from "@/components/overview/format";
+import { linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import { CHECK_IN_INDICATORS, INDICATORS, classify, evaluateValue } from "@/lib/health/knowledge";
 import type { IndicatorId, Status } from "@/lib/types";
 import { CHECK_IN_GROUPS, SCALE_LABELS, type CheckInInput, type CheckInResult } from "./types";
@@ -240,12 +241,16 @@ export function CheckInForm({
   crewId,
   crewName,
   commDelaySeconds,
+  link = null,
   baselines,
   submit,
 }: {
   crewId: string;
   crewName: string;
-  commDelaySeconds: number;
+  /** One-way signal delay in seconds (from the server, ?link= aware); null means no contact (blackout). */
+  commDelaySeconds: number | null;
+  /** Signal-delay profile chosen with ?link=, carried into the result links (null: none chosen). */
+  link?: LinkProfileId | null;
   baselines: Partial<Record<IndicatorId, number>>;
   submit: (input: CheckInInput) => Promise<CheckInResult>;
 }) {
@@ -305,7 +310,7 @@ export function CheckInForm({
 
   return (
     <div className="space-y-6">
-      {result && <ResultPanel result={result} headingRef={resultRef} commDelaySeconds={commDelaySeconds} crewId={crewId} />}
+      {result && <ResultPanel result={result} headingRef={resultRef} commDelaySeconds={commDelaySeconds} crewId={crewId} link={link} />}
 
       <form onSubmit={onSubmit} noValidate aria-label={`Daily check-in for ${crewName}`} className="space-y-6">
         {groups.map((g) => (
@@ -398,11 +403,13 @@ function ResultPanel({
   headingRef,
   commDelaySeconds,
   crewId,
+  link,
 }: {
   result: CheckInResult;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
-  commDelaySeconds: number;
+  commDelaySeconds: number | null;
   crewId: string;
+  link: LinkProfileId | null;
 }) {
   if (!result.ok) {
     return (
@@ -417,7 +424,7 @@ function ResultPanel({
   const items = [...result.items].sort(bySeverity);
   // Only a met escalation rule asks for the flight surgeon; a critical band alone does not.
   const escalate = items.filter((i) => i.escalate);
-  const longDelay = commDelaySeconds >= 60;
+  const policy = linkPolicy(commDelaySeconds);
   return (
     <section aria-labelledby="ci-result" className="space-y-4 rounded-xl border border-fg/25 bg-surface p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -437,12 +444,15 @@ function ResultPanel({
       {(escalate.length > 0 || result.otherEscalations.length > 0) && (
         <div role="alert" className="rounded-lg border border-critical/60 bg-critical/10 p-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-critical">
-            <Stethoscope size={18} aria-hidden /> Contact the flight surgeon
+            <Stethoscope size={18} aria-hidden />{" "}
+            {policy.mode === "blackout" ? "Escalation rule met: no contact (blackout)" : "Contact the flight surgeon"}
           </p>
           <p className="mt-1 text-sm">
-            {longDelay
-              ? `Signal delay is ${formatDelay(commDelaySeconds)} one way: start the crew actions below now, then send this check-in and your notes to the ground. Do not wait for a reply.`
-              : `Request a private medical conference now (signal delay ${formatDelay(commDelaySeconds)}). Start the crew actions below while you connect.`}
+            {policy.mode === "blackout"
+              ? "No contact with the ground: act on the onboard procedures; transmit when contact returns. Start the crew actions below now and keep this check-in and your notes for the report."
+              : policy.mode === "delayed"
+                ? `Signal delay is ${policy.label} one way: start the crew actions below now, then send this check-in and your notes to the ground. Do not wait for a reply.`
+                : `Request a private medical conference now (signal delay ${policy.label}). Start the crew actions below while you connect.`}
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
             {escalate.map((i) => (
@@ -486,10 +496,10 @@ function ResultPanel({
       </ul>
 
       <div className="flex flex-wrap gap-2 text-sm">
-        <Link href={`/?crew=${crewId}#detail`} className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">
+        <Link href={withLink(`/?crew=${crewId}#detail`, link)} className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">
           View on overview
         </Link>
-        <Link href={`/body?crew=${crewId}`} className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">
+        <Link href={withLink(`/body?crew=${crewId}`, link)} className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">
           Open body map
         </Link>
       </div>
