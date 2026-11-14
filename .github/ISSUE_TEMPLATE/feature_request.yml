@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a new indicator, pattern or feature
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What crew or ground need does it serve
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: For health thresholds or claims, link the evidence.

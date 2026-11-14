@@ -59,25 +59,63 @@ docker compose up --build
 
 Then open <http://localhost:3000>. Readings entered by hand are kept in the `demify-data` volume.
 
-## Project layout
+## Architecture
+
+```
+Browser (four sections)          Devices and ground systems
+        |                                   |
+  Next.js pages, server actions      HTTP API /api/v1 (token, OpenAPI)
+        \                                   /
+         src/domain: rule engine, indicators, simulator (pure TypeScript)
+                            |
+         src/server: storage port with SQLite (default) or JSON driver,
+                     migrations, audit trail, configuration
+```
 
 | Path | Contents |
 |---|---|
-| `src/domain` | Framework-free logic: metric catalog and ranges, rule engine, mission simulator, validation |
-| `src/server` | Server-only code: storage for manually entered readings |
-| `src/app` | Next.js pages and server actions |
-| `src/ui` | Dashboard components |
+| `src/domain` | Framework-free logic: indicators and ranges, rule engine, simulator, task readiness, radiation, mission context |
+| `src/server` | Server-only code: configuration, storage port and drivers, migrations, HTTP API logic |
+| `src/app` | Next.js pages, server actions and API route handlers |
+| `src/ui` | Components of the four sections |
+| `e2e` | End-to-end tests (Playwright) |
+| `docs` | [Data layer](docs/data.md), [HTTP API](docs/api.md) |
 
-Manually entered readings are saved to `.data/manual-readings.json` (or the folder set in `DEMIFY_DATA_DIR`). This suits one on-board server; serverless hosting needs a database instead.
+## Configuration
+
+Copy `.env.example` to `.env`. All settings are optional.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DEMIFY_DATA_DIR` | `.data` | Where the database (or JSON files) are kept. The container uses `/data` |
+| `DEMIFY_STORE` | `sqlite` | `sqlite` or `json` |
+| `DEMIFY_API_TOKEN` | not set | Switches on the crew endpoints of the HTTP API and protects them |
+
+A bad value stops the server at start-up with a message naming the variable.
+
+## HTTP API
+
+Devices and ground systems can send readings and read the evaluation through a versioned JSON API under `/api/v1`, described by an OpenAPI 3.1 document at `/api/v1/openapi.json` and a readable page at `/api/docs`. See [docs/api.md](docs/api.md) for `curl` examples.
 
 ## Scripts
+
+Node.js 22.15 or newer.
 
 | Command | Purpose |
 |---|---|
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and server |
-| `npm test` | Unit tests for the rule engine, simulator and body map |
-| `npm run typecheck` | Type check |
+| `npm test` | Unit and integration tests (Vitest) |
+| `npm run e2e` | End-to-end tests in a real browser (Playwright) |
+| `npm run lint` / `npm run typecheck` | Lint and type check |
+| `npm run format` | Format with Prettier |
+| `node scripts/backup.mjs <file>` | Consistent copy of the database |
+
+Every push runs lint, type check, tests, the end-to-end tests and a container build on GitHub Actions. A tag `v*` publishes a container image to GitHub Container Registry.
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), and report security problems as described in [SECURITY.md](SECURITY.md). Released under the [MIT License](LICENSE).
 
 ## Sources
 

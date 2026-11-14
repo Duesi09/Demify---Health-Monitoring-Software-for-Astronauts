@@ -190,7 +190,7 @@ src/
     *.test.ts             unit tests
   server/                 back
     mission.ts            merges simulated and manual readings
-    readingStore.ts       reads and writes the JSON file, with its own tests
+    repository.ts         storage port; sqliteRepository.ts and jsonRepository.ts implement it (docs/data.md)
   app/                    back and entry point
     page.tsx              loads readings on the server, renders the dashboard
     error.tsx             shown when the dashboard cannot load
