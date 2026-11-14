@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BodyMap } from "@/components/body/body-map";
 import { CrewSwitcher } from "@/components/crew-switcher";
+import { DrillTag } from "@/components/overview/status-icon";
 import { Card, PageHeader } from "@/components/ui";
 import { assessAllCrew } from "@/lib/health/assess";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
@@ -37,6 +38,15 @@ export default async function BodyPage(props: PageProps<"/body">) {
           />
         )}
       </PageHeader>
+
+      {active?.scenario && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#ffcc00]/40 bg-[#ffcc00]/10 px-3 py-2 text-sm" role="status">
+          <DrillTag />
+          <span>
+            {active.crew.name}: {active.scenario.label}. Training scenario with simulated telemetry, not a real emergency.
+          </span>
+        </div>
+      )}
 
       {active ? (
         <BodyMap

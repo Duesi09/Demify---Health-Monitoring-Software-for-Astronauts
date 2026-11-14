@@ -85,3 +85,72 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Body figure (skeleton artwork). "bf-" prefix; artwork classes are   */
+/* generated into figure-art.ts.                                       */
+/* ------------------------------------------------------------------ */
+.bf-root {
+  overflow: visible;
+}
+.bf-art {
+  pointer-events: none;
+}
+.bf-art [data-region] {
+  transition: filter 0.2s ease;
+}
+/* Hover / selection: lift the region with a soft white glow. */
+.bf-root[data-hover="brain"] .bf-art [data-region="brain"],
+.bf-root[data-selected="brain"] .bf-art [data-region="brain"],
+.bf-root[data-hover="eyes"] .bf-art [data-region="eyes"],
+.bf-root[data-selected="eyes"] .bf-art [data-region="eyes"],
+.bf-root[data-hover="heart"] .bf-art [data-region="heart"],
+.bf-root[data-selected="heart"] .bf-art [data-region="heart"],
+.bf-root[data-hover="lungs"] .bf-art [data-region="lungs"],
+.bf-root[data-selected="lungs"] .bf-art [data-region="lungs"],
+.bf-root[data-hover="blood"] .bf-art [data-region="blood"],
+.bf-root[data-selected="blood"] .bf-art [data-region="blood"],
+.bf-root[data-hover="gut"] .bf-art [data-region="gut"],
+.bf-root[data-selected="gut"] .bf-art [data-region="gut"],
+.bf-root[data-hover="muscles"] .bf-art [data-region="muscles"],
+.bf-root[data-selected="muscles"] .bf-art [data-region="muscles"],
+.bf-root[data-hover="skeleton"] .bf-art [data-region="skeleton"],
+.bf-root[data-selected="skeleton"] .bf-art [data-region="skeleton"],
+.bf-root[data-hover="skin"] .bf-art [data-region="skin"],
+.bf-root[data-selected="skin"] .bf-art [data-region="skin"] {
+  filter: brightness(1.15) drop-shadow(0 0 2.5px rgb(255 255 255 / 0.85));
+}
+/* Invisible click layer: opacity 0 still receives pointer events. */
+.bf-hit {
+  opacity: 0;
+  cursor: pointer;
+}
+.bf-hit[data-hit="blood"] * {
+  stroke-width: 3.5px !important;
+}
+/* Soft critical glow over organs hidden behind bones. */
+@keyframes bf-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+.bf-glow {
+  filter: blur(5px);
+  animation: bf-glow 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bf-glow { animation: none; opacity: 0.7; }
+}
+/* Heartbeat at the crew member's current heart rate. */
+.bf-root[data-beat="on"] .bf-art [data-region="heart"] {
+  transform-box: fill-box;
+  transform-origin: 50% 55%;
+  animation: bm-heartbeat var(--bf-beat, 1s) ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bf-root[data-beat="on"] .bf-art [data-region="heart"] {
+    animation: none;
+  }
+  .bf-art [data-region] {
+    transition: none;
+  }
+}

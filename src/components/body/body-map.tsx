@@ -79,7 +79,7 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
 
         <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-center">
           <BodyFigure
-            className="h-auto w-[min(100%,240px)] shrink-0 select-none sm:w-[270px]"
+            className="h-auto w-[min(100%,250px)] shrink-0 select-none sm:w-[280px]"
             regions={regions}
             selected={selected}
             hovered={hovered}

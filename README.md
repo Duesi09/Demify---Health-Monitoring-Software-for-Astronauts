@@ -11,6 +11,8 @@ On long missions astronauts are exposed to space radiation, isolation, altered g
 | Page | What it does |
 |---|---|
 | **Overview** `/` | Crew health board. Shows the mission, mission day and signal delay to Earth. An escalation banner appears when someone needs the flight surgeon. Each crew card shows body-region status. Vital signs have 24 h charts with the normal range shaded, plus a 7-day check-in history. |
+| **Crew Monitor** `/crew/<id>` | One page per crew member, switchable. A live bedside-style patient monitor (ECG, arterial pressure, pleth, respiration waveforms with large numerics), permanently labelled **DEMO**. The page also has emergency drills (heart attack/STEMI, cardiac arrest/VF, hypertensive crisis) with a response checklist, and a complete health record table with trends. |
+| **Alarms** (every page) | Monitor alarms in IEC 60601-1-8 style, red for high priority and amber for medium, with optional sound, a two-minute silence and activity-aware limits. Drills are always labelled **TRAINING SCENARIO**. |
 | **Body Map** `/body` | Interactive human figure. Each of 9 body systems is coloured by its health status. The heart beats at the crew member's current heart rate. Click a region to see its function, how spaceflight affects it, the live indicators, what to do now and when to escalate. |
 | **Check-in** `/check-in` | Daily self-assessment: vitals, sleep, mood, stress, hydration, exercise, body mass, vision symptoms and dosimeter. Each value is rated as you type. After saving you get concrete actions and a flight-surgeon alert when needed. |
 | **Radiation** `/radiation` | Live solar radiation storm level and proton flux from NOAA GOES satellites, solar flare class, an estimated crew dose rate and a mission dose budget against NASA's 600 mSv career limit. Measured ISS dosimetry from NASA OSDR serves as a cross-check, alongside the NASA-STD-3001 limits and the NOAA 3-day outlook. |
@@ -133,6 +135,9 @@ curl -X POST http://localhost:3000/api/readings \
 | `GET /api/osdr/inspiration4?panel=CMP&analyte=glucose` | Inspiration4 biomarkers |
 | `GET /api/osdr/search?q=bone` | OSDR study search |
 | `GET /api/osdr/eda` | ISS dosimetry |
+| `GET /api/vitals/live[?crewId=]` | Instantaneous vitals for the live monitor |
+| `GET /api/alarms` | Active monitor alarms across the crew |
+| `GET/POST/DELETE /api/scenarios` | Start (`{"crewId":"plt","type":"stemi"}`) or end emergency training drills |
 | `GET /api/health` | Liveness probe |
 
 ## Project structure
