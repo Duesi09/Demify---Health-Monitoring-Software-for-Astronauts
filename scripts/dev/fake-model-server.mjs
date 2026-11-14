@@ -150,7 +150,18 @@ function embedText(text) {
 /* ------------------------------------------------------------------------- */
 
 /** Sections of the user message that end a passage (see src/lib/assistant/prompt.ts). */
-const SECTION = /^(question:|crew data \[c\]|library status:|ground link status:)/i;
+const SECTION = /^(question:|crew data \[c\]|library status:|ground link status:|the crew's question|<question>)/i;
+
+/**
+ * The question of the user message: the text between <question> tags
+ * (prompt.ts puts it last), else a "Question:" line.
+ * @param {string} message
+ */
+function questionOf(message) {
+  const tagged = message.match(/<question>\s*([\s\S]*?)\s*<\/question>/i);
+  if (tagged) return tagged[1];
+  return message.match(/^question:\s*(.*)$/im)?.[1] ?? "";
+}
 
 /**
  * Sentences of the earliest passage in the message (each list item or line
@@ -222,7 +233,7 @@ function answerFor(messages) {
   const user = [...list].reverse().find((m) => m && m.role === "user" && typeof m.content === "string");
   const sentences = user ? firstPassage(user.content) : null;
   if (!sentences) return "NO_ANSWER";
-  const question = user.content.match(/^question:\s*(.*)$/im)?.[1] ?? "";
+  const question = questionOf(user.content);
   const answer = `According to the library, ${bestSentence(sentences, question)} [1].`;
   return THINK ? `<think>The question matches passage [1]; answer from it.</think>\n${answer}` : answer;
 }

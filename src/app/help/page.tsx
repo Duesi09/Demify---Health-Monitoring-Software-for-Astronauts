@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, FileDown } from "lucide-react";
 import { BASIS_INFO, BasisTag } from "@/components/guidance/basis";
 import { DRILL_BUTTONS } from "@/components/crew/protocols";
 import { CopyCode } from "@/components/help/copy-code";
@@ -14,11 +14,12 @@ import {
 import { DemoTag } from "@/components/monitor/shared";
 import { DrillTag, SimulatedTag, SourceTag } from "@/components/overview/status-icon";
 import { PageHeader, StatusBadge, Tag, tagClass } from "@/components/ui";
-import { currentLink, currentMission } from "@/lib/config";
+import { currentMission } from "@/lib/config";
 import { INTENDED_PURPOSE } from "@/lib/disclaimer";
 import type { Basis } from "@/lib/health/knowledge";
 import { ADMIN_HEADER, adminToken } from "@/lib/http";
-import { CRITICAL_BAND_ESCALATION, linkPolicy, withLink, type LinkMode } from "@/lib/link";
+import { CRITICAL_BAND_ESCALATION, withLink, type LinkMode } from "@/lib/link";
+import { effectiveLink } from "@/lib/onboard/effective-link";
 import { MAX_SCENARIO_MS } from "@/lib/store/scenarios";
 import type { Status } from "@/lib/types";
 
@@ -32,6 +33,7 @@ const TOC = [
   { href: "#alarms", label: "When an alarm sounds" },
   { href: "#drills", label: "Emergency drills" },
   { href: "#data", label: "Where the data comes from" },
+  { href: "#onboard", label: "Onboard server and assistant" },
   { href: "#sensor", label: "Connecting a sensor" },
   { href: "#faq", label: "Questions" },
   { href: "#about", label: "About Demify" },
@@ -228,17 +230,73 @@ const FAQ: { q: string; a: ReactNode }[] = [
   },
 ];
 
+/** The printable user guide (public/docs/demify-user-guide.pdf). */
+const USER_GUIDE_PDF = "/docs/demify-user-guide.pdf";
+
+/** What the onboard assistant and library are, and how to read an answer. */
+const ONBOARD_CARDS: { title: string; text: string; link?: { href: string; label: string } }[] = [
+  {
+    title: "Onboard assistant",
+    text: "Ask a question in plain words. A library assistant (local language model) answers from the onboard library and nothing else, and says so when the library has no good answer instead of guessing. It never names medicines or doses, and it never raises or clears an alarm: the alarms and the response checklists stay primary. In an emergency, start the checklist before asking.",
+    link: { href: "/assistant", label: "Onboard assistant" },
+  },
+  {
+    title: "Onboard library",
+    text: "A curated set of documents: procedures (drill checklists, escalation, signal delay and blackout), reference ranges, crew baselines and a representative medical-kit inventory of devices and supplies, without medicines. Each document names its source and review status (Project text, not clinically reviewed) and carries a version; every passage is checked against its checksum before the assistant uses it.",
+    link: { href: "/library", label: "Onboard library" },
+  },
+  {
+    title: "Citations and freshness",
+    text: "Every answer cites the passages it used, numbered [1], [2], with the document they come from. It also says how fresh the library is, for example “last synced 14 hours ago”, and whether the ground link is up. Read the cited passages before you act on an answer.",
+  },
+];
+
+/** What the simulated ground link switch changes. */
+const GROUND_LINK_ROWS: { status: Status; name: string; meaning: string }[] = [
+  {
+    status: "nominal",
+    name: "Ground link up",
+    meaning:
+      "Normal mode. On the onboard server the library syncs from the ground on a schedule and with Sync now; NOAA and NASA data are fetched when needed (REAL).",
+  },
+  {
+    status: "caution",
+    name: "Ground link down",
+    meaning:
+      "Simulated blackout. Every page behaves as under the Conjunction signal-delay profile: no contact, act on the onboard procedures, transmit when contact returns. NOAA and NASA data come from the last snapshots (SNAPSHOT), the library does not sync, and the assistant answers from the onboard copy (“Ask the flight surgeon when contact returns”).",
+  },
+];
+
+/** Where Demify runs: the pitch laptop or the onboard server. */
+const SETUP_ROWS: { name: string; meaning: string }[] = [
+  {
+    name: "Laptop mode",
+    meaning:
+      "The standard setup (docker-compose.yml or npm start): no database and no language model unless you set one up. The assistant searches the library bundled with Demify by keywords and shows the matching passages; with a local model configured (DEMIFY_MODEL_URL) the model writes the answer from those passages, with citations. The switch is stored in a file.",
+  },
+  {
+    name: "Onboard server",
+    meaning:
+      "An NVIDIA DGX Spark (docker-compose.spark.yml): PostgreSQL with pgvector for readings and the library, a local model server, and a sync service that brings library updates and data snapshots from the ground while the link is up. It is a ground-test and analog-station setup; on a real spacecraft the same software would target an existing approved crew laptop or a hosted payload, not a new box. Demify does not connect to any ISS system.",
+  },
+];
+
 /* ------------------------------------------------------------------------- */
 
 export default async function HelpPage(props: PageProps<"/help">) {
   const sp = await props.searchParams;
   const mission = currentMission();
   const tokenSet = adminToken() != null;
-  // ?link= swaps the signal delay like on the other pages (/help?link=conjunction shows the blackout text).
-  const { profile: link, selected } = currentLink(sp.link);
-  const policy = linkPolicy(link.oneWayS);
-  const linkName = selected ? link.label : mission.name;
-  const where = selected ? `Signal delay profile ${link.label}` : `Current mission ${mission.name}`;
+  // ?link= swaps the signal delay like on the other pages (/help?link=conjunction shows the blackout text);
+  // with the ground link switched down it is that blackout too (effectiveLink).
+  const { profile: link, selected, policy, groundLinkDown } = await effectiveLink(sp.link);
+  // The diagram node is narrow: the short name of the switch there.
+  const linkName = groundLinkDown ? "Ground link down" : selected ? link.label : mission.name;
+  const where = groundLinkDown
+    ? link.label
+    : selected
+      ? `Signal delay profile ${link.label}`
+      : `Current mission ${mission.name}`;
   // policy.label is formatDelay(oneWayS), or "no contact (blackout)".
   const delayText = policy.mode === "blackout" ? policy.label : `${policy.label} one-way`;
   const autoEndMin = Math.round(MAX_SCENARIO_MS / 60_000);
@@ -249,7 +307,16 @@ export default async function HelpPage(props: PageProps<"/help">) {
         <PageHeader
           title="How to use Demify"
           description="The daily routine, what the colours mean, what to do when an alarm sounds and where the data comes from. No training needed: start with the routine below."
-        />
+        >
+          <a
+            href={USER_GUIDE_PDF}
+            download
+            className="inline-flex shrink-0 items-center gap-2 rounded-[3px] border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <FileDown size={16} aria-hidden />
+            User guide (PDF)
+          </a>
+        </PageHeader>
         <nav aria-label="On this page" className="flex flex-wrap gap-1.5">
           {TOC.map((t) => (
             <a key={t.href} href={t.href} className={tagClass("md", true)}>
@@ -475,6 +542,64 @@ export default async function HelpPage(props: PageProps<"/help">) {
         description="Space weather and NASA research data are REAL, or a dated SNAPSHOT when offline. Vital signs and check-in values are SIMULATED until a DEVICE or the crew provides real ones, and are labelled that way."
       >
         <DataFlowDiagram />
+      </Section>
+
+      {/* Onboard server and assistant ------------------------------------- */}
+      <Section
+        id="onboard"
+        title="Onboard server and assistant"
+        description="The onboard assistant answers crew questions from a curated onboard library, in laptop mode or on an optional onboard server. It advises, never decides: the crew and, when the ground link is up, the flight surgeons make every medical decision."
+      >
+        <div className="grid gap-4 xl:grid-cols-2">
+          <ul className="space-y-3 text-sm">
+            {ONBOARD_CARDS.map((c) => (
+              <li key={c.title} className="rounded-xl border border-border bg-surface p-4">
+                <p className="font-semibold">{c.title}</p>
+                <p className="mt-1 leading-relaxed text-muted">{c.text}</p>
+                {c.link && (
+                  <p className="mt-2">
+                    <PageLink href={withLink(c.link.href, selected)}>{c.link.label}</PageLink>
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">Ground link up or down</h3>
+              <ul className="divide-y divide-border">
+                {GROUND_LINK_ROWS.map((r) => (
+                  <li key={r.name} className="grid gap-x-4 gap-y-1.5 px-4 py-3 text-sm sm:grid-cols-[150px_1fr]">
+                    <span>
+                      <StatusBadge status={r.status} label={r.name} />
+                    </span>
+                    <span className="leading-relaxed text-muted">{r.meaning}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="border-t border-border px-4 py-3 text-sm leading-relaxed text-muted">
+                The switch (Simulated ground link: Up or Down (blackout)) is on the Assistant and Library pages. On a
+                server with an admin token, a browser must be unlocked to move it (see{" "}
+                <a href="#admin-token" className="font-medium text-accent underline-offset-2 hover:underline">
+                  admin token
+                </a>
+                ). Air-gapped mode (<span className="text-fg">DEMIFY_OFFLINE=true</span>) is not a blackout: no
+                external data is fetched, but the pages keep their wording.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">Laptop mode or onboard server</h3>
+              <ul className="divide-y divide-border">
+                {SETUP_ROWS.map((r) => (
+                  <li key={r.name} className="grid gap-x-4 gap-y-1.5 px-4 py-3 text-sm sm:grid-cols-[150px_1fr]">
+                    <span className="font-semibold">{r.name}</span>
+                    <span className="leading-relaxed text-muted">{r.meaning}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
       </Section>
 
       {/* Sensor ------------------------------------------------------------ */}

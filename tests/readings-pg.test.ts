@@ -336,14 +336,17 @@ describe.skipIf(!TEST_URL)("PostgreSQL readings store", () => {
 
       await proxy.close(); // outage: open connections dropped, new ones refused
       const b = await s.addReadings([reading({ takenAt: "2026-11-14T11:00:00.000Z", value: 71 })]);
-      // Degraded: the JSON store only has what was spooled.
-      expect((await s.listReadings()).map((r) => r.id)).toEqual([b[0].id]);
+      // Degraded: the last-known history plus what was spooled.
+      expect((await s.listReadings()).map((r) => r.id)).toEqual([a[0].id, b[0].id]);
       expect(warn.mock.calls.filter((c) => /PostgreSQL is unreachable/.test(String(c[0])))).toHaveLength(1);
+      // Only the spooled reading is in the JSON file.
+      expect(JSON.parse(await fs.readFile(dbPath(), "utf8")).readings.map((r: Reading) => r.id)).toEqual([b[0].id]);
 
       proxy = await startProxy(port, target.hostname, Number(target.port || 5432));
       try {
         // Still inside the retry window: no database attempt yet.
-        expect((await s.listReadings()).map((r) => r.id)).toEqual([b[0].id]);
+        expect((await s.listReadings()).map((r) => r.id)).toEqual([a[0].id, b[0].id]);
+        expect(await fs.readdir(dir)).toContain("demify-db.json");
         vi.setSystemTime(new Date("2026-11-14T12:00:16Z"));
         expect((await s.listReadings()).map((r) => r.id)).toEqual([a[0].id, b[0].id]);
         expect(await fs.readdir(dir)).not.toContain("demify-db.json");
@@ -366,7 +369,229 @@ describe.skipIf(!TEST_URL)("PostgreSQL readings store", () => {
       const renamed = (await fs.readdir(dir)).find((f) => f.startsWith("demify-db.json.imported-"));
       const kept = JSON.parse(await fs.readFile(path.join(dir, renamed!), "utf8"));
       expect(kept.readings.map((r: Reading) => r.id)).toEqual([ghost.id]);
+      // Also saved on its own with the reason (imported-* files are pruned, rejected-* files are not).
+      const rejected = (await fs.readdir(dir)).find((f) => f.startsWith("demify-db.json.rejected-"));
+      const saved = JSON.parse(await fs.readFile(path.join(dir, rejected!), "utf8"));
+      expect(saved.readings.map((r: Reading) => r.id)).toEqual([ghost.id]);
+      expect(saved.reasons).toEqual([{ kind: "reading", id: ghost.id, reason: 'unknown crew member "ghost"' }]);
     });
+
+    it("keeps the crew history during an outage: last-known copy (loaded at start-up) plus the spool", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-14T12:00:00Z"));
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      // History stored before this process started (an earlier run), and a crew list of its own.
+      await query(
+        `INSERT INTO crew (id, name, role, baseline) VALUES
+           ('cdr', 'Commander', 'Commander', '{}'), ('plt', 'Pilot', 'Pilot', '{}'), ('eva', 'EVA Specialist', 'Mission Specialist', '{}')`,
+      );
+      await query(
+        `INSERT INTO readings (id, crew_id, indicator, value, unit, taken_at, source) VALUES
+           ('c0ffee00-0000-4000-8000-000000000101', 'cdr', 'heartRate', 61, 'bpm', '2026-11-13T08:00:00Z', 'manual'),
+           ('c0ffee00-0000-4000-8000-000000000102', 'plt', 'heartRate', 59, 'bpm', '2026-11-13T09:00:00Z', 'sensor'),
+           ('c0ffee00-0000-4000-8000-000000000103', 'eva', 'spo2', 97, '%', '2026-11-13T10:00:00Z', 'sensor'),
+           ('c0ffee00-0000-4000-8000-000000000199', 'cdr', 'heartRate', 50, 'bpm', '2020-01-01T00:00:00Z', 'sensor')`,
+      );
+      vi.stubEnv("DEMIFY_RETENTION_DAYS", "365"); // the 2020 reading is outside the window
+      const target = new URL(TEST_URL!);
+      const port = await freePort();
+      const viaProxy = new URL(TEST_URL!);
+      viaProxy.hostname = "127.0.0.1";
+      viaProxy.port = String(port);
+      vi.stubEnv("DATABASE_URL", viaProxy.toString());
+      let proxy = await startProxy(port, target.hostname, Number(target.port || 5432));
+      const s = await store();
+      expect((await s.listCrew()).map((c) => c.id)).toEqual(["cdr", "plt", "eva"]); // start-up done
+
+      await proxy.close();
+      const [b] = await s.addReadings([reading({ crewId: "eva", indicator: "spo2", value: 96, unit: "%", takenAt: "2026-11-14T11:00:00.000Z" })]);
+      const ids = (rs: Reading[]) => rs.map((r) => r.id.slice(-3));
+      expect(ids(await s.listReadings())).toEqual(["101", "102", "103", b.id.slice(-3)]);
+      expect(ids(await s.listReadings({ crewId: "eva" }))).toEqual(["103", b.id.slice(-3)]);
+      expect(ids(await s.listReadings({ crewId: "cdr", indicator: "heartRate" }))).toEqual(["101"]);
+      expect(ids(await s.listReadings({ since: "2026-11-13T08:30:00.000Z", limit: 2 }))).toEqual(["103", b.id.slice(-3)]);
+      // The crew list stays the database's, not the JSON store's default crew.
+      expect((await s.listCrew()).map((c) => c.id)).toEqual(["cdr", "plt", "eva"]);
+      expect(await s.getCrew("eva")).toMatchObject({ name: "EVA Specialist" });
+
+      proxy = await startProxy(port, target.hostname, Number(target.port || 5432));
+      try {
+        vi.setSystemTime(new Date("2026-11-14T12:00:16Z"));
+        expect(ids(await s.listReadings({ since: "2026-11-01T00:00:00.000Z" }))).toEqual(["101", "102", "103", b.id.slice(-3)]);
+        expect(await fs.readdir(dir)).not.toContain("demify-db.json");
+      } finally {
+        await (await db()).closePool();
+        await proxy.close();
+      }
+    });
+  });
+
+  describe("text PostgreSQL cannot store (NUL, unpaired surrogates)", () => {
+    it("stores such a reading cleaned instead of spooling it; the database stays in use", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const s = await store();
+      const created = await s.addReadings([
+        reading({ note: "bad\u0000note", takenAt: "2026-11-14T10:00:00.000Z" }),
+        reading({ note: "half \ud83d pair", takenAt: "2026-11-14T10:01:00.000Z" }),
+        reading({ note: "whole \ud83d\ude80 pair", takenAt: "2026-11-14T10:02:00.000Z" }),
+      ]);
+      expect(await fs.readdir(dir)).toEqual([]); // nothing spooled
+      expect(await query("SELECT note FROM readings ORDER BY taken_at")).toEqual([
+        { note: "badnote" },
+        { note: "half \ufffd pair" },
+        { note: "whole \ud83d\ude80 pair" },
+      ]);
+      expect((await s.listReadings()).map((r) => r.id)).toEqual(created.map((r) => r.id));
+      await s.addReadings([reading({ value: 70 })]);
+      expect(await query("SELECT count(*)::int AS n FROM readings")).toEqual([{ n: 4 }]);
+      expect(warn.mock.calls.flat().join("\n")).not.toMatch(/PostgreSQL could not|unreachable|start-up failed/);
+    });
+
+    it("imports a spool or legacy file holding such text (cleaned) and renames it", async () => {
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      const file = {
+        crew: [{ id: "cdr", name: "Com\u0000mander", role: "Commander", baseline: { heartRate: 62 } }],
+        readings: [
+          { id: "c0ffee00-0000-4000-8000-000000000201", crewId: "cdr", indicator: "heartRate", value: 61, unit: "bpm", takenAt: "2026-11-14T08:00:00.000Z", source: "manual", note: "bad\u0000note" },
+          { id: "c0ffee00-0000-4000-8000-000000000202", crewId: "cdr", indicator: "heartRate", value: 62, unit: "bpm", takenAt: "2026-11-14T09:00:00.000Z", source: "manual", note: "\udc00x" },
+        ],
+      };
+      await fs.writeFile(dbPath(), JSON.stringify(file));
+      const s = await store();
+      expect((await s.listReadings()).map((r) => r.note)).toEqual(["badnote", "\ufffdx"]);
+      expect((await s.getCrew("cdr"))?.name).toBe("Commander");
+      const files = await fs.readdir(dir);
+      expect(files).not.toContain("demify-db.json");
+      expect(files.filter((f) => f.startsWith("demify-db.json.rejected-"))).toEqual([]);
+    });
+
+    it("a row the database still refuses goes to a .rejected file and never blocks the replay", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      // Stand-in for any row PostgreSQL refuses with a data error (SQLSTATE class 22).
+      const original = pg.Client.prototype.query;
+      vi.spyOn(pg.Client.prototype, "query").mockImplementation(function (this: pg.Client, ...args: unknown[]) {
+        const [text, params] = args;
+        if (typeof text === "string" && text.includes("INSERT INTO readings") && JSON.stringify(params ?? []).includes("poison")) {
+          return Promise.reject(Object.assign(new Error("simulated data error"), { code: "22003" }));
+        }
+        return (original as (...a: unknown[]) => unknown).apply(this, args);
+      } as never);
+      const row = (n: number, note?: string) => ({
+        id: `c0ffee00-0000-4000-8000-00000000030${n}`,
+        crewId: "cdr",
+        indicator: "heartRate",
+        value: 60 + n,
+        unit: "bpm",
+        takenAt: `2026-11-14T0${n}:00:00.000Z`,
+        source: "sensor",
+        ...(note ? { note } : {}),
+      });
+      const file = { crew: [{ id: "cdr", name: "Commander", role: "Commander", baseline: {} }], readings: [row(1), row(2, "poison"), row(3)] };
+      await fs.writeFile(dbPath(), JSON.stringify(file));
+
+      const s = await store();
+      expect((await s.listReadings()).map((r) => r.value)).toEqual([61, 63]);
+      const files = await fs.readdir(dir);
+      expect(files).not.toContain("demify-db.json");
+      const rejected = files.find((f) => f.startsWith("demify-db.json.rejected-"));
+      const saved = JSON.parse(await fs.readFile(path.join(dir, rejected!), "utf8"));
+      expect(saved.readings).toEqual([row(2, "poison")]);
+      expect(saved.reasons).toEqual([
+        { kind: "reading", id: row(2).id, reason: "rejected by the database (simulated data error)" },
+      ]);
+      expect(log.mock.calls.flat().join("\n")).toMatch(
+        /2 readings added, 0 already there, 0 skipped .*, 1 rejected by the database, 1 crew members added\. .*Rows not imported were saved to demify-db\.json\.rejected-/,
+      );
+      // The database stays in use: the next write is stored there, nothing is spooled.
+      await s.addReadings([reading({ value: 70 })]);
+      expect(await query("SELECT count(*)::int AS n FROM readings")).toEqual([{ n: 3 }]);
+      expect(await fs.readdir(dir)).not.toContain("demify-db.json");
+      expect(warn.mock.calls.flat().join("\n")).not.toMatch(/start-up failed|unreachable/);
+    });
+  });
+});
+
+describe("onboard/db.mjs pool settings (no database needed)", () => {
+  afterEach(async () => {
+    vi.useRealTimers();
+    await (await db()).closePool();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("sets a client-side query timeout and TCP keep-alive", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://demify:x@127.0.0.1:1/demify");
+    const { getPool, QUERY_TIMEOUT_MS } = await db();
+    const pool = getPool() as unknown as { options: Record<string, unknown> };
+    expect(QUERY_TIMEOUT_MS).toBe(10_000);
+    expect(pool.options).toMatchObject({ query_timeout: 10_000, keepAlive: true, connectionTimeoutMillis: 3000 });
+  });
+
+  it("warns about an invalid DEMIFY_* value once, not on every database operation", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("DATABASE_URL", "postgres://demify:x@127.0.0.1:1/demify");
+    vi.stubEnv("DEMIFY_EMBED_DIM", "not-a-number");
+    const { databaseUrl, getPool } = await db();
+    for (let i = 0; i < 5; i++) {
+      expect(databaseUrl()).toBe("postgres://demify:x@127.0.0.1:1/demify");
+      getPool();
+    }
+    expect(warn.mock.calls.filter((c) => /Ignoring invalid DEMIFY_EMBED_DIM/.test(String(c[0])))).toHaveLength(1);
+    // A changed value is read (and warned about) again.
+    vi.stubEnv("DEMIFY_EMBED_DIM", "also-bad");
+    databaseUrl();
+    expect(warn.mock.calls.filter((c) => /Ignoring invalid DEMIFY_EMBED_DIM/.test(String(c[0])))).toHaveLength(2);
+  });
+
+  it("logs lost pool connections at most once a minute, with a count of the rest", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-14T12:00:00Z"));
+    (globalThis as { __demifyPgErrorLog?: unknown }).__demifyPgErrorLog = undefined;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("DATABASE_URL", "postgres://demify:x@127.0.0.1:1/demify");
+    const pool = (await db()).getPool();
+    for (let i = 0; i < 4; i++) pool.emit("error", new Error("terminating connection due to administrator command"));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toMatch(/PostgreSQL connection lost: terminating connection/);
+    vi.advanceTimersByTime(60_000);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(String(warn.mock.calls[1][0])).toMatch(/3 more pool connection error\(s\) in the last minute/);
+    vi.advanceTimersByTime(120_000);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("JSON store: imported-file housekeeping (no database)", () => {
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "demify-readings-prune-"));
+    vi.stubEnv("DEMIFY_DATA_DIR", dir);
+    vi.stubEnv("DATABASE_URL", "");
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("keeps only the 5 newest demify-db.json.imported-* files; rejected-* and other files stay", async () => {
+    const old = [1, 2, 3, 4, 5, 6, 7].map((d) => `demify-db.json.imported-2026-11-0${d}T10-00-00-000Z`);
+    for (const name of old) await fs.writeFile(path.join(dir, name), "{}");
+    await fs.writeFile(path.join(dir, "demify-db.json.rejected-2026-11-01T10-00-00-000Z"), "{}");
+    await fs.writeFile(path.join(dir, "demify-db.json.imported-notes.txt"), "keep me");
+    await fs.writeFile(dbPath(), JSON.stringify({ crew: [], readings: [] }));
+    const j = await import("@/lib/store/readings-json");
+    const done = await j.drainJsonStore(async () => "imported");
+    expect(done?.result).toBe("imported");
+    const files = (await fs.readdir(dir)).sort();
+    expect(files.filter((f) => /^demify-db\.json\.imported-\d/.test(f))).toEqual(
+      [...old.slice(3), path.basename(done!.renamedTo)].sort(),
+    );
+    expect(files).toContain("demify-db.json.rejected-2026-11-01T10-00-00-000Z");
+    expect(files).toContain("demify-db.json.imported-notes.txt");
+    expect(j.KEEP_IMPORTED_FILES).toBe(5);
   });
 });
 

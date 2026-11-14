@@ -1,3 +1,4 @@
+import { parseLinkParam, withLink } from "@/lib/link";
 import type { LiveVitals, MonitorAlarm } from "@/lib/types";
 
 /** Pure helpers for the global alarm bar (client- and server-safe, no React). */
@@ -186,6 +187,14 @@ export function announce(fresh: MonitorAlarm[]): string {
 export function formatCountdown(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
+ * The crew monitor of `crewId`, keeping the current page's signal-delay
+ * profile (`linkParam`: the ?link= value; unknown or missing is dropped).
+ */
+export function monitorHref(crewId: string, linkParam?: string | null): string {
+  return withLink(`/crew/${encodeURIComponent(crewId)}`, parseLinkParam(linkParam));
 }
 
 /** True when `pathname` is the crew page (or a sub-page) of `crewId`. */

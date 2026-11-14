@@ -29,7 +29,7 @@ Sources: NASA HRP, Risk of Cardiovascular Adaptations (https://www.nasa.gov/refe
 
 ## Vision and SANS
 
-The headward fluid shift causes Spaceflight Associated Neuro-ocular Syndrome (SANS): optic disc swelling, choroidal and retinal folds and a flattened eyeball. About 70 % of long-duration crews show signs of SANS; 18 % are clinically significant. Cabin CO₂ may contribute to SANS. Eyes are checked with eye charts, OCT, a fundoscope and ocular ultrasound in "eye weeks" (flight day 30, 90, return-30). Crews fly 3 or more strengths of glasses and switch to the next pair of backup glasses when near vision blurs; keep cabin CO₂ low. Any new visual change escalates: OCT and fundoscope exam with ground support. Radiation also raises cataract risk (lens dose limits).
+The headward fluid shift causes Spaceflight Associated Neuro-ocular Syndrome (SANS): optic disc swelling, choroidal and retinal folds and a flattened eyeball. About 70 % of long-duration crews show signs of SANS; 18 % are clinically significant. Cabin CO₂ may contribute to SANS. Eyes are checked with eye charts, OCT, a fundoscope and ocular ultrasound in "eye weeks" (flight day 30, 90, return-30). Crews fly 3 or more strengths of glasses and switch to the next pair of backup glasses when near vision blurs; keep cabin CO₂ low. Any new visual change escalates: OCT and fundoscope exam (with ground support when contact allows). Radiation also raises cataract risk (lens dose limits).
 
 Sources: NASA OCHMO-MTB-001 SANS (https://www.nasa.gov/wp-content/uploads/2024/02/ochmo-mtb-001-sans.pdf); NASA HRP, SANS (https://www.nasa.gov/reference/risk-of-spaceflight-associated-neuro-ocular-syndrome-sans/).
 

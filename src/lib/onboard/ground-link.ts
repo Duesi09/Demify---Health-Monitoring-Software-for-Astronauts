@@ -14,9 +14,14 @@ import type { GroundLinkState } from "./types";
  * <dataDir>/ground-link.json (atomic write). With a database, the file is
  * kept as a mirror of the last known position: it is what the app uses while
  * the database is unreachable, and a switch made during such an outage is
- * written to the database once it is back (the newer change wins).
- * Nothing stored = up. DEMIFY_OFFLINE=true forces the link down whatever the
- * switch says (hard air-gap).
+ * written to the database once it is back, with its original switch time
+ * (the newer change wins). Nothing stored = up. DEMIFY_OFFLINE=true forces
+ * the link down whatever the switch says (hard air-gap).
+ *
+ * Reads are cheap enough for every page render: the answer is cached for
+ * CACHE_MS (process-wide), the file is read synchronously, and a database
+ * read is raced against LOAD_DEADLINE_MS with the file mirror as the answer
+ * when the database is slower. Nothing here throws into a page.
  */
 
 interface StoredLink {
@@ -25,9 +30,21 @@ interface StoredLink {
   changedBy?: string;
 }
 
+type Backend = GroundLinkState["backend"];
+interface Loaded {
+  link: StoredLink;
+  backend: Backend;
+}
+
 const DEFAULT_LINK: StoredLink = { up: true, changedAt: new Date(0).toISOString() };
-/** How long isGroundLinkUp() reuses its answer. */
+/** How long getGroundLink() / isGroundLinkUp() reuse their answer. */
 const CACHE_MS = 2_000;
+/**
+ * Longest a caller waits for the database read of the switch. Past it the
+ * file mirror (the last known position) answers and the read finishes in the
+ * background, so a slow or frozen database never holds up a page render.
+ */
+const LOAD_DEADLINE_MS = 500;
 /** After a database failure, use the file this long before trying the database again. */
 const RETRY_AFTER_MS = 15_000;
 const LOG_EVERY_MS = 60_000;
@@ -46,9 +63,10 @@ export function isForcedOffline(): boolean {
 }
 
 interface Shared {
-  /** Last effective answer of groundLinkUpNow, per backend (DATABASE_URL + file). */
-  cache: { key: string; up: boolean; at: number } | null;
-  inflight: { key: string; promise: Promise<boolean> } | null;
+  /** Last answer, per backend (DATABASE_URL + file); reused for CACHE_MS. */
+  cache: ({ key: string; at: number } & Loaded) | null;
+  /** Database read in progress (single-flight, shared by all callers). */
+  inflight: { key: string; promise: Promise<Loaded> } | null;
   /** Bumped by setGroundLink so a read that started earlier cannot overwrite the new answer. */
   version: number;
   /** Database left alone until `until` after a failure. */
@@ -186,11 +204,12 @@ async function readLinkRow(): Promise<StoredLink> {
   return link.readGroundLinkRow(pool);
 }
 
-async function writeLinkRow(up: boolean, changedBy?: string): Promise<StoredLink> {
+/** changedAt: keep the original switch time (write-back after an outage; only a newer change overwrites). */
+async function writeLinkRow(up: boolean, changedBy?: string, changedAt?: string): Promise<StoredLink> {
   const [db, link] = await onboardDb();
   const pool = db.getPool();
   await db.ensureSchema(pool);
-  return link.writeGroundLinkRow(pool, up, changedBy);
+  return link.writeGroundLinkRow(pool, up, changedBy, changedAt);
 }
 
 const sameLink = (a: StoredLink, b: StoredLink) =>
@@ -209,7 +228,7 @@ async function mirror(link: StoredLink): Promise<void> {
 /* API                                                                        */
 /* ------------------------------------------------------------------------- */
 
-function toState(link: StoredLink, backend: GroundLinkState["backend"]): GroundLinkState {
+function toState(link: StoredLink, backend: Backend): GroundLinkState {
   const forcedOffline = isForcedOffline();
   return {
     up: link.up && !forcedOffline,
@@ -221,15 +240,18 @@ function toState(link: StoredLink, backend: GroundLinkState["backend"]): GroundL
   };
 }
 
-async function loadLink(): Promise<{ link: StoredLink; backend: GroundLinkState["backend"] }> {
+const fromFile = (): Loaded => ({ link: readLinkFile() ?? DEFAULT_LINK, backend: "file" });
+
+async function loadLink(): Promise<Loaded> {
   const url = databaseUrl();
   if (databaseUsable(url)) {
     try {
       let link = await readLinkRow();
       const file = readLinkFile();
       if (file && Date.parse(file.changedAt) > Date.parse(link.changedAt)) {
-        // Switched while the database was unreachable: that newer change wins.
-        link = await writeLinkRow(file.up, file.changedBy);
+        // Switched while the database was unreachable: that newer change wins,
+        // with its original switch time.
+        link = await writeLinkRow(file.up, file.changedBy, file.changedAt);
       }
       if (!file || !sameLink(file, link)) await mirror(link);
       return { link, backend: "database" };
@@ -237,20 +259,88 @@ async function loadLink(): Promise<{ link: StoredLink; backend: GroundLinkState[
       markDatabaseDown(url, err);
     }
   }
-  return { link: readLinkFile() ?? DEFAULT_LINK, backend: "file" };
+  return fromFile();
 }
 
-/** Current ground link state (GET /api/ground-link). Never throws; unknown = up. */
+const cacheKey = () => `${databaseUrl() ?? ""}|${linkFile()}`;
+
+/**
+ * The switch as fast as it can be known: the cached answer (< CACHE_MS old),
+ * else the file (synchronous, tiny) when the file is the backend, else the
+ * database read, single-flight and raced against LOAD_DEADLINE_MS (the file
+ * mirror answers when the database is slower). Only the database path
+ * returns a promise, and that promise never rejects.
+ */
+function current(): Loaded | Promise<Loaded> {
+  const sh = shared();
+  const key = cacheKey();
+  const now = Date.now();
+  const { cache } = sh;
+  if (cache && cache.key === key && now - cache.at < CACHE_MS && now >= cache.at) return cache;
+  if (!databaseUsable(databaseUrl())) {
+    const loaded = fromFile();
+    sh.cache = { key, at: now, ...loaded };
+    return loaded;
+  }
+  const started = sh.version;
+  if (!sh.inflight || sh.inflight.key !== key) {
+    const promise: Promise<Loaded> = loadLink()
+      .catch(fromFile)
+      .then((loaded) => {
+        if (sh.version === started) sh.cache = { key, at: Date.now(), ...loaded };
+        return loaded;
+      })
+      .finally(() => {
+        if (sh.inflight?.promise === promise) sh.inflight = null;
+      });
+    sh.inflight = { key, promise };
+  }
+  const pending = sh.inflight.promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<Loaded>((resolve) => {
+    timer = setTimeout(() => {
+      // The database is slow: answer with the last known position and keep
+      // it for CACHE_MS; the read still updates the cache when it finishes.
+      const loaded = fromFile();
+      if (sh.version === started) sh.cache = { key, at: Date.now(), ...loaded };
+      resolve(loaded);
+    }, LOAD_DEADLINE_MS);
+    timer.unref?.();
+  });
+  return Promise.race([pending, deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Current ground link state (GET /api/ground-link, page renders). Never
+ * throws or rejects; unknown = up. Answered from the cache (< 2 s old)
+ * without any I/O; otherwise from the file, or from the database within
+ * LOAD_DEADLINE_MS (the file mirror answers when the database is slower).
+ * `switchedUp` is the switch position, `up` also honours DEMIFY_OFFLINE.
+ */
 export async function getGroundLink(): Promise<GroundLinkState> {
   try {
-    const { link, backend } = await loadLink();
+    const { link, backend } = await current();
     return toState(link, backend);
   } catch {
     return toState(DEFAULT_LINK, "file");
   }
 }
 
-const cacheKey = () => `${databaseUrl() ?? ""}|${linkFile()}`;
+/**
+ * The last known ground link state, synchronously and without waiting for
+ * the database: the cached answer of any age, else the file mirror, else up.
+ * Never throws. For callers that must not wait at all (health fallback).
+ */
+export function lastKnownGroundLink(): GroundLinkState {
+  try {
+    const { cache } = shared();
+    if (cache && cache.key === cacheKey()) return toState(cache.link, cache.backend);
+    const { link, backend } = fromFile();
+    return toState(link, backend);
+  } catch {
+    return toState(DEFAULT_LINK, "file");
+  }
+}
 
 /**
  * Moves the switch (POST /api/ground-link). Throws only when the position
@@ -259,7 +349,7 @@ const cacheKey = () => `${databaseUrl() ?? ""}|${linkFile()}`;
 export async function setGroundLink(up: boolean, changedBy?: string): Promise<GroundLinkState> {
   const by = changedBy?.trim().slice(0, 64) || undefined;
   const url = databaseUrl();
-  let stored: { link: StoredLink; backend: GroundLinkState["backend"] } | null = null;
+  let stored: Loaded | null = null;
   if (databaseUsable(url)) {
     try {
       const link = await writeLinkRow(up, by);
@@ -274,49 +364,29 @@ export async function setGroundLink(up: boolean, changedBy?: string): Promise<Gr
     await writeLinkFile(link);
     stored = { link, backend: "file" };
   }
-  const state = toState(stored.link, stored.backend);
   const sh = shared();
   sh.version++;
   sh.inflight = null;
-  sh.cache = { key: cacheKey(), up: stored.link.up, at: Date.now() };
-  return state;
+  sh.cache = { key: cacheKey(), at: Date.now(), ...stored };
+  return toState(stored.link, stored.backend);
 }
 
 /**
  * Effective ground link, answered synchronously whenever possible: false
  * right away under DEMIFY_OFFLINE, the cached answer for CACHE_MS, and a
  * synchronous file read when the file is the backend. Only a database read
- * returns a promise. Never throws or rejects; unknown = up.
+ * returns a promise (settled within LOAD_DEADLINE_MS). Never throws or
+ * rejects; unknown = up.
  */
 export function groundLinkUpNow(): boolean | Promise<boolean> {
   try {
     if (isForcedOffline()) return false;
-    const sh = shared();
-    const key = cacheKey();
-    const now = Date.now();
-    const { cache } = sh;
-    if (cache && cache.key === key && now - cache.at < CACHE_MS && now >= cache.at) return cache.up;
-    if (!databaseUsable(databaseUrl())) {
-      const up = (readLinkFile() ?? DEFAULT_LINK).up;
-      sh.cache = { key, up, at: now };
-      return up;
-    }
-    if (!sh.inflight || sh.inflight.key !== key) {
-      const started = sh.version;
-      const promise: Promise<boolean> = loadLink()
-        .then(
-          ({ link }) => {
-            if (sh.version === started) sh.cache = { key, up: link.up, at: Date.now() };
-            return link.up && !isForcedOffline();
-          },
-          () => true,
-        )
-        .finally(() => {
-          if (sh.inflight?.promise === promise) sh.inflight = null;
-        });
-      sh.inflight = { key, promise };
-    }
-    return sh.inflight.promise;
+    const answer = current();
+    if (!(answer instanceof Promise)) return answer.link.up;
+    return answer.then(
+      ({ link }) => link.up && !isForcedOffline(),
+      () => true,
+    );
   } catch {
     return true;
   }

@@ -5,6 +5,7 @@ import type { Pool, PoolClient } from "pg";
 import { ensureSchema, getPool } from "@onboard/db.mjs";
 import * as json from "./readings-json";
 import type { JsonDbShape, ReadingFilter } from "./readings-json";
+import { cleanDeep, cleanText } from "./text";
 import type { CrewMember, IndicatorId, Reading, ReadingSource } from "../types";
 
 /**
@@ -16,13 +17,26 @@ import type { CrewMember, IndicatorId, Reading, ReadingSource } from "../types";
  * NOTHING; the file is then renamed to demify-db.json.imported-<timestamp>),
  * then seed the default crew if the crew table is still empty.
  *
- * Resilience: while the database is unreachable, reads come from the JSON
- * store and writes are spooled into it (same reading ids). The next
- * successful database operation replays the spool through the same import
- * path and renames the file, so nothing is lost or duplicated. After a
+ * Resilience: while the database is unreachable, writes are spooled into
+ * the JSON store (same reading ids) and reads return the last-known copy of
+ * the readings plus the spooled ones, so pages keep the crew history. The
+ * last-known copy is process-wide (globalThis): loaded at start-up (the
+ * retention window) and kept current by every successful read and write.
+ * The next successful database operation replays the spool through the same
+ * import path and renames the file, so nothing is lost or duplicated. After a
  * connection failure the database is left alone for RETRY_AFTER_MS, so pages
  * do not wait for a connection timeout on every request. Database errors
  * never reach pages; each kind of log line is printed at most once a minute.
+ *
+ * Text hygiene: PostgreSQL text and jsonb cannot hold NUL characters, and
+ * jsonb rejects unpaired UTF-16 surrogates. Every string is cleaned before
+ * an insert or import (NUL removed, unpaired surrogates replaced by U+FFFD),
+ * so such a reading is stored instead of blocking the database. An import
+ * inserts in savepoint-protected batches; a batch that still fails with a
+ * data or integrity error (SQLSTATE class 22/23) is split down to single
+ * rows, the rows the database rejects are written to
+ * demify-db.json.rejected-<timestamp> with the reason, and the rest is
+ * imported, so one bad row never blocks the replay.
  *
  * Retention (DEMIFY_RETENTION_DAYS / DEMIFY_MAX_READINGS, same defaults and
  * eviction order as the JSON store: past the window first, then the oldest
@@ -51,6 +65,12 @@ interface State {
   lastRetention: number;
   retention: Promise<void> | null;
   crew: { at: number; list: CrewMember[] } | null;
+  /** Last crew list the database returned (no expiry): used during an outage. */
+  lastCrew: CrewMember[] | null;
+  /** Last-known copy of the stored readings by id (retention window): used during an outage. */
+  lastKnown: Map<string, Reading>;
+  /** Last retention-window trim of lastKnown. */
+  lastKnownTrim: number;
   /** Last console.warn per kind of message. */
   lastLog: Map<string, number>;
 }
@@ -84,6 +104,9 @@ function current(): State {
     lastRetention: 0,
     retention: null,
     crew: null,
+    lastCrew: null,
+    lastKnown: new Map(),
+    lastKnownTrim: 0,
     lastLog: new Map(),
   };
   shared.__demifyReadingsPg = { url, pool, state };
@@ -123,7 +146,32 @@ function isDataError(err: unknown): boolean {
   return typeof code === "string" && /^(22|23|42|0A|40|P0)[0-9A-Z]{3}$/.test(code);
 }
 
+/** Data exception or integrity violation: this row is wrong, the database is fine. */
+function isRowError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^(22|23)[0-9A-Z]{3}$/.test(code);
+}
+
 class DatabaseUnavailable extends Error {}
+
+/* ------------------------------------------------------------------------- */
+/* Last-known copy (reads during an outage)                                   */
+/* ------------------------------------------------------------------------- */
+
+/** How often the last-known copy drops readings past the retention window. */
+const LAST_KNOWN_TRIM_MS = 60_000;
+
+/** Adds readings the database holds to the last-known copy, within the retention limits. */
+function remember(s: State, readings: Reading[], forceTrim = false): void {
+  for (const r of readings) s.lastKnown.set(r.id, r);
+  const { maxReadings } = json.retentionLimits();
+  const now = Date.now();
+  if (forceTrim || s.lastKnown.size > maxReadings || now - s.lastKnownTrim >= LAST_KNOWN_TRIM_MS || now < s.lastKnownTrim) {
+    s.lastKnownTrim = now;
+    const kept = json.evict([...s.lastKnown.values()], now);
+    if (kept.length !== s.lastKnown.size) s.lastKnown = new Map(kept.map((r) => [r.id, r]));
+  }
+}
 
 /**
  * Runs op against the database after start-up and any pending spool replay.
@@ -159,8 +207,9 @@ async function withDb<T>(what: string, op: (pool: Pool) => Promise<T>): Promise<
       logLimited(
         s,
         "down",
-        `${why} (${describe(err)}). Crew readings are read from and written to the JSON file ` +
-          `store until it is back; spooled readings are copied into the database then.`,
+        `${why} (${describe(err)}). Until it is back, new crew readings are spooled to the JSON file ` +
+          `store and pages show the last-known history plus the spooled readings; the spool is copied ` +
+          `into the database then.`,
       );
     }
     throw err;
@@ -193,6 +242,29 @@ async function init(pool: Pool, s: State): Promise<void> {
     s.crew = null;
     console.log(`[demify] PostgreSQL crew table was empty: added the ${added} default crew members.`);
   }
+  await loadLastKnown(pool, s);
+}
+
+/**
+ * Fills the last-known copy with the retention window (newest first, capped
+ * at DEMIFY_MAX_READINGS) and the crew list, so an outage right after
+ * start-up still shows the crew history. A failure is logged, not fatal: the
+ * copy then fills from later reads and writes.
+ */
+async function loadLastKnown(pool: Pool, s: State): Promise<void> {
+  try {
+    const { retentionDays, maxReadings } = json.retentionLimits();
+    const cutoff = new Date(Date.now() - retentionDays * 86_400_000).toISOString();
+    const { rows } = await pool.query<DbReading>(
+      `SELECT id::text AS id, crew_id, indicator, value, unit, taken_at, source, note FROM readings
+       WHERE taken_at >= $1 ORDER BY taken_at DESC, created_at DESC, id DESC LIMIT $2`,
+      [cutoff, maxReadings],
+    );
+    remember(s, rows.map(fromRow), true);
+    s.lastCrew = await selectCrew(pool);
+  } catch (err) {
+    logLimited(s, "last-known", `Could not load the crew history for outages (${describe(err)}); it fills from later reads.`);
+  }
 }
 
 /** Imports demify-db.json (first start or spooled readings) and renames it. Single-flight. */
@@ -202,7 +274,7 @@ function drain(pool: Pool, s: State): Promise<void> {
     // sets the flag again once it is on disk.
     s.spoolPending = false;
     const run: Promise<void> = json
-      .drainJsonStore((db) => importJsonDb(pool, db))
+      .drainJsonStore((db) => importJsonDb(pool, s, db))
       .then(
         (done) => {
           if (!done) return;
@@ -211,7 +283,9 @@ function drain(pool: Pool, s: State): Promise<void> {
           console.log(
             `[demify] Imported ${done.file} into PostgreSQL: ${r.inserted} readings added, ` +
               `${r.alreadyPresent} already there, ${r.skipped} skipped (invalid or unknown crew member), ` +
-              `${r.crewAdded} crew members added. The file was renamed to ${path.basename(done.renamedTo)}.`,
+              `${r.rejected} rejected by the database, ` +
+              `${r.crewAdded} crew members added. The file was renamed to ${path.basename(done.renamedTo)}.` +
+              (r.rejectedFile ? ` Rows not imported were saved to ${path.basename(r.rejectedFile)}.` : ""),
           );
         },
         (err: unknown) => {
@@ -231,7 +305,12 @@ interface ImportResult {
   crewAdded: number;
   inserted: number;
   alreadyPresent: number;
+  /** Invalid rows and readings of an unknown crew member. */
   skipped: number;
+  /** Rows the database refused (SQLSTATE class 22/23). */
+  rejected: number;
+  /** Where the skipped and refused rows were saved (null: none, or the file could not be written). */
+  rejectedFile: string | null;
 }
 
 /** Row shape for jsonb_to_recordset inserts. */
@@ -269,7 +348,7 @@ function isoTime(value: string): string | null {
 function importRow(r: unknown): ReadingRow | null {
   if (typeof r !== "object" || r === null) return null;
   const x = r as Record<string, unknown>;
-  const str = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
+  const str = (v: unknown) => (typeof v === "string" && cleanText(v) !== "" ? cleanText(v) : null);
   const crewId = str(x.crewId);
   const indicator = str(x.indicator);
   const source = str(x.source);
@@ -282,51 +361,146 @@ function importRow(r: unknown): ReadingRow | null {
     crew_id: crewId,
     indicator,
     value: x.value,
-    unit: x.unit,
+    unit: cleanText(x.unit),
     taken_at: takenAt,
     source,
-    note: typeof x.note === "string" ? x.note : null,
+    note: typeof x.note === "string" ? cleanText(x.note) : null,
   };
 }
 
 function importCrew(c: unknown): CrewMember | null {
   if (typeof c !== "object" || c === null) return null;
   const x = c as Record<string, unknown>;
-  if (typeof x.id !== "string" || x.id === "") return null;
+  const id = typeof x.id === "string" ? cleanText(x.id) : "";
+  if (id === "") return null;
   const baseline =
     typeof x.baseline === "object" && x.baseline !== null && !Array.isArray(x.baseline)
-      ? (x.baseline as CrewMember["baseline"])
+      ? (cleanDeep(x.baseline) as CrewMember["baseline"])
       : {};
   return {
-    id: x.id,
-    name: typeof x.name === "string" ? x.name : x.id,
-    role: typeof x.role === "string" ? x.role : "",
+    id,
+    name: typeof x.name === "string" ? cleanText(x.name) : id,
+    role: typeof x.role === "string" ? cleanText(x.role) : "",
     baseline,
   };
 }
 
-async function importJsonDb(pool: Pool, db: JsonDbShape): Promise<ImportResult> {
-  const crew = db.crew.map(importCrew).filter((c): c is CrewMember => c !== null);
+interface Rejected {
+  crew: unknown[];
+  readings: unknown[];
+  reasons: { kind: "crew" | "reading"; id: string | null; reason: string }[];
+}
+
+const idOf = (v: unknown): string | null => {
+  const id = (v as { id?: unknown } | null)?.id;
+  return typeof id === "string" ? id : null;
+};
+
+/**
+ * Runs insert(batch) under a savepoint. A batch the database rejects with a
+ * data or integrity error (class 22/23) is rolled back to the savepoint and
+ * split in halves, down to single rows; each single row that still fails is
+ * handed to reject(). Any other error is thrown (the import is retried later).
+ * Resolves to the number of rows inserted.
+ */
+async function insertIsolated<T>(
+  client: PoolClient,
+  batch: T[],
+  insert: (rows: T[]) => Promise<number>,
+  reject: (row: T, err: unknown) => void,
+): Promise<number> {
+  if (!batch.length) return 0;
+  await client.query("SAVEPOINT demify_import");
+  try {
+    const n = await insert(batch);
+    await client.query("RELEASE SAVEPOINT demify_import");
+    return n;
+  } catch (err) {
+    if (!isRowError(err)) throw err;
+    await client.query("ROLLBACK TO SAVEPOINT demify_import");
+    await client.query("RELEASE SAVEPOINT demify_import");
+    if (batch.length === 1) {
+      reject(batch[0], err);
+      return 0;
+    }
+    const mid = Math.ceil(batch.length / 2);
+    return (
+      (await insertIsolated(client, batch.slice(0, mid), insert, reject)) +
+      (await insertIsolated(client, batch.slice(mid), insert, reject))
+    );
+  }
+}
+
+async function importJsonDb(pool: Pool, s: State, db: JsonDbShape): Promise<ImportResult> {
+  const rejected: Rejected = { crew: [], readings: [], reasons: [] };
+  const crew: { member: CrewMember; original: unknown }[] = [];
+  for (const c of db.crew) {
+    const member = importCrew(c);
+    if (member) crew.push({ member, original: c });
+    else {
+      rejected.crew.push(c);
+      rejected.reasons.push({ kind: "crew", id: idOf(c), reason: "invalid crew member" });
+    }
+  }
   const client = await pool.connect();
   let failed: Error | undefined;
+  let result: ImportResult;
+  const imported: ReadingRow[] = [];
   try {
     await client.query("BEGIN");
-    const crewAdded = crew.length ? await insertCrew(client, crew) : 0;
+    const crewAdded = await insertIsolated(
+      client,
+      crew,
+      (rows) => insertCrew(client, rows.map((r) => r.member)),
+      (row, err) => {
+        rejected.crew.push(row.original);
+        rejected.reasons.push({ kind: "crew", id: row.member.id, reason: `rejected by the database (${describe(err)})` });
+      },
+    );
     const { rows } = await client.query<{ id: string }>("SELECT id FROM crew");
     const known = new Set(rows.map((r) => r.id));
-    const valid: ReadingRow[] = [];
+    const valid: { row: ReadingRow; original: unknown }[] = [];
     let skipped = 0;
     for (const r of db.readings) {
       const row = importRow(r);
-      if (row && known.has(row.crew_id)) valid.push(row);
-      else skipped++;
+      if (row && known.has(row.crew_id)) {
+        valid.push({ row, original: r });
+        continue;
+      }
+      skipped++;
+      rejected.readings.push(r);
+      rejected.reasons.push({
+        kind: "reading",
+        id: idOf(r),
+        reason: row ? `unknown crew member ${JSON.stringify(row.crew_id)}` : "invalid reading",
+      });
     }
     let inserted = 0;
+    let refused = 0;
+    const refusedIds = new Set<string>();
     for (let i = 0; i < valid.length; i += IMPORT_BATCH) {
-      inserted += await insertRows(client, valid.slice(i, i + IMPORT_BATCH));
+      inserted += await insertIsolated(
+        client,
+        valid.slice(i, i + IMPORT_BATCH),
+        (batch) => insertRows(client, batch.map((v) => v.row)),
+        (v, err) => {
+          refused++;
+          refusedIds.add(v.row.id);
+          rejected.readings.push(v.original);
+          rejected.reasons.push({ kind: "reading", id: idOf(v.original), reason: `rejected by the database (${describe(err)})` });
+        },
+      );
     }
     await client.query("COMMIT");
-    return { crewAdded, inserted, alreadyPresent: valid.length - inserted, skipped };
+    for (const v of valid) if (!refusedIds.has(v.row.id)) imported.push(v.row);
+    result = {
+      crewAdded,
+      inserted,
+      alreadyPresent: valid.length - refused - inserted,
+      skipped,
+      rejected: refused,
+      rejectedFile: null,
+    };
   } catch (err) {
     failed = err instanceof Error ? err : new Error(String(err));
     await client.query("ROLLBACK").catch(() => {});
@@ -335,6 +509,16 @@ async function importJsonDb(pool: Pool, db: JsonDbShape): Promise<ImportResult> 
     // A failed connection must not go back into the pool.
     client.release(failed);
   }
+  remember(s, imported.map(rowToReading));
+  if (rejected.crew.length || rejected.readings.length) {
+    try {
+      result.rejectedFile = await json.writeRejectedRows(rejected);
+    } catch (err) {
+      // The rows are still in the renamed file; the import is not repeated for this.
+      logLimited(s, "rejected-file", `Could not save the rows PostgreSQL did not take (${describe(err)}); they remain in the imported file.`);
+    }
+  }
+  return result;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -372,15 +556,29 @@ async function insertRows(db: Queryable, rows: ReadingRow[]): Promise<number> {
 function toRow(r: Reading): ReadingRow {
   return {
     id: r.id,
-    crew_id: r.crewId,
-    indicator: r.indicator,
+    crew_id: cleanText(r.crewId),
+    indicator: cleanText(r.indicator),
     value: r.value,
-    unit: r.unit,
+    unit: cleanText(r.unit),
     // Normalised to UTC; an unparseable value is passed on and rejected by
     // PostgreSQL (the reading then goes to the JSON spool, not lost).
     taken_at: isoTime(r.takenAt) ?? r.takenAt,
-    source: r.source,
-    note: r.note ?? null,
+    source: cleanText(r.source),
+    note: r.note != null ? cleanText(r.note) : null,
+  };
+}
+
+/** A row as the database returns it (fromRow without the round trip). */
+function rowToReading(r: ReadingRow): Reading {
+  return {
+    id: r.id,
+    crewId: r.crew_id,
+    indicator: r.indicator as IndicatorId,
+    value: r.value,
+    unit: r.unit,
+    takenAt: isoTime(r.taken_at) ?? r.taken_at,
+    source: r.source as ReadingSource,
+    ...(r.note != null ? { note: r.note } : {}),
   };
 }
 
@@ -425,11 +623,11 @@ async function selectReadings(pool: Pool, filter?: ReadingFilter): Promise<Readi
   const where: string[] = [];
   const params: unknown[] = [];
   if (filter?.crewId) {
-    params.push(filter.crewId);
+    params.push(cleanText(filter.crewId));
     where.push(`crew_id = $${params.length}`);
   }
   if (filter?.indicator) {
-    params.push(filter.indicator);
+    params.push(cleanText(filter.indicator));
     where.push(`indicator = $${params.length}`);
   }
   if (filter?.since) {
@@ -513,7 +711,9 @@ async function maybeRunRetention(pool: Pool, s: State): Promise<void> {
   if (s.retention || (now - s.lastRetention < RETENTION_EVERY_MS && now >= s.lastRetention)) return;
   s.lastRetention = now;
   const run = runRetention(pool)
-    .then(() => {})
+    .then((removed) => {
+      if (removed) remember(s, [], true);
+    })
     .catch((err: unknown) => {
       s.lastRetention = 0; // try again on the next insert
       logLimited(s, "retention", `PostgreSQL retention pass failed (${describe(err)}); it is retried on the next insert.`);
@@ -536,9 +736,11 @@ export async function listCrew(): Promise<CrewMember[]> {
   try {
     const list = await withDb("read the crew", selectCrew);
     s.crew = { at: Date.now(), list };
+    s.lastCrew = list;
     return list;
   } catch {
-    return json.listCrew();
+    // Outage: the crew the database last returned, else the JSON store's.
+    return current().lastCrew ?? json.listCrew();
   }
 }
 
@@ -548,9 +750,23 @@ export async function getCrew(id: string): Promise<CrewMember | undefined> {
 
 export async function listReadings(filter?: ReadingFilter): Promise<Reading[]> {
   try {
-    return await withDb("read readings", (pool) => selectReadings(pool, filter));
+    const s = current();
+    const out = await withDb("read readings", (pool) => selectReadings(pool, filter));
+    remember(s, out);
+    return out;
   } catch {
-    return json.listReadings(filter);
+    // Outage: the last-known copy plus the readings spooled since (same ids
+    // win from the spool), filtered exactly like the JSON store.
+    const { lastKnown } = current();
+    if (!lastKnown.size) return json.listReadings(filter);
+    const spooled = await json.listReadings();
+    const spooledIds = new Set(spooled.map((r) => r.id));
+    // Narrowed by crew and indicator first: the copy can hold the whole retention window.
+    const wanted = (r: Reading) =>
+      (!filter?.crewId || r.crewId === filter.crewId) && (!filter?.indicator || r.indicator === filter.indicator);
+    const merged = spooled.filter(wanted);
+    for (const r of lastKnown.values()) if (wanted(r) && !spooledIds.has(r.id)) merged.push(r);
+    return json.filterReadings(merged, filter);
   }
 }
 
@@ -559,9 +775,10 @@ export async function addReadings(input: Omit<Reading, "id">[]): Promise<Reading
   if (!created.length) return created;
   const s = current();
   let pool: Pool | null = null;
+  const rows = created.map(toRow);
   try {
     pool = await withDb("store readings", async (p) => {
-      await insertRows(p, created.map(toRow));
+      await insertRows(p, rows);
       return p;
     });
   } catch {
@@ -570,6 +787,7 @@ export async function addReadings(input: Omit<Reading, "id">[]): Promise<Reading
     current().spoolPending = true;
     return created;
   }
+  remember(s, rows.map(rowToReading));
   await maybeRunRetention(pool, s);
   return created;
 }

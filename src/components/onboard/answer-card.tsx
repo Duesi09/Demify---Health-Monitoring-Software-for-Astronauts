@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { Ban, BookOpenText, ChevronDown, Clock, ExternalLink, MessageSquareText, SearchX, ShieldCheck, Siren, TriangleAlert } from "lucide-react";
 import { StatusBadge, Tag } from "@/components/ui";
 import type { AssistantAnswer, Citation } from "@/lib/onboard/types";
@@ -9,8 +9,11 @@ import {
   STATUS_HEADING,
   answerBlocks,
   citationTitle,
+  excerptIsWhole,
   freshnessLine,
   modeLine,
+  passageBlocks,
+  passagesNote,
   shortVersion,
   splitActNow,
   splitMarkers,
@@ -32,6 +35,10 @@ const STATUS_ICON = {
   blocked: Ban,
 } as const;
 
+/** [n] / [C] markers: dark text on a quiet surface with an accent border (contrast above 4.5:1 at 10.5 px). */
+const MARKER_CLASS =
+  "mx-px inline-flex h-4 items-center rounded-[3px] border border-accent/50 bg-surface-2 px-1 align-[1px] font-mono text-[10.5px] font-semibold text-fg no-underline hover:border-accent focus-visible:outline-2 focus-visible:outline-accent";
+
 /** Renders split answer text as React nodes: text stays text, [n] becomes a link to its citation. */
 function InlineText({ parts, prefix, citations }: { parts: Inline[]; prefix: string; citations: Citation[] }) {
   return (
@@ -49,7 +56,7 @@ function InlineText({ parts, prefix, citations }: { parts: Inline[]; prefix: str
             <a
               key={i}
               href={`#${prefix}-crew`}
-              className="mx-px inline-flex h-4 items-center rounded-[3px] border border-border bg-surface-2 px-1 align-[1px] font-mono text-[10.5px] font-semibold text-accent no-underline hover:border-accent/60 focus-visible:outline-2 focus-visible:outline-accent"
+              className={MARKER_CLASS}
               aria-label="Crew data used as context"
             >
               C
@@ -60,7 +67,7 @@ function InlineText({ parts, prefix, citations }: { parts: Inline[]; prefix: str
           <a
             key={i}
             href={`#${prefix}-cite-${p.n}`}
-            className="mx-px inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] border border-border bg-surface-2 px-1 align-[1px] font-mono text-[10.5px] font-semibold text-accent no-underline hover:border-accent/60 focus-visible:outline-2 focus-visible:outline-accent"
+            className={`${MARKER_CLASS} min-w-4 justify-center`}
             aria-label={c ? `Source ${p.n}: ${citationTitle(c)}` : `Source ${p.n}`}
             title={c ? citationTitle(c) : undefined}
           >
@@ -100,14 +107,71 @@ function AnswerText({ text, prefix, citations, hasCrew }: { text: string; prefix
   );
 }
 
-function CitationItem({ c, prefix }: { c: Citation; prefix: string }) {
+/** Inline text of a library passage: **bold** kept, [n] markers stay plain text (they are not this answer's). */
+function PassageInline({ text }: { text: string }) {
+  return <InlineText parts={splitMarkers(text, [], false)} prefix="" citations={[]} />;
+}
+
+/** A whole library passage with its line breaks and lists, rendered as React text (never as HTML). */
+function PassageText({ text }: { text: string }) {
+  return (
+    <div className="space-y-2 text-[13px] leading-relaxed text-fg">
+      {passageBlocks(text).map((b, i) => {
+        if (b.kind === "h") {
+          return (
+            <p key={i} className="font-semibold">
+              <PassageInline text={b.text} />
+            </p>
+          );
+        }
+        if (b.kind === "ul") {
+          return (
+            <ul key={i} className="list-disc space-y-0.5 pl-5 marker:text-muted">
+              {b.items.map((item, j) => (
+                <li key={j}>
+                  <PassageInline text={item} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (b.kind === "ol") {
+          return (
+            <ol key={i} start={b.start} className="list-decimal space-y-0.5 pl-6 marker:text-muted">
+              {b.items.map((item, j) => (
+                <li key={j}>
+                  <PassageInline text={item} />
+                </li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={i}>
+            {b.lines.map((line, j) => (
+              <Fragment key={j}>
+                {j > 0 && <br />}
+                <PassageInline text={line} />
+              </Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function CitationItem({ c, prefix, askedAt }: { c: Citation; prefix: string; askedAt: string }) {
+  // Citation.text is the whole checksum-verified passage; older answers may lack it.
+  const full = typeof c.text === "string" ? c.text.trim() : "";
+  const whole = excerptIsWhole(c.excerpt, full);
   return (
     <li
       id={`${prefix}-cite-${c.n}`}
       className="scroll-mt-24 rounded-lg border border-border bg-surface-2/40 p-3 target:border-accent target:ring-2 target:ring-accent/30"
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="font-mono text-xs font-semibold text-accent">[{c.n}]</span>
+        <span className="font-mono text-xs font-semibold text-fg">[{c.n}]</span>
         <span className="min-w-0 text-sm font-medium">{citationTitle(c)}</span>
         <Tag size="xs">{CATEGORY_LABEL[c.category] ?? c.category}</Tag>
       </div>
@@ -116,20 +180,39 @@ function CitationItem({ c, prefix }: { c: Citation; prefix: string }) {
         {" · "}
         {c.reviewed ?? "Review status not stated"}
       </p>
-      <blockquote className="mt-2 border-l-2 border-border pl-3 text-[13px] leading-relaxed text-fg/90">{c.excerpt}</blockquote>
+      <blockquote className="mt-2 border-l-2 border-border pl-3 text-[13px] leading-relaxed text-fg/90">
+        {whole && full ? <PassageText text={full} /> : c.excerpt}
+      </blockquote>
+      {!whole && (
+        <details className="group/passage mt-2">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-[3px] text-xs font-medium text-fg underline decoration-accent underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+            <ChevronDown size={12} aria-hidden className="shrink-0 transition-transform group-open/passage:rotate-180" />
+            Show the whole passage
+          </summary>
+          <div className="mt-2 rounded-md border border-border bg-surface p-3">
+            <PassageText text={full} />
+          </div>
+        </details>
+      )}
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
         <span>
           Version <span className="font-mono">{shortVersion(c.version)}</span>
         </span>
-        <span className="inline-flex items-center gap-1 text-nominal">
-          <ShieldCheck size={12} aria-hidden />
+        <span className="inline-flex items-center gap-1 text-fg">
+          <ShieldCheck size={12} aria-hidden className="text-nominal" />
           checksum verified
         </span>
-        {c.syncedAt && <span>synced {utcTime(c.syncedAt)}</span>}
+        {c.syncedAt && <span>synced {utcTime(c.syncedAt, askedAt)}</span>}
         {c.url && (
-          <a href={c.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent underline underline-offset-2">
+          <a
+            href={c.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-fg underline decoration-accent underline-offset-2"
+          >
             Source document
             <ExternalLink size={10} aria-hidden />
+            <span className="sr-only"> (opens in a new tab)</span>
           </a>
         )}
       </p>
@@ -164,7 +247,7 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
           id={`${key}-heading`}
           ref={headingRef}
           tabIndex={-1}
-          className="flex items-center gap-2 text-base font-semibold tracking-tight focus:outline-none"
+          className="flex items-center gap-2 rounded-[3px] text-base font-semibold tracking-tight focus:outline-2 focus:outline-offset-4 focus:outline-accent"
         >
           <Icon size={18} aria-hidden className={answer.status === "answered" ? "text-accent" : "text-muted"} />
           {STATUS_HEADING[answer.status]}
@@ -189,12 +272,7 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
         ) : (
           body.rest && <p className="text-[15px] leading-relaxed">{body.rest}</p>
         )}
-        {showPassagesNote && (
-          <p className="mt-2 text-sm text-muted">
-            The {answer.citations.length === 1 ? "passage" : "passages"} below matched the question. Read them yourself; nothing was
-            written by a model.
-          </p>
-        )}
+        {showPassagesNote && <p className="mt-2 text-sm text-muted">{passagesNote(answer.citations.length)}</p>}
       </div>
 
       <div className="mt-3 space-y-1 border-t border-border pt-2.5 text-[12px] leading-snug text-muted">
@@ -204,7 +282,6 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
           {answer.freshness.stale && <StatusBadge status="caution" label="Library may be out of date" size="xs" className="ml-2 align-middle" />}
         </p>
         <p>{modeLine(answer)}</p>
-        {answer.mode.fallbackReason && <p className="text-[11px]">Fallback: {answer.mode.fallbackReason}</p>}
         <p className="text-[11px]">{answer.notice}</p>
       </div>
 
@@ -216,7 +293,7 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
         >
           <summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded-lg p-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
             <span className="flex flex-wrap items-center gap-2">
-              <span className="font-mono font-semibold text-accent">[C]</span>
+              <span className="font-mono font-semibold text-fg">[C]</span>
               Crew data used as context: {answer.crewContext.crewName}
               <Tag size="xs">{answer.crewContext.source}</Tag>
               {answer.crewContext.takenAt && (
@@ -246,7 +323,7 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
           </h4>
           <ol className="mt-2 space-y-2">
             {answer.citations.map((c) => (
-              <CitationItem key={c.n} c={c} prefix={key} />
+              <CitationItem key={c.n} c={c} prefix={key} askedAt={answer.askedAt} />
             ))}
           </ol>
         </section>

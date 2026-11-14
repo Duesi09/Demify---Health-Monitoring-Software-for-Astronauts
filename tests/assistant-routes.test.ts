@@ -38,7 +38,25 @@ const ask = (body: unknown, headers: Record<string, string> = {}) => post("/api/
 
 function clearShared() {
   const g = globalThis as Record<string, unknown>;
-  for (const k of ["__demifyGroundLink", "__demifyLibrarySource", "__demifyModelReady", "__demifyScenarios"]) delete g[k];
+  for (const k of ["__demifyGroundLink", "__demifyLibrarySource", "__demifyModelReady", "__demifyChatsInFlight", "__demifyScenarios"]) delete g[k];
+}
+
+/** Starts scripts/dev/fake-model-server.mjs on a free port; resolves to its /v1 URL and a stop function. */
+async function fakeModel(env: Record<string, string> = {}): Promise<{ url: string; stop: () => void }> {
+  const fake = spawn(process.execPath, [path.join(ROOT, "scripts/dev/fake-model-server.mjs"), "--port", "0"], {
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const url = await new Promise<string>((resolve, reject) => {
+    let out = "";
+    fake.stdout!.on("data", (d: Buffer) => {
+      out += d.toString();
+      const m = out.match(/listening on (\S+\/v1)/);
+      if (m) resolve(m[1]);
+    });
+    fake.on("exit", () => reject(new Error(out)));
+  });
+  return { url, stop: () => fake.kill("SIGTERM") };
 }
 
 beforeEach(async () => {
@@ -49,6 +67,7 @@ beforeEach(async () => {
   vi.stubEnv("DEMIFY_OFFLINE", "");
   vi.stubEnv("DEMIFY_ADMIN_TOKEN", "");
   vi.stubEnv("DEMIFY_SIMULATE", "false");
+  vi.stubEnv("DEMIFY_TRUST_PROXY", "");
   clearShared();
   vi.resetModules();
 });
@@ -84,6 +103,18 @@ describe("POST /api/assistant", () => {
     expect((await POST(ask({ question: "x".repeat(501) }))).status).toBe(400);
     expect((await POST(ask({}))).status).toBe(400);
     expect((await POST(ask({ question: "y".repeat(5000) }))).status).toBe(413);
+    // A chunked body (no Content-Length) is read only up to the limit.
+    const chunked = new Request(`http://${HOST}/api/assistant`, {
+      method: "POST",
+      headers: { host: HOST, "content-type": "application/json" },
+      body: new ReadableStream({
+        pull(c) {
+          c.enqueue(new TextEncoder().encode("x".repeat(1024)));
+        },
+      }),
+      duplex: "half",
+    } as RequestInit);
+    expect((await POST(chunked)).status).toBe(413);
     const unknown = await POST(ask({ question: VF, crewId: "nobody" }));
     expect(unknown.status).toBe(400);
     expect(await unknown.json()).toEqual({ error: "Unknown crewId" });
@@ -113,15 +144,71 @@ describe("POST /api/assistant", () => {
     expect(a.mode.groundLink).toBe("down");
   });
 
-  it("allows 12 questions a minute per client, then answers 429 with Retry-After", async () => {
+  it("refuses a body whose Content-Length is too large before reading it (checker C1 finding 12)", async () => {
+    const { POST } = await assistantRoute();
+    let pulled = 0;
+    const req = new Request(`http://${HOST}/api/assistant`, {
+      method: "POST",
+      headers: { host: HOST, "content-type": "application/json", "content-length": "100000" },
+      body: new ReadableStream({
+        pull(c) {
+          pulled++;
+          c.enqueue(new TextEncoder().encode("x".repeat(1024)));
+        },
+      }),
+      duplex: "half",
+    } as RequestInit);
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "Body too large" });
+    expect(pulled).toBeLessThanOrEqual(1); // the stream may prefetch one chunk; the route reads none
+  });
+
+  it("allows 12 questions a minute, then answers 429 with Retry-After; a made-up X-Forwarded-For does not help (checker C1 finding 9)", async () => {
     const { POST } = await assistantRoute();
     for (let i = 0; i < 12; i++) expect((await POST(ask({ question: "hi" }))).status).toBe(400);
     const limited = await POST(ask({ question: VF }));
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(Number(limited.headers.get("retry-after"))).toBeLessThanOrEqual(60);
+    // Without DEMIFY_TRUST_PROXY the header is the client's own word: still limited.
+    expect((await POST(ask({ question: VF }, { "x-forwarded-for": "10.0.0.7" }))).status).toBe(429);
+    expect((await POST(ask({ question: VF }, { "x-real-ip": "10.0.0.8" }))).status).toBe(429);
+  });
+
+  it("behind a trusted proxy (DEMIFY_TRUST_PROXY=true) counts per client: the address the proxy appended", async () => {
+    vi.stubEnv("DEMIFY_TRUST_PROXY", "true");
+    const { POST } = await assistantRoute();
+    const { clientKey } = await import("@/lib/assistant/rate-limit");
+    expect(clientKey(ask({ question: VF }, { "x-forwarded-for": "6.6.6.6, 10.0.0.7" }))).toBe("10.0.0.7");
+    expect(clientKey(ask({ question: VF }, { "x-real-ip": "10.0.0.9" }))).toBe("10.0.0.9");
+    expect(clientKey(ask({ question: VF }))).toBe("direct");
+    expect(clientKey(ask({ question: VF }, { "x-forwarded-for": "10.0.0.7" }), false)).toBe("direct");
+    for (let i = 0; i < 12; i++) expect((await POST(ask({ question: "hi" }, { "x-forwarded-for": "1.2.3.4, 10.0.0.1" }))).status).toBe(400);
+    expect((await POST(ask({ question: VF }, { "x-forwarded-for": "1.2.3.4, 10.0.0.1" }))).status).toBe(429);
+    // A different leftmost (client-written) entry is the same client.
+    expect((await POST(ask({ question: VF }, { "x-forwarded-for": "9.9.9.9, 10.0.0.1" }))).status).toBe(429);
     // Another client has its own budget.
-    expect((await POST(ask({ question: VF }, { "x-forwarded-for": "10.0.0.7, 10.0.0.1" }))).status).toBe(200);
+    expect((await POST(ask({ question: VF }, { "x-forwarded-for": "1.2.3.4, 10.0.0.2" }))).status).toBe(200);
+  });
+
+  it("answers 503 while the model already answers two questions", async () => {
+    const fake = await fakeModel({ FAKE_DELAY_MS: "1200" });
+    try {
+      vi.stubEnv("DEMIFY_MODEL_URL", fake.url);
+      vi.stubEnv("DEMIFY_ASSISTANT_MIN_SCORE", "0.25");
+      const { POST } = await assistantRoute();
+      const results = await Promise.all([0, 1, 2].map(() => POST(ask({ question: VF }))));
+      const statuses = results.map((r) => r.status).sort();
+      expect(statuses).toEqual([200, 200, 503]);
+      const busy = results.find((r) => r.status === 503)!;
+      expect(await busy.json()).toEqual({ error: "Assistant busy, try again in a moment." });
+      expect(busy.headers.get("retry-after")).toBe("5");
+      const answered = (await results.find((r) => r.status === 200)!.json()) as AssistantAnswer;
+      expect(answered.status).toBe("answered");
+    } finally {
+      fake.stop();
+    }
   });
 
   it("starts a new budget after a minute", async () => {
@@ -131,6 +218,40 @@ describe("POST /api/assistant", () => {
     for (let i = 0; i < 12; i++) expect(takeAssistantBudget("a", t0 + i)).toBe(0);
     expect(takeAssistantBudget("a", t0 + 30_000)).toBe(30);
     expect(takeAssistantBudget("a", t0 + 60_000)).toBe(0);
+  });
+});
+
+describe("POST /api/assistant with a model server and no database (lead decision 5)", () => {
+  const EXAMPLES: [string, string[]][] = [
+    [VF, ["alarm-response"]],
+    ["Blood pressure is 185/115. When do we contact the flight surgeon?", ["vital-sign-ranges", "alarm-response", "escalation-and-signal-delay"]],
+    ["A solar storm is starting. What is the radiation shelter procedure?", ["space-radiation"]],
+    ["Where is the pulse oximeter in the medical kit?", ["med-kit-inventory"]],
+    ["What is the commander's resting heart rate baseline?", ["crew-baselines"]],
+    ["The ground link is down. How do we handle a medical event during the blackout?", ["ground-link-blackout"]],
+  ];
+
+  it("the model writes the answers from the bundled keyword hits; no-answer and blocked stay as they are", async () => {
+    const fake = await fakeModel();
+    try {
+      vi.stubEnv("DEMIFY_MODEL_URL", fake.url);
+      const { POST } = await assistantRoute();
+      for (const [question, docs] of EXAMPLES) {
+        const a = (await (await POST(ask({ question }))).json()) as AssistantAnswer;
+        expect(a.status, question).toBe("answered");
+        expect(a.mode).toMatchObject({ retrieval: "bundled", model: "gpt-oss:20b" });
+        expect(a.answer).toMatch(/According to the library, .+ \[1\]\.$/);
+        expect(a.citations.map((c) => c.n)).toEqual([1]);
+        expect(docs).toContain(a.citations[0].docId);
+        expect(a.citations[0].text.length).toBeGreaterThan(0);
+      }
+      const kidney = (await (await POST(ask({ question: "What is the best treatment for a kidney stone?" }))).json()) as AssistantAnswer;
+      expect(kidney.status).toBe("no-answer");
+      const dose = (await (await POST(ask({ question: "How many milligrams can I give him?" }))).json()) as AssistantAnswer;
+      expect(dose.status).toBe("blocked");
+    } finally {
+      fake.stop();
+    }
   });
 });
 
@@ -170,26 +291,14 @@ describe("GET /api/onboard/status", () => {
   });
 
   it("reports the model server: ready, missing models, unreachable", async () => {
-    const fake = spawn(process.execPath, [path.join(ROOT, "scripts/dev/fake-model-server.mjs"), "--port", "0"], {
-      env: { ...process.env, FAKE_MODELS: "gpt-oss:20b" },
-      stdio: ["ignore", "pipe", "inherit"],
-    });
+    const fake = await fakeModel({ FAKE_MODELS: "gpt-oss:20b" });
     try {
-      const url = await new Promise<string>((resolve, reject) => {
-        let out = "";
-        fake.stdout!.on("data", (d: Buffer) => {
-          out += d.toString();
-          const m = out.match(/listening on (\S+\/v1)/);
-          if (m) resolve(m[1]);
-        });
-        fake.on("exit", () => reject(new Error(out)));
-      });
-      vi.stubEnv("DEMIFY_MODEL_URL", url);
+      vi.stubEnv("DEMIFY_MODEL_URL", fake.url);
       const { GET } = await statusRoute();
       const s = (await (await GET()).json()) as OnboardStatus;
-      expect(s.model).toEqual({ state: "missing-models", url, llm: "gpt-oss:20b", embed: "nomic-embed-text", available: ["gpt-oss:20b"] });
+      expect(s.model).toEqual({ state: "missing-models", url: fake.url, llm: "gpt-oss:20b", embed: "nomic-embed-text", available: ["gpt-oss:20b"] });
     } finally {
-      fake.kill("SIGTERM");
+      fake.stop();
     }
 
     const closed = createServer();

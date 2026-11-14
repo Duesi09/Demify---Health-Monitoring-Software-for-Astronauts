@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
+import { withLink, type LinkProfileId } from "@/lib/link";
 import { RECORD_GROUPS, type RecordRow } from "./record-data";
 import { Sparkline } from "./sparkline";
 
@@ -58,9 +59,10 @@ function Trend({ row }: { row: RecordRow }) {
 
 /**
  * Complete health record for one crew member: every indicator grouped by
- * body system. A table from 640 px up, stacked cards below.
+ * body system. A table from 640 px up, stacked cards below. The guidance
+ * links keep the selected signal-delay profile (`link`, from ?link=).
  */
-export function HealthRecord({ rows }: { rows: RecordRow[] }) {
+export function HealthRecord({ rows, link = null }: { rows: RecordRow[]; link?: LinkProfileId | null }) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const groups = RECORD_GROUPS.map((g) => ({ ...g, rows: g.ids.map((id) => byId.get(id)).filter((r) => r != null) }));
 
@@ -106,7 +108,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
               {g.rows.map((r) => (
                 <tr key={r.id} className="border-t border-border/60 align-middle hover:bg-surface-2/50">
                   <th scope="row" className="px-3 py-2.5 font-normal">
-                    <Link href={`/guidance#ind-${r.id}`} className="font-medium text-fg hover:text-accent hover:underline">
+                    <Link href={withLink(`/guidance#ind-${r.id}`, link)} className="font-medium text-fg hover:text-accent hover:underline">
                       {r.short}
                     </Link>
                     <span className="block text-[11px] text-muted">{r.label}</span>
@@ -158,7 +160,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
               {g.rows.map((r) => (
                 <li key={r.id} className="rounded-xl border border-border bg-surface p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/guidance#ind-${r.id}`} className="min-w-0 font-medium hover:text-accent hover:underline">
+                    <Link href={withLink(`/guidance#ind-${r.id}`, link)} className="min-w-0 font-medium hover:text-accent hover:underline">
                       {r.short}
                     </Link>
                     <StatusBadge status={r.status} size="xs" />

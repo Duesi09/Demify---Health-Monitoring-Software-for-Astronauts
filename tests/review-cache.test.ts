@@ -1,10 +1,16 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // config reads the environment at import time, so each test re-imports the
-// modules (fresh in-memory cache, failure and in-flight maps).
+// modules. The in-memory cache, failure and in-flight maps are process-wide
+// per snapshot directory pair, so a fresh pair of directories per test gives
+// each test a fresh cache. DEMIFY_DATA_DIR is a fresh directory too, so a
+// developer's data/ground-link.json (switch down) cannot leak into these
+// tests, and DATABASE_URL is cleared so the switch is never read from a
+// developer's database.
+let root: string;
 let runtimeDir: string;
 let seedDir: string;
 
@@ -18,12 +24,14 @@ async function loadCache() {
 }
 
 beforeEach(() => {
-  const root = mkdtempSync(path.join(tmpdir(), "demify-cache-"));
+  root = mkdtempSync(path.join(tmpdir(), "demify-cache-"));
   runtimeDir = path.join(root, "runtime");
   seedDir = path.join(root, "seed");
-  process.env.DEMIFY_SNAPSHOT_DIR = runtimeDir;
-  process.env.DEMIFY_SNAPSHOT_SEED_DIR = seedDir;
-  delete process.env.DEMIFY_OFFLINE;
+  vi.stubEnv("DEMIFY_SNAPSHOT_DIR", runtimeDir);
+  vi.stubEnv("DEMIFY_SNAPSHOT_SEED_DIR", seedDir);
+  vi.stubEnv("DEMIFY_DATA_DIR", path.join(root, "data"));
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("DEMIFY_OFFLINE", "");
   vi.resetModules();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-14T12:00:00Z"));
@@ -32,8 +40,20 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  delete process.env.DEMIFY_SNAPSHOT_DIR;
-  delete process.env.DEMIFY_SNAPSHOT_SEED_DIR;
+  vi.unstubAllEnvs();
+  // Best effort: a snapshot refresh may still be writing in the background.
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* left in the OS temp dir */
+  }
+});
+
+describe("test isolation", () => {
+  it("never reads the repository's ground link file", async () => {
+    const { getGroundLink } = await import("@/lib/onboard/ground-link");
+    expect(await getGroundLink()).toMatchObject({ up: true, backend: "file", changedAt: new Date(0).toISOString() });
+  });
 });
 
 describe("cached(): failure backoff (#9)", () => {
@@ -134,7 +154,7 @@ describe("cached(): in-flight dedupe (#9)", () => {
 
 describe("cached(): snapshot directories", () => {
   it("reads the newest of the refreshed and seed snapshots", async () => {
-    process.env.DEMIFY_OFFLINE = "true";
+    vi.stubEnv("DEMIFY_OFFLINE", "true");
     const { cached } = await loadCache();
     writeSnap(seedDir, "n", "2026-01-01T00:00:00.000Z", "seed");
     writeSnap(runtimeDir, "n", "2026-06-01T00:00:00.000Z", "runtime");

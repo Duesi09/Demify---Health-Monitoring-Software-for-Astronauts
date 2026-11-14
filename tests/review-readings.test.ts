@@ -8,7 +8,10 @@ let dir: string;
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "demify-readings-"));
+  // A fresh data dir (no developer demify-db.json or ground-link.json), and
+  // the JSON store even when the shell exports a DATABASE_URL.
   vi.stubEnv("DEMIFY_DATA_DIR", dir);
+  vi.stubEnv("DATABASE_URL", "");
   vi.stubEnv("DEMIFY_SIMULATE", "false");
   // A token exported in the shell (docs/OPERATIONS.md) must not turn these into 401s.
   vi.stubEnv("DEMIFY_ADMIN_TOKEN", "");
@@ -175,6 +178,21 @@ describe("POST /api/readings", () => {
     expect((await POST(post({ ...valid, takenAt: future }))).status).toBe(400);
     const skew = new Date(Date.now() + 60_000).toISOString();
     expect((await POST(post({ ...valid, takenAt: skew }))).status).toBe(201);
+  });
+
+  it("rejects text PostgreSQL cannot store (NUL, unpaired surrogates) with a clear 400", async () => {
+    const { POST } = await route();
+    for (const note of ["bad\u0000note", "half \ud83d pair", "\udc00"]) {
+      const res = await POST(post({ ...valid, note }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/note must not contain NUL characters \(U\+0000\) or unpaired UTF-16 surrogates/);
+    }
+    const unit = await POST(post({ ...valid, unit: "bpm\u0000" }));
+    expect(unit.status).toBe(400);
+    expect((await unit.json()).error).toMatch(/unit must not contain NUL/);
+    // A whole surrogate pair (emoji) is fine, and nothing above was stored.
+    expect((await POST(post({ ...valid, note: "ok \ud83d\ude80" }))).status).toBe(201);
+    expect((await (await store()).listReadings()).map((r) => r.note)).toEqual(["ok \ud83d\ude80"]);
   });
 
   it("rate-limits readings per crew member (#15/#31)", async () => {

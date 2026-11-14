@@ -183,9 +183,10 @@ async function persist(db: DbShape) {
  * Drops readings past the retention window, then, if the store is still over
  * the cap, the oldest sensor readings before the oldest manual check-ins.
  * Eviction is by takenAt, never by insertion order, so a burst of writes can't
- * push out recent crew history.
+ * push out recent crew history. Also used by the PostgreSQL store for its
+ * last-known in-memory copy.
  */
-function evict(readings: Reading[], now = Date.now()): Reading[] {
+export function evict(readings: Reading[], now = Date.now()): Reading[] {
   const { retentionDays, maxReadings: max } = retentionLimits();
   const cutoff = now - retentionDays * 86_400_000;
   let out = readings.filter((r) => !(Date.parse(r.takenAt) < cutoff));
@@ -228,8 +229,16 @@ export interface ReadingFilter {
 }
 
 export async function listReadings(filter?: ReadingFilter): Promise<Reading[]> {
-  const db = await load();
-  let out = db.readings;
+  return filterReadings((await load()).readings, filter);
+}
+
+/**
+ * listReadings' filter on any list of readings (the PostgreSQL store applies
+ * it to its last-known copy plus the spool during an outage). Returns a new
+ * array, oldest first; `limit` = the newest N.
+ */
+export function filterReadings(readings: Reading[], filter?: ReadingFilter): Reading[] {
+  let out = readings;
   if (filter?.crewId) out = out.filter((r) => r.crewId === filter.crewId);
   if (filter?.indicator) out = out.filter((r) => r.indicator === filter.indicator);
   if (filter?.since) out = out.filter((r) => r.takenAt >= filter.since!);
@@ -263,10 +272,71 @@ export async function appendReadings(readings: Reading[]): Promise<void> {
   await state.writeChain;
 }
 
+/** How many demify-db.json.imported-* files are kept (the newest). */
+export const KEEP_IMPORTED_FILES = 5;
+
+const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
+
+/**
+ * Deletes all but the newest KEEP_IMPORTED_FILES demify-db.json.imported-*
+ * files. Their readings are in the database, and every row an import did not
+ * take is saved in a demify-db.json.rejected-* file, which is never pruned.
+ * Best effort: never throws.
+ */
+export async function pruneImportedFiles(keep = KEEP_IMPORTED_FILES): Promise<string[]> {
+  const file = dbFile();
+  const prefix = `${path.basename(file)}.imported-`;
+  try {
+    const names = (await fs.readdir(path.dirname(file)))
+      .filter((n) => n.startsWith(prefix) && /^\d{4}-\d{2}-\d{2}T[\d-]+Z$/.test(n.slice(prefix.length)))
+      .sort()
+      .reverse();
+    const old = names.slice(Math.max(0, keep));
+    const removed: string[] = [];
+    for (const name of old) {
+      try {
+        await fs.rm(path.join(path.dirname(file), name));
+        removed.push(name);
+      } catch {
+        /* best effort */
+      }
+    }
+    return removed;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Saves rows an import did not take (invalid, unknown crew member, or
+ * rejected by the database) to <dataDir>/demify-db.json.rejected-<timestamp>,
+ * in the same shape as the database file plus the reason per row, for manual
+ * recovery. Resolves to the file path.
+ */
+export async function writeRejectedRows(rows: {
+  crew: unknown[];
+  readings: unknown[];
+  reasons: { kind: "crew" | "reading"; id: string | null; reason: string }[];
+}): Promise<string> {
+  await fs.mkdir(config.dataDir, { recursive: true });
+  const target = `${dbFile()}.rejected-${stamp()}`;
+  const tmp = `${target}.tmp`;
+  const fh = await fs.open(tmp, "w");
+  try {
+    await fh.writeFile(JSON.stringify(rows, null, 1));
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+  await fs.rename(tmp, target);
+  return target;
+}
+
 /**
  * Hands the JSON database file to `importer` (the PostgreSQL import), then
  * renames it to demify-db.json.imported-<timestamp> so it is imported only
- * once, and forgets the in-memory copy. Runs in the write queue, so a reading
+ * once (keeping the newest KEEP_IMPORTED_FILES such files), and forgets the
+ * in-memory copy. Runs in the write queue, so a reading
  * spooled while the import runs is either in the imported file or in a new
  * file, never lost. Resolves to null when there is no file to import (a
  * corrupt file is moved aside as on any load). If `importer` throws, the file
@@ -297,9 +367,10 @@ export async function drainJsonStore<T>(
       return null;
     }
     const result = await importer(db);
-    const renamedTo = `${file}.imported-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    const renamedTo = `${file}.imported-${stamp()}`;
     await fs.rename(file, renamedTo);
     state.loading = null;
+    await pruneImportedFiles();
     return { file, renamedTo, result };
   };
   const done = state.writeChain.then(run, run);

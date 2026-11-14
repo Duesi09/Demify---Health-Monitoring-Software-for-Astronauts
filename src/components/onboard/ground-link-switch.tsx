@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Segmented } from "@/components/ui";
+import { withLink, type LinkProfileId } from "@/lib/link";
 import type { GroundLinkState } from "@/lib/onboard/types";
 import { groundLinkChange } from "./format";
 import { publishGroundLink, useGroundLink } from "./use-ground-link";
@@ -11,14 +12,25 @@ import { publishGroundLink, useGroundLink } from "./use-ground-link";
  * Error of an admin-guarded POST, shown like the drill console's: the
  * server's message, plus how to unlock this browser on a 401.
  */
-export function ActionError({ message, locked, what }: { message: string; locked: boolean; what: string }) {
+export function ActionError({
+  message,
+  locked,
+  what,
+  link = null,
+}: {
+  message: string;
+  locked: boolean;
+  what: string;
+  /** The page's signal delay profile, kept on the help link. */
+  link?: LinkProfileId | null;
+}) {
   return (
     <div role="alert" className="mt-3 rounded-lg border border-critical/60 bg-critical/10 px-3 py-2 text-sm text-critical">
       <p>{message}</p>
       {locked && (
         <p className="mt-1 text-fg/85">
           This server protects {what} with an admin token.{" "}
-          <Link href="/help#admin-token" className="font-medium text-accent underline underline-offset-2">
+          <Link href={withLink("/help#admin-token", link)} className="font-medium text-fg underline decoration-accent underline-offset-2">
             How to unlock this browser
           </Link>
         </p>
@@ -42,17 +54,22 @@ export async function responseError(res: Response): Promise<ActionErrorState> {
 
 /**
  * The simulated ground-link switch (POST /api/ground-link, admin-guarded).
- * Down = simulated blackout: Demify works from the onboard library and the
- * last data snapshots. No real link changes.
+ * Down = simulated blackout: Demify works from the last data snapshots and
+ * the onboard library, and advice follows the onboard procedures. No real
+ * link changes. It also works in an air-gapped deployment (DEMIFY_OFFLINE),
+ * which is not a blackout by itself.
  */
 export function GroundLinkSwitch({
   initial,
   onChanged,
+  link = null,
   className = "",
 }: {
   /** Server-rendered state, used until the shared poll answers. */
   initial: GroundLinkState;
   onChanged?: (state: GroundLinkState) => void;
+  /** The page's signal delay profile, kept on the help link of an error. */
+  link?: LinkProfileId | null;
   className?: string;
 }) {
   const { state: live } = useGroundLink();
@@ -98,12 +115,12 @@ export function GroundLinkSwitch({
           { value: "down", label: "Down (blackout)" },
         ]}
         onChange={(v) => void set(v === "up")}
-        disabled={busy || state.forcedOffline}
+        disabled={busy}
       />
       <p className="mt-1.5 text-[11px] leading-snug text-muted">
-        {busy ? "Switching…" : state.forcedOffline ? "Locked down by DEMIFY_OFFLINE" : groundLinkChange(state)}
+        {busy ? "Switching…" : `${groundLinkChange(state)}${state.forcedOffline ? " · air-gapped deployment (DEMIFY_OFFLINE)" : ""}`}
       </p>
-      {error && <ActionError message={error.message} locked={error.locked} what="the ground link switch" />}
+      {error && <ActionError message={error.message} locked={error.locked} what="the ground link switch" link={link} />}
     </div>
   );
 }

@@ -11,7 +11,14 @@
  *  - applies the schema, retrying with backoff while PostgreSQL is down;
  *  - once, after start: an empty library is seeded from the release copy
  *    DEMIFY_SEED_LIBRARY_DIR (default ./library), even with the ground link
- *    down (trigger "startup");
+ *    down (trigger "startup"). Before seeding it GETs the app's crew list
+ *    (DEMIFY_APP_URL/api/crew): the app creates its default crew on its first
+ *    store operation, so the seed already holds the crew-baseline document;
+ *  - crew baselines: while the crew table is empty it asks the app for the
+ *    crew again; as soon as crew rows exist and the crew-baseline document is
+ *    missing or older than the newest crew record, it re-runs a library sync
+ *    (ground link up) or regenerates that one document from the crew table
+ *    (ground link down: onboard data, no ground needed);
  *  - reads the ground link (DEMIFY_OFFLINE=true keeps it down). While it is up:
  *      - syncs the library from DEMIFY_GROUND_LIBRARY_DIR when the last sync
  *        from the ground is older than DEMIFY_SYNC_INTERVAL_HOURS (default 6)
@@ -20,7 +27,9 @@
  *        endpoints at DEMIFY_APP_URL, so the app refreshes its snapshot
  *        copies, and records a sync_runs row (kind "snapshots");
  *  - embeds chunks still waiting for embeddings as soon as the model server
- *    answers (local work, no ground link needed).
+ *    answers (local work, no ground link needed);
+ *  - after every library sync and snapshots run: prunes the sync history to
+ *    the last 30 days, keeping at least the last 100 runs (pruneSyncRuns).
  *
  * SIGTERM / SIGINT: finishes the current step, closes the pool, exits 0.
  */
@@ -29,7 +38,14 @@ import path from "node:path";
 import { onboardConfig } from "../onboard/config.mjs";
 import { closePool, ensureSchema, getPool, LOCK_SYNC, withAdvisoryLock } from "../onboard/db.mjs";
 import { readGroundLinkRow } from "../onboard/ground-link.mjs";
-import { embedPending, syncLibrary } from "../onboard/library.mjs";
+import {
+  crewBaselinesState,
+  embedPending,
+  librarySyncInfo,
+  pruneSyncRuns,
+  refreshCrewBaselines,
+  syncLibrary,
+} from "../onboard/library.mjs";
 
 /**
  * @param {string} name
@@ -68,6 +84,8 @@ const RETRY_AFTER_FAILURE_MS = Math.min(LIBRARY_MS, 10 * 60_000);
 const HEARTBEAT = process.env.DEMIFY_SYNC_HEARTBEAT?.trim() || "/tmp/demify-sync-heartbeat";
 const SEED_DIR = path.resolve(process.env.DEMIFY_SEED_LIBRARY_DIR?.trim() || path.join(process.cwd(), "library"));
 const FETCH_TIMEOUT_MS = 30_000;
+/** GET /api/crew: the app may still be applying migrations or importing its JSON file. */
+const CREW_FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * The app's data endpoints (src/app/api/**) whose sources keep snapshot
@@ -128,14 +146,13 @@ async function heartbeat() {
 }
 
 /**
- * Last successful library sync from the ground (startup seeds excluded).
+ * Last successful library sync from the ground (ms), or null. The startup
+ * seed and runs forced during a blackout do not count (librarySyncInfo).
  * @param {import("pg").Pool} pool
  */
 async function lastGroundSync(pool) {
-  const { rows } = await pool.query(
-    "SELECT max(finished_at) AS at FROM sync_runs WHERE kind = 'library' AND status = 'ok' AND trigger <> 'startup'",
-  );
-  return rows[0]?.at ? new Date(rows[0].at).getTime() : null;
+  const at = (await librarySyncInfo(pool)).lastGroundSync;
+  return at ? Date.parse(at) : null;
 }
 
 /** @param {import("pg").Pool} pool */
@@ -158,17 +175,57 @@ function syncSummary(r) {
   return `${r.status}${r.status === "ok" ? `: ${parts.join(", ")}` : ""}${r.reason ? ` (${r.reason})` : ""}`;
 }
 
+let lastCrewNote = "";
 /**
- * Seeds an empty library from the release copy. Returns false when it must be retried.
+ * Asks the app for its crew list (GET /api/crew). The app creates its default
+ * crew in PostgreSQL on its first store operation, so after this call the
+ * crew table normally has rows. Best effort; logs only when the outcome changes.
+ * @returns {Promise<number | null>} crew members the app reported, or null
+ */
+async function askAppForCrew() {
+  /** @type {string} */
+  let note;
+  /** @type {number | null} */
+  let count = null;
+  try {
+    const res = await fetch(`${cfg.appUrl}/api/crew`, {
+      signal: AbortSignal.timeout(CREW_FETCH_TIMEOUT_MS),
+      headers: { Accept: "application/json", "User-Agent": "demify-sync" },
+    });
+    /** @type {any} */
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    count = res.ok && Array.isArray(body?.crew) ? body.crew.length : null;
+    note =
+      count !== null
+        ? `crew: the app reports ${count} crew members`
+        : `crew: GET ${cfg.appUrl}/api/crew answered HTTP ${res.status} without a crew list; crew baselines follow once the app has created its crew`;
+  } catch (err) {
+    note = `crew: app not reachable at ${cfg.appUrl} (${message(err)}); crew baselines follow once the app has created its crew`;
+  }
+  if (note !== lastCrewNote) log(note);
+  lastCrewNote = note;
+  return count;
+}
+
+/**
+ * Seeds an empty library from the release copy, after asking the app to
+ * create its crew (so the seed includes the crew baselines). Returns false
+ * when it must be retried.
  * @param {import("pg").Pool} pool
  * @param {boolean} up
  */
 async function seedIfEmpty(pool, up) {
   const { rows } = await pool.query("SELECT count(*)::int AS n FROM library_documents");
   if (Number(rows[0]?.n ?? 0) > 0) return true;
+  if ((await crewBaselinesState(pool)).crewMembers === 0) await askAppForCrew();
   const r = await syncLibrary(pool, { ...cfg, groundLibraryDir: SEED_DIR }, { trigger: "startup", groundLinkUp: up, force: true });
   log(`library empty: seeded from the release copy ${SEED_DIR}: ${syncSummary(r)}`);
-  return true;
+  return r.status !== "skipped"; // another sync held the lock: try again next tick
 }
 
 /**
@@ -244,6 +301,12 @@ async function warmSnapshots(pool) {
   );
   const failed = results.filter((r) => !r.refreshed).map((r) => `${r.endpoint} ${r.httpStatus || "error"}${r.freshness ? ` ${r.freshness}` : ""}`);
   log(`snapshots: ${status}, ${refreshed}/${results.length} refreshed${failed.length ? `; not refreshed: ${failed.join(", ")}` : ""}`);
+  try {
+    const pruned = await pruneSyncRuns(pool);
+    if (pruned) log(`sync history: removed ${pruned} runs older than 30 days`);
+  } catch (err) {
+    log(`sync history: pruning failed (${message(err)})`);
+  }
   return true;
 }
 
@@ -352,12 +415,36 @@ async function main() {
 
       if (!seeded && !stopping) seeded = await seedIfEmpty(pool, up);
 
+      // The crew exists once the app has served its first store operation.
+      let crew = stopping ? null : await crewBaselinesState(pool);
+      if (crew && crew.crewMembers === 0 && (await askAppForCrew()) !== null) crew = await crewBaselinesState(pool);
+
       if (up && !stopping && Date.now() >= nextLibraryTry) {
         const last = await lastGroundSync(pool);
-        if (last === null || Date.now() - last >= LIBRARY_MS) {
+        const why =
+          last === null
+            ? "never synced from the ground"
+            : Date.now() - last >= LIBRARY_MS
+              ? "interval due"
+              : crew?.due
+                ? crew.documentSyncedAt
+                  ? "crew records changed"
+                  : "crew baselines missing"
+                : null;
+        if (why) {
           const r = await syncLibrary(pool, cfg, { trigger: "schedule", groundLinkUp: true });
-          log(`library sync (${last === null ? "never synced from the ground" : "interval due"}): ${syncSummary(r)}`);
+          log(`library sync (${why}): ${syncSummary(r)}`);
           if (r.status === "failed") nextLibraryTry = Date.now() + RETRY_AFTER_FAILURE_MS;
+          crew = await crewBaselinesState(pool);
+        }
+      }
+
+      // No library sync possible (blackout, or the last one failed): the
+      // crew baselines are onboard data, so regenerate that document alone.
+      if (crew?.due && !stopping) {
+        const c = await refreshCrewBaselines(pool);
+        if (c.status !== "skipped" && c.status !== "unchanged") {
+          log(`crew baselines: ${c.status} from the crew table (${c.crewMembers ?? 0} crew members)${up ? "" : ", ground link down"}`);
         }
       }
 

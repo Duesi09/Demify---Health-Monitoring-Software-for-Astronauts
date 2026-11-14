@@ -1,238 +1,292 @@
 {
   "title": "Medical kit inventory",
   "updated": "2026-11-14",
-  "notice": "Representative training inventory, not the real ISS kit. Devices and supplies, no medicines.",
+  "notice": "Representative training inventory, not the real ISS kit. Grouped by the ISS Crew Health Care System (CHeCS) pack names from public NASA sources (2011/2015), plus the emergency equipment; contents not confirmed for 2026. Devices and supplies; the medicine packs are left out.",
   "items": [
     {
       "id": "pulse-oximeter",
       "name": "Pulse oximeter, fingertip",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 2",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 2",
       "quantity": 2,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "bp-cuff-automated",
       "name": "Blood pressure cuff, automated",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 1",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 1",
       "quantity": 1,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "bp-cuff-manual",
       "name": "Blood pressure cuff, manual, with stethoscope",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 1",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 1",
       "quantity": 1,
       "unit": "set",
-      "notes": "Representative training inventory, not the real ISS kit. Backup when the automated cuff is unavailable."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. Backup when the automated cuff is unavailable."
     },
     {
       "id": "thermometer",
       "name": "Thermometer, digital",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 2",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 2",
       "quantity": 2,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "glucose-meter",
       "name": "Glucose meter (point-of-care, finger stick)",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 3",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 3",
       "quantity": 1,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "glucose-test-strips",
       "name": "Glucose test strips",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 3",
+      "category": "Medical Diagnostics Pack (MDP)",
+      "location": "Medical kit, Medical Diagnostics Pack (MDP), pouch 3",
       "quantity": 2,
       "unit": "packs",
       "expiresOn": "2027-06-30",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "fundoscope",
       "name": "Fundoscope",
-      "category": "monitoring devices",
-      "location": "Medical kit A, pouch 4",
+      "category": "Physician Equipment Pack (PEP)",
+      "location": "Medical kit, Physician Equipment Pack (PEP), pouch 1",
       "quantity": 1,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. Eye exams with ground guidance when contact allows."
     },
     {
       "id": "ecg-monitor",
       "name": "ECG monitor, 12-lead capable",
-      "category": "cardiac",
-      "location": "Medical kit B, front compartment",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), front compartment",
       "quantity": 1,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "ecg-electrodes",
       "name": "ECG electrodes, single use",
-      "category": "cardiac",
-      "location": "Medical kit B, pouch 1",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 1",
       "quantity": 60,
       "unit": "each",
       "expiresOn": "2027-08-31",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "aed",
-      "name": "Automated external defibrillator (AED)",
-      "category": "cardiac",
-      "location": "Medical kit B, outer bracket",
-      "quantity": 1,
-      "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "aed-pads",
-      "name": "AED electrode pads, adult",
-      "category": "cardiac",
-      "location": "Medical kit B, outer bracket",
-      "quantity": 2,
-      "unit": "pairs",
-      "expiresOn": "2027-05-31",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "cpr-restraints",
-      "name": "CPR restraint straps (patient and rescuer)",
-      "category": "cardiac",
-      "location": "Medical kit B, pouch 2",
-      "quantity": 1,
-      "unit": "set",
-      "notes": "Representative training inventory, not the real ISS kit. Used for the microgravity CPR position."
-    },
-    {
-      "id": "bag-valve-mask",
-      "name": "Bag-valve mask, adult",
-      "category": "airway and breathing",
-      "location": "Medical kit C, pouch 1",
-      "quantity": 1,
-      "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "oxygen-mask",
-      "name": "Oxygen mask with tubing",
-      "category": "airway and breathing",
-      "location": "Medical kit C, pouch 1",
-      "quantity": 2,
-      "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "oropharyngeal-airways",
       "name": "Oropharyngeal airway set (airway adjuncts, assorted sizes)",
-      "category": "airway and breathing",
-      "location": "Medical kit C, pouch 2",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 2",
       "quantity": 1,
       "unit": "set",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "nasopharyngeal-airways",
       "name": "Nasopharyngeal airway set (airway adjuncts, assorted sizes)",
-      "category": "airway and breathing",
-      "location": "Medical kit C, pouch 2",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 2",
       "quantity": 1,
       "unit": "set",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "laryngeal-mask-airway",
+      "name": "Laryngeal mask airway, adult",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 3",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "laryngoscope",
+      "name": "Laryngoscope",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 3",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "suction-device",
+      "name": "Suction device, manual",
+      "category": "Advanced Life Support Pack (ALSP)",
+      "location": "Medical kit, Advanced Life Support Pack (ALSP), pouch 4",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "aed",
+      "name": "Automated external defibrillator (AED), LIFEPAK 1000",
+      "category": "AED (LIFEPAK 1000)",
+      "location": "Emergency equipment, AED (LIFEPAK 1000), carrying case",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "aed-pads",
+      "name": "AED electrode pads, adult",
+      "category": "AED (LIFEPAK 1000)",
+      "location": "Emergency equipment, AED (LIFEPAK 1000), carrying case",
+      "quantity": 2,
+      "unit": "pairs",
+      "expiresOn": "2027-05-31",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "crew-medical-restraint-system",
+      "name": "Crew Medical Restraint System (CMRS) board with patient and rescuer restraints",
+      "category": "Crew Medical Restraint System (CMRS)",
+      "location": "Emergency equipment, Crew Medical Restraint System (CMRS), stowage bag",
+      "quantity": 1,
+      "unit": "set",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. Holds patient, rescuer and equipment for CPR; isolates the patient electrically during defibrillation."
+    },
+    {
+      "id": "bag-valve-mask",
+      "name": "Bag-valve mask, adult",
+      "category": "Respiratory Support Pack (RSP)",
+      "location": "Medical kit, Respiratory Support Pack (RSP), pouch 1",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "oxygen-mask",
+      "name": "Oxygen mask with tubing",
+      "category": "Respiratory Support Pack (RSP)",
+      "location": "Medical kit, Respiratory Support Pack (RSP), pouch 1",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "ventilator",
+      "name": "Ventilator, portable",
+      "category": "Respiratory Support Pack (RSP)",
+      "location": "Medical kit, Respiratory Support Pack (RSP), main compartment",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "iv-start-kit",
       "name": "IV start kit (catheters, tourniquet, dressings)",
-      "category": "IV access",
-      "location": "Medical kit D, pouch 1",
+      "category": "IV Supply Pack (ISP)",
+      "location": "Medical kit, IV Supply Pack (ISP), pouch 1",
       "quantity": 4,
       "unit": "kits",
       "expiresOn": "2027-11-30",
-      "notes": "Representative training inventory, not the real ISS kit. Catheters, tourniquet and dressings; no fluids."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. Catheters, tourniquet and dressings; no fluids."
+    },
+    {
+      "id": "iv-pressure-infusor",
+      "name": "IV pressure infusor",
+      "category": "IV Supply Pack (ISP)",
+      "location": "Medical kit, IV Supply Pack (ISP), pouch 2",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. IV bags cannot drip by gravity on the station."
+    },
+    {
+      "id": "intraosseous-access",
+      "name": "Intraosseous (bone) access device",
+      "category": "IV Supply Pack (ISP)",
+      "location": "Medical kit, IV Supply Pack (ISP), pouch 3",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "wound-dressings",
       "name": "Wound dressings, assorted",
-      "category": "wound care",
-      "location": "Medical kit E, pouch 1",
+      "category": "Medical Supply Pack (MSP)",
+      "location": "Medical kit, Medical Supply Pack (MSP), pouch 1",
       "quantity": 20,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "gauze-pads",
       "name": "Gauze pads, sterile",
-      "category": "wound care",
-      "location": "Medical kit E, pouch 1",
+      "category": "Medical Supply Pack (MSP)",
+      "location": "Medical kit, Medical Supply Pack (MSP), pouch 1",
       "quantity": 40,
       "unit": "each",
       "expiresOn": "2028-01-31",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "wound-closure-strips",
-      "name": "Wound closure strips",
-      "category": "wound care",
-      "location": "Medical kit E, pouch 2",
-      "quantity": 30,
-      "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "elastic-bandages",
       "name": "Elastic bandages",
-      "category": "wound care",
-      "location": "Medical kit E, pouch 2",
+      "category": "Medical Supply Pack (MSP)",
+      "location": "Medical kit, Medical Supply Pack (MSP), pouch 2",
       "quantity": 4,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "splints",
-      "name": "Splints, malleable, padded",
-      "category": "immobilisation",
-      "location": "Medical kit F, pouch 1",
-      "quantity": 2,
-      "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit."
-    },
-    {
-      "id": "eye-wash",
-      "name": "Eye wash bottle",
-      "category": "eye care",
-      "location": "Medical kit E, pouch 3",
-      "quantity": 2,
-      "unit": "each",
-      "expiresOn": "2027-02-28",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "exam-gloves",
       "name": "Examination gloves, nitrile",
-      "category": "protective equipment",
-      "location": "Medical kit A, pouch 5",
+      "category": "Medical Supply Pack (MSP)",
+      "location": "Medical kit, Medical Supply Pack (MSP), pouch 3",
       "quantity": 50,
       "unit": "pairs",
-      "notes": "Representative training inventory, not the real ISS kit."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "wound-closure-strips",
+      "name": "Wound closure strips",
+      "category": "Minor Treatment Pack (MTP)",
+      "location": "Medical kit, Minor Treatment Pack (MTP), pouch 1",
+      "quantity": 30,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "eye-wash",
+      "name": "Eye wash bottle",
+      "category": "Minor Treatment Pack (MTP)",
+      "location": "Medical kit, Minor Treatment Pack (MTP), pouch 2",
+      "quantity": 2,
+      "unit": "each",
+      "expiresOn": "2027-02-28",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
+    },
+    {
+      "id": "splints",
+      "name": "Splints, malleable, padded",
+      "category": "Emergency Medical Treatment Pack (EMTP)",
+      "location": "Medical kit, Emergency Medical Treatment Pack (EMTP), pouch 1",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
     },
     {
       "id": "personal-dosimeters",
       "name": "Personal dosimeters (one per crew member)",
-      "category": "radiation monitoring",
-      "location": "Radiation monitoring kit, pouch 1",
+      "category": "Environmental Health System (radiation monitoring)",
+      "location": "Environmental Health System radiation kit, pouch 1 (when not worn)",
       "quantity": 4,
       "unit": "each",
-      "notes": "Representative training inventory, not the real ISS kit. Worn at all times; log readings in the daily check-in."
+      "notes": "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026. Worn by each crew member at all times; log readings in the daily check-in."
     }
   ]
 }

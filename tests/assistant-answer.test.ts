@@ -29,12 +29,13 @@ const mocks = vi.hoisted(() => {
     modelStatus: vi.fn(),
     searchLibrary: vi.fn(),
     syncLibrary: vi.fn(),
-    lastLibrarySync: vi.fn(),
+    librarySyncInfo: vi.fn(),
     searchBundled: vi.fn(),
     dbQuery: vi.fn(),
-    ping: vi.fn(),
+    db: { down: false as false | string },
     assess: vi.fn(),
     live: vi.fn(),
+    listCrew: vi.fn(),
   };
 });
 
@@ -48,13 +49,17 @@ vi.mock("@onboard/library.mjs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@onboard/library.mjs")>()),
   searchLibrary: mocks.searchLibrary,
   syncLibrary: mocks.syncLibrary,
-  lastLibrarySync: mocks.lastLibrarySync,
+  librarySyncInfo: mocks.librarySyncInfo,
   searchBundled: mocks.searchBundled,
 }));
 vi.mock("@onboard/db.mjs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@onboard/db.mjs")>()),
-  getPool: () => ({ query: mocks.dbQuery }),
-  pingDatabase: mocks.ping,
+  getPool: () => ({
+    query: async (sql: string, params?: unknown[]) => {
+      if (mocks.db.down) throw new Error(mocks.db.down);
+      return mocks.dbQuery(sql, params);
+    },
+  }),
   ensureSchema: async () => [],
 }));
 vi.mock("@/lib/onboard/ground-link", () => ({
@@ -69,13 +74,14 @@ vi.mock("@/lib/onboard/ground-link", () => ({
 }));
 vi.mock("@/lib/store/readings", async () => {
   const { DEFAULT_CREW } = await import("@/lib/store/readings-json");
-  return { listCrew: async () => DEFAULT_CREW, getCrew: async (id: string) => DEFAULT_CREW.find((c) => c.id === id) };
+  mocks.listCrew.mockImplementation(async () => DEFAULT_CREW);
+  return { listCrew: (...args: unknown[]) => mocks.listCrew(...args), getCrew: async (id: string) => DEFAULT_CREW.find((c) => c.id === id) };
 });
 vi.mock("@/lib/health/assess", () => ({ assessCrewMember: mocks.assess }));
 vi.mock("@/lib/monitor/live", () => ({ getLiveVitals: mocks.live }));
 
-import { askAssistant, EXCERPT_MAX, excerpt, resetAssistantState } from "@/lib/assistant/answer";
-import { resetLibrarySourceState } from "@/lib/assistant/library-source";
+import { askAssistant, AssistantBusyError, EXCERPT_MAX, excerpt, MAX_CONCURRENT_CHATS, resetAssistantState } from "@/lib/assistant/answer";
+import { libraryFreshness, libraryListing, libraryStatus, resetLibrarySourceState, resolveLibrary, syncNow } from "@/lib/assistant/library-source";
 import {
   ACT_NOW_LINE,
   ASSISTANT_NOTICE,
@@ -137,6 +143,7 @@ function hit(n: number, over: Partial<LibraryHit> = {}): LibraryHit {
 const vector = (hits: LibraryHit[], over: Partial<SearchResult> = {}): SearchResult => ({ tier: "vector", hits, integrityFailures: 0, ...over });
 
 const READY = { reachable: true, available: ["gpt-oss:20b", "nomic-embed-text"], llmReady: true, embedReady: true };
+const syncedAgo = (ms: number) => ({ lastGroundSync: new Date(Date.now() - ms).toISOString(), seededAt: null });
 
 beforeAll(async () => {
   actualSearchBundled = (await vi.importActual<typeof import("@onboard/library.mjs")>("@onboard/library.mjs")).searchBundled;
@@ -147,16 +154,17 @@ beforeEach(async () => {
   resetLibrarySourceState();
   resetAssistantState();
   mocks.link.up = true;
-  for (const m of [mocks.chat, mocks.embed, mocks.modelStatus, mocks.searchLibrary, mocks.syncLibrary, mocks.lastLibrarySync, mocks.searchBundled, mocks.dbQuery, mocks.ping, mocks.assess, mocks.live]) {
+  for (const m of [mocks.chat, mocks.embed, mocks.modelStatus, mocks.searchLibrary, mocks.syncLibrary, mocks.librarySyncInfo, mocks.searchBundled, mocks.dbQuery, mocks.assess, mocks.live]) {
     m.mockReset();
   }
+  mocks.listCrew.mockClear();
+  mocks.db.down = false;
   mocks.searchBundled.mockImplementation((...args: Parameters<typeof actualSearchBundled>) => actualSearchBundled(...args));
   mocks.modelStatus.mockResolvedValue(READY);
-  mocks.ping.mockResolvedValue(true);
   mocks.dbQuery.mockImplementation(async (sql: string) =>
-    /FROM library_documents/.test(sql) ? { rows: [{ n: POOL_DOCS }] } : { rows: [] },
+    /count\(\*\)::int AS n FROM library_documents/.test(sql) ? { rows: [{ n: POOL_DOCS }] } : { rows: [] },
   );
-  mocks.lastLibrarySync.mockResolvedValue(new Date(Date.now() - 14 * HOUR).toISOString());
+  mocks.librarySyncInfo.mockResolvedValue(syncedAgo(14 * HOUR));
   mocks.syncLibrary.mockResolvedValue({ status: "ok" });
   mocks.assess.mockResolvedValue(null);
   mocks.live.mockResolvedValue(null);
@@ -226,10 +234,10 @@ describe("blocked questions", () => {
 describe("with a model", () => {
   it("answers from the passages, keeps valid markers and maps citations to passages", async () => {
     mocks.searchLibrary.mockResolvedValue(vector([hit(1), hit(2), hit(3)]));
-    mocks.chat.mockResolvedValue("Start the emergency checklist [2]. Call the crew [1][2]. Ignore [7].");
+    mocks.chat.mockResolvedValue("Start the emergency checklist [2]. Call the crew [1][2][7].");
     const a = await askAssistant({ question: VF }, onboard());
     expect(a.status).toBe("answered");
-    expect(a.answer).toBe(`${ACT_NOW_LINE}\n\nStart the emergency checklist [2]. Call the crew [1][2]. Ignore.`);
+    expect(a.answer).toBe(`${ACT_NOW_LINE}\n\nStart the emergency checklist [2]. Call the crew [1][2].`);
     expect(a.citations.map((c) => [c.n, c.docId])).toEqual([
       [1, "doc-1"],
       [2, "doc-2"],
@@ -248,6 +256,8 @@ describe("with a model", () => {
     });
     expect(a.citations[0].excerpt.length).toBeLessThanOrEqual(EXCERPT_MAX);
     expect(a.citations[0].excerpt.endsWith("…")).toBe(true);
+    // The whole verified chunk travels with the citation.
+    expect(a.citations[0].text).toBe(hit(1).text);
     expect(a.mode).toEqual({ retrieval: "vector", model: "gpt-oss:20b", groundLink: "up" });
     expect(a.freshness).toMatchObject({ libraryAgeText: "last synced 14 hours ago", stale: false, crewDataAt: null, groundLinkUp: true });
 
@@ -257,6 +267,9 @@ describe("with a model", () => {
     expect(messages[1].content).toContain("[1] Document 1 › Section 1");
     expect(messages[1].content).toContain("[3] Document 3 › Section 3");
     expect(messages[1].content).toContain("Library status: last synced 14 hours ago.");
+    expect(messages[1].content).toMatch(/<question>\nThe monitor shows ventricular fibrillation\. What does the drill checklist say\?\n<\/question>$/);
+    // Vector search with the short question-embedding limit.
+    expect(mocks.searchLibrary.mock.calls[0][4]).toEqual({ skipVector: false, embedTimeoutMs: 3000 });
   });
 
   it("an answer without a valid citation is not shown", async () => {
@@ -266,7 +279,7 @@ describe("with a model", () => {
     expect(a).toMatchObject({ status: "passages-only", answer: null, reason: PASSAGES_ONLY_REASON.uncited });
     expect(a.citations.map((c) => c.n)).toEqual([1, 2]);
     expect(a.mode.model).toBeNull();
-    expect(a.mode.fallbackReason).toMatch(/no valid citation/);
+    expect(a.mode.fallbackReason).toMatch(/cited no passage that exists/);
   });
 
   it("an answer with a dose pattern is not shown", async () => {
@@ -312,12 +325,128 @@ describe("with a model", () => {
     expect(a.citations).toHaveLength(1);
   });
 
-  it("answers in the bundled setup with a model too", async () => {
+  it("answers in the bundled setup with a model too (no database, no embeddings)", async () => {
     mocks.chat.mockResolvedValue("The pulse oximeter is listed in the medical kit inventory [1].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, withModel());
     expect(a.status).toBe("answered");
     expect(a.citations.map((c) => c.docId)).toEqual(["med-kit-inventory"]);
     expect(a.mode).toEqual({ retrieval: "bundled", model: "gpt-oss:20b", groundLink: "up" });
+    expect(a.freshness.libraryAgeText).toMatch(/^bundled with this release/);
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(mocks.searchLibrary).not.toHaveBeenCalled();
+  });
+
+  it("withholds an answer that cites crew data [C] when no crew member was selected", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockResolvedValue("Start the emergency checklist [1]. The heart rate is high [C].");
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a).toMatchObject({ status: "passages-only", reason: PASSAGES_ONLY_REASON.uncited });
+  });
+
+  it("withholds an answer with more than one uncited sentence", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockResolvedValue("Start the emergency checklist [1]. Then rest. Then eat.");
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a).toMatchObject({ status: "passages-only", reason: PASSAGES_ONLY_REASON.uncited });
+    expect(a.mode.fallbackReason).toMatch(/2 statements of the model answer had no citation/);
+  });
+});
+
+describe("grounding check (a real model may copy words from the question)", () => {
+  // "placebin" is a made-up medicine name; the question is not blocked (it names no request, amount or medicine word).
+  const QUESTION = "Is placebin safe in the radiation shelter during a solar storm?";
+
+  it("withholds an answer that copies a question word no passage contains (bundled library)", async () => {
+    mocks.chat.mockResolvedValue("Placebin is not covered; during a solar storm move to the radiation shelter [1].");
+    const a = await askAssistant({ question: QUESTION }, withModel());
+    expect(a).toMatchObject({ status: "passages-only", answer: null, reason: PASSAGES_ONLY_REASON.ungrounded });
+    expect(a.citations.length).toBeGreaterThan(0);
+    expect(a.mode.model).toBeNull();
+    // The word itself is not repeated in the reason.
+    expect(a.mode.fallbackReason).toBe("model answer used 1 word that no cited passage contains");
+  });
+
+  it("asks the database library about the words the cited passages lack", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockResolvedValue("Placebin is not in the library; start the emergency checklist [1].");
+    const a = await askAssistant({ question: QUESTION }, onboard());
+    expect(a).toMatchObject({ status: "passages-only", reason: PASSAGES_ONLY_REASON.ungrounded });
+    const lookup = mocks.dbQuery.mock.calls.find(([sql]) => /unnest\(\$1::text\[\]\)/.test(sql as string));
+    expect(lookup?.[1]).toEqual([["placebin"]]);
+  });
+
+  it("accepts question words the library contains elsewhere", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.dbQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (/unnest/.test(sql)) return { rows: ((params?.[0] as string[]) ?? []).filter((w) => ["monitor", "alarms"].includes(w)).map((w) => ({ w })) };
+      return /count\(\*\)::int AS n FROM library_documents/.test(sql) ? { rows: [{ n: POOL_DOCS }] } : { rows: [] };
+    });
+    mocks.chat.mockResolvedValue("When the monitor alarms, start the emergency checklist [1].");
+    const a = await askAssistant({ question: "What do we do when the monitor alarms?" }, onboard());
+    expect(a.status).toBe("answered");
+  });
+
+  it("withholds an answer that names something shaped like a medicine the passages do not contain", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockResolvedValue("Start the emergency checklist and give examprofen [1].");
+    const a = await askAssistant({ question: VF }, onboard());
+    expect(a).toMatchObject({ status: "passages-only", reason: `${ACT_NOW_LINE} ${PASSAGES_ONLY_REASON.ungrounded}` });
+  });
+});
+
+describe("model server problems", () => {
+  it("skips vector search while the model server is known to be unreachable, and remembers it", async () => {
+    mocks.modelStatus.mockResolvedValue({ reachable: false, available: [], llmReady: false, embedReady: false, error: "timeout" });
+    mocks.searchLibrary.mockResolvedValue({ ...vector([hit(1, { tier: "fulltext", score: 0.2, text: "Pulse oximeter: medical kit A." })]), tier: "fulltext" });
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a).toMatchObject({ status: "passages-only", reason: PASSAGES_ONLY_REASON.unreachable });
+    expect(mocks.searchLibrary.mock.calls[0][4]).toEqual({ skipVector: true, embedTimeoutMs: 3000 });
+    // Within 30 s the next question does not ask the model server again.
+    await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(mocks.modelStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.searchLibrary.mock.calls[1][4]).toEqual({ skipVector: true, embedTimeoutMs: 3000 });
+  });
+
+  it("does not skip vector search when only the language model is missing", async () => {
+    mocks.modelStatus.mockResolvedValue({ ...READY, available: ["nomic-embed-text"], llmReady: false });
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(mocks.searchLibrary.mock.calls[0][4]).toEqual({ skipVector: false, embedTimeoutMs: 3000 });
+  });
+
+  it("an unreachable chat call is remembered: the next question skips the model at once", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockRejectedValue(new mocks.ModelError("unreachable", "connect ECONNREFUSED"));
+    const first = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(first.reason).toBe(PASSAGES_ONLY_REASON.unreachable);
+    const second = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(second.reason).toBe(PASSAGES_ONLY_REASON.unreachable);
+    expect(mocks.chat).toHaveBeenCalledTimes(1);
+    expect(mocks.modelStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.searchLibrary.mock.calls[1][4]).toEqual({ skipVector: true, embedTimeoutMs: 3000 });
+  });
+
+  it(`runs at most ${MAX_CONCURRENT_CHATS} chat calls at once; a further question is told the assistant is busy`, async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    const releases: ((v: string) => void)[] = [];
+    mocks.chat.mockImplementation(() => new Promise<string>((r) => releases.push(r)));
+    const running = [askAssistant({ question: EXAMPLES[3][0] }, onboard()), askAssistant({ question: EXAMPLES[3][0] }, onboard())];
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    await expect(askAssistant({ question: EXAMPLES[3][0] }, onboard())).rejects.toBeInstanceOf(AssistantBusyError);
+    // Questions that never reach the model are not affected.
+    expect((await askAssistant({ question: "How many pills can he take?" }, onboard())).status).toBe("blocked");
+    for (const r of releases) r("Answer [1].");
+    expect((await Promise.all(running)).map((a) => a.status)).toEqual(["answered", "answered"]);
+    mocks.chat.mockResolvedValue("Answer [1].");
+    expect((await askAssistant({ question: EXAMPLES[3][0] }, onboard())).status).toBe("answered");
+  });
+
+  it("frees the chat slot when the chat call fails", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockRejectedValue(new mocks.ModelError("http", "HTTP 500", 500));
+    for (let i = 0; i < MAX_CONCURRENT_CHATS + 1; i++) await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    mocks.chat.mockResolvedValue("Answer [1].");
+    expect((await askAssistant({ question: EXAMPLES[3][0] }, onboard())).status).toBe("answered");
   });
 });
 
@@ -357,15 +486,20 @@ describe("retrieval gates and integrity", () => {
     });
   });
 
-  it("falls back to the bundled library when the database is unreachable", async () => {
-    mocks.ping.mockResolvedValue(false);
+  it("falls back to the bundled library when the database is unreachable, and says it is the release copy", async () => {
+    mocks.db.down = "connect ECONNREFUSED 127.0.0.1:5432";
     vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.chat.mockResolvedValue("Kit A [1].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
     expect(a.status).toBe("answered");
     expect(a.mode.retrieval).toBe("bundled");
-    expect(a.mode.fallbackReason).toMatch(/^database unreachable/);
-    expect(a.freshness.libraryAgeText).toMatch(/^bundled with this release/);
+    // The driver's reason, not "no answer within 2 s".
+    expect(a.mode.fallbackReason).toBe("database unreachable (connect ECONNREFUSED 127.0.0.1:5432); using the release copy bundled with the app");
+    expect(a.freshness).toMatchObject({
+      librarySyncedAt: null,
+      libraryAgeText: "release copy bundled with the app (database unreachable)",
+      stale: true,
+    });
     expect(mocks.searchLibrary).not.toHaveBeenCalled();
     expect(mocks.syncLibrary).not.toHaveBeenCalled();
   });
@@ -381,20 +515,22 @@ describe("retrieval gates and integrity", () => {
   });
 
   it("uses the bundled library while the database library is still empty", async () => {
-    mocks.dbQuery.mockImplementation(async (sql: string) => (/FROM library_documents/.test(sql) ? { rows: [{ n: 0 }] } : { rows: [] }));
-    mocks.lastLibrarySync.mockResolvedValue(null);
+    mocks.dbQuery.mockImplementation(async (sql: string) => (/count\(\*\)::int AS n FROM library_documents/.test(sql) ? { rows: [{ n: 0 }] } : { rows: [] }));
+    mocks.librarySyncInfo.mockResolvedValue({ lastGroundSync: null, seededAt: null });
     mocks.chat.mockResolvedValue("Kit A [1].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
     expect(a.mode.retrieval).toBe("bundled");
     expect(a.mode.fallbackReason).toMatch(/database library is empty/);
-    // The empty database library syncs in the background.
-    expect(mocks.syncLibrary).toHaveBeenCalledTimes(1);
+    expect(a.freshness.libraryAgeText).toBe("release copy bundled with the app (onboard library empty, not synced yet)");
+    // The empty database library syncs in the background, after the crew store is initialised.
+    await vi.waitFor(() => expect(mocks.syncLibrary).toHaveBeenCalledTimes(1));
+    expect(mocks.listCrew.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.syncLibrary.mock.invocationCallOrder[0]);
   });
 });
 
 describe("freshness and automatic sync", () => {
   it("syncs a stale library in the background while the ground link is up, at most every 10 minutes", async () => {
-    mocks.lastLibrarySync.mockResolvedValue(new Date(Date.now() - 30 * HOUR).toISOString());
+    mocks.librarySyncInfo.mockResolvedValue(syncedAgo(30 * HOUR));
     mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
     mocks.chat.mockResolvedValue("Answer [1].");
     let release: (v: unknown) => void = () => {};
@@ -403,7 +539,7 @@ describe("freshness and automatic sync", () => {
     // The answer did not wait for the sync.
     expect(a.status).toBe("answered");
     expect(a.freshness).toMatchObject({ libraryAgeText: "last synced 30 hours ago", stale: true });
-    expect(mocks.syncLibrary).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.syncLibrary).toHaveBeenCalledTimes(1));
     expect(mocks.syncLibrary.mock.calls[0][2]).toEqual({ trigger: "auto", groundLinkUp: true });
     release({ status: "ok" });
     await askAssistant({ question: EXAMPLES[3][0] }, onboard());
@@ -412,7 +548,7 @@ describe("freshness and automatic sync", () => {
 
   it("does not sync during a blackout, and the prompt says the library may be out of date", async () => {
     mocks.link.up = false;
-    mocks.lastLibrarySync.mockResolvedValue(new Date(Date.now() - 3 * 24 * HOUR - 60_000).toISOString());
+    mocks.librarySyncInfo.mockResolvedValue(syncedAgo(3 * 24 * HOUR + 60_000));
     mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
     mocks.chat.mockResolvedValue("Answer [1].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
@@ -422,6 +558,53 @@ describe("freshness and automatic sync", () => {
     const user = mocks.chat.mock.calls[0][1][1].content as string;
     expect(user).toContain("Library status: last synced 3 days ago; the library may be out of date.");
     expect(user).toMatch(/Ground link status: down \(blackout\)/);
+  });
+
+  it("says when the station library was only seeded from the release copy, and syncs it while the link is up", async () => {
+    mocks.librarySyncInfo.mockResolvedValue({ lastGroundSync: null, seededAt: "2026-11-14T08:00:00.000Z" });
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1)]));
+    mocks.chat.mockResolvedValue("Answer [1].");
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a.freshness).toMatchObject({
+      librarySyncedAt: null,
+      libraryAgeText: "seeded from the release copy (2026-11-14); not synced from the ground yet",
+      stale: true,
+    });
+    await vi.waitFor(() => expect(mocks.syncLibrary).toHaveBeenCalledTimes(1));
+    const listing = await libraryListing(onboard());
+    expect(listing.freshness.libraryAgeText).toBe("seeded from the release copy (2026-11-14); not synced from the ground yet");
+    const status = await libraryStatus(onboard());
+    expect(status.library.freshness.libraryAgeText).toBe("seeded from the release copy (2026-11-14); not synced from the ground yet");
+  });
+
+  it("labels the release copy during a database outage everywhere (answer, listing, status)", async () => {
+    mocks.db.down = "connect ECONNREFUSED 127.0.0.1:5432";
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const listing = await libraryListing(onboard());
+    expect(listing.source).toBe("bundled");
+    expect(listing.freshness).toEqual({ librarySyncedAt: null, libraryAgeText: "release copy bundled with the app (database unreachable)", stale: true });
+    resetLibrarySourceState();
+    const status = await libraryStatus(onboard());
+    expect(status.database).toBe("unreachable");
+    expect(status.library.freshness.libraryAgeText).toBe("release copy bundled with the app (database unreachable)");
+    // Without a database at all, the laptop wording stays.
+    expect((await libraryListing(laptop())).freshness.libraryAgeText).toMatch(/^bundled with this release \(\d{4}-\d{2}-\d{2}\), no sync on this machine$/);
+    const lib = await resolveLibrary(laptop());
+    expect((await libraryFreshness("bundled", lib, laptop())).stale).toBe(false);
+  });
+
+  it("Sync now initialises the crew store before the library sync (crew baselines on a fresh database)", async () => {
+    mocks.syncLibrary.mockResolvedValue({ status: "ok" });
+    const out = await syncNow(onboard());
+    expect(out.ok).toBe(true);
+    expect(mocks.listCrew).toHaveBeenCalled();
+    expect(mocks.listCrew.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.syncLibrary.mock.invocationCallOrder[0]);
+    expect(mocks.syncLibrary.mock.calls[0][2]).toEqual({ trigger: "manual", groundLinkUp: true });
+    // A crew store that fails does not stop the sync.
+    mocks.listCrew.mockRejectedValueOnce(new Error("store down"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect((await syncNow(onboard())).ok).toBe(true);
+    expect(mocks.syncLibrary).toHaveBeenCalledTimes(2);
   });
 
   it("does not sync a fresh library", async () => {
@@ -510,6 +693,21 @@ describe("excerpts", () => {
     const e = excerpt(long);
     expect(e.length).toBeLessThanOrEqual(300);
     expect(e.endsWith("word…")).toBe(true);
-    expect(excerpt("  short\n text ")).toBe("short text");
+    expect(excerpt("  short\n text ")).toBe("short\ntext");
+  });
+
+  // Checker C2 MAJOR 2: the excerpt shows the line that answers the question.
+  it.each([
+    [EXAMPLES[3][0], /Pulse oximeter, fingertip: stowed in /],
+    [EXAMPLES[0][0], /ventricular fibrillation|VF/i],
+    [EXAMPLES[2][0], /shelter/i],
+  ])("in the laptop setup show the words of %j", async (question, re) => {
+    const a = await askAssistant({ question }, laptop());
+    const c = a.citations[0];
+    expect(c.excerpt.length).toBeLessThanOrEqual(EXCERPT_MAX);
+    expect(c.excerpt).toMatch(re);
+    // The whole passage is there for "Show the whole passage".
+    expect(c.text.length).toBeGreaterThanOrEqual(c.excerpt.replace(/…/g, "").length);
+    expect(c.text).toContain(c.excerpt.replace(/^…|…$/g, "").split("\n")[0]);
   });
 });

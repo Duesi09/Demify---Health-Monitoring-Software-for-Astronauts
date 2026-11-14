@@ -87,7 +87,7 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Nominal: 36.1–38.0 °C (NEWS2 0 points)
 - Caution: 35.1–36.0 or 38.1–39.0 °C (NEWS2 1 point)
 - Critical: ≤ 35.0 °C (NEWS2 3 points) or ≥ 39.1 °C (NEWS2 2 points; rating it critical is our project rule)
-- Automatic escalation flag: Any value ≤ 35.0 °C or ≥ 39.1 °C; ≥ 38.1 °C persisting 24 h
+- Automatic escalation flag: Any value ≤ 35.0 °C or ≥ 39.1 °C (project rule); ≥ 38.1 °C persisting 24 h
 - Contact the flight surgeon when: 35.0 °C or below, 39.1 °C or above (project rule), 38.1 °C or more persisting 24 h (project rule), or fever with rash, stiff neck or low WBC.
 - Crew actions: Drink fluids and rest. Check for signs of infection (sore throat, rash, cough). Reduce exercise intensity while elevated.
 - In spaceflight: Core temperature rises up to ~1 °C over long missions (impaired heat loss without convection), so compare against your own in-flight baseline.
@@ -286,5 +286,5 @@ AHA categories: 130–139 / 80–89 mmHg (stage 1) and 140–180 / 90–120 mmHg
 - Contact the flight surgeon when: Any ST elevation ≥ 1 mm, ST depression > 2 mm (project rule), or chest pain (medical emergency).
 - Crew actions: Stop all activity; the crew member rests, monitored, with the Crew Medical Officer. Record and transmit a 12-lead ECG to the flight surgeon immediately. Follow the onboard medical checklist for chest pain; contact the flight surgeon.
 - In spaceflight: Spaceflight remodels the heart and radiation adds long-term cardiovascular risk. A heart attack far from Earth must be recognised and treated by the crew itself: there is no emergency room and evacuation takes days. Reference: new ST elevation ≥ 1 mm in two contiguous leads is the STEMI criterion, a medical emergency; crewed vehicles carry a defibrillator (AED) and an advanced cardiac life support kit for the onboard procedures.
-- Measured with: Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG transmitted to the flight surgeon.
+- Measured with: Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG for the flight surgeon.
 - Sources: Fourth Universal Definition of Myocardial Infarction (ESC/ACC/AHA/WHF 2018) (https://www.ahajournals.org/doi/10.1161/CIR.0000000000000617); NASA HRP: Risk of Cardiovascular Adaptations (https://www.nasa.gov/reference/risk-of-cardiovascular-adaptations/); CSA Bio-Monitor (https://www.asc-csa.gc.ca/eng/sciences/bio-monitor.asp)

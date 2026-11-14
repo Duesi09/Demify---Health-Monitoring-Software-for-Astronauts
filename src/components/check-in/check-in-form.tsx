@@ -6,6 +6,7 @@ import { Save, Stethoscope } from "lucide-react";
 import { StatusBadge } from "@/components/ui";
 import { StatusIcon } from "@/components/overview/status-icon";
 import { bySeverity, formatUtc, formatValue } from "@/components/overview/format";
+import { actionUnderLink } from "@/components/crew/protocols";
 import { findingUnderLink, linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import { CHECK_IN_INDICATORS, INDICATORS, classify, evaluateValue } from "@/lib/health/knowledge";
 import type { IndicatorId, Status } from "@/lib/types";
@@ -431,7 +432,8 @@ export function CheckInForm({
   );
 }
 
-function ResultPanel({
+/** The saved check-in: findings and crew actions under the current link (exported for tests). */
+export function ResultPanel({
   result,
   headingRef,
   commDelaySeconds,
@@ -519,8 +521,9 @@ function ResultPanel({
               <div className="mt-2">
                 <h3 className="text-[11px] text-muted">What to do now</h3>
                 <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm">
+                  {/* Same blackout wording as the crew page, the body map and the guidance (actionUnderLink). */}
                   {i.actions.map((a) => (
-                    <li key={a}>{a}</li>
+                    <li key={a}>{actionUnderLink(a, policy.mode)}</li>
                   ))}
                 </ol>
               </div>

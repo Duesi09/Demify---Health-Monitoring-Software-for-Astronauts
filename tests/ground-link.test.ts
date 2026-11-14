@@ -1,4 +1,5 @@
 import { mkdirSync, promises as fs, writeFileSync } from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import pg from "pg";
@@ -161,16 +162,72 @@ describe("source cache while the ground link is down", () => {
     expect(loader).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps serving what it fetched before the blackout from memory", async () => {
+  /** writeSnapshot runs in the background after a live fetch. */
+  async function snapshotWritten(key: string, data: unknown) {
+    const file = path.join(dir, "runtime", `${key}.json`);
+    for (let i = 0; i < 100; i++) {
+      try {
+        if (JSON.parse(await fs.readFile(file, "utf8")).data === data) return;
+      } catch {
+        /* not there yet */
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    throw new Error(`snapshot ${key} was not written`);
+  }
+
+  it("serves the snapshot of the last live fetch, never a memory hit, while the switch is down", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-14T12:00:00Z"));
+    const { cached, GROUND_LINK_DOWN } = await import("@/lib/sources/cache");
+    const loader = vi.fn(async () => "before");
+    expect(await cached("k", "src", loader, 300)).toMatchObject({ freshness: "live", data: "before" });
+    await snapshotWritten("k", "before");
+    await (await link()).setGroundLink(false);
+
+    // Inside the TTL the memory copy is fresh, but a blackout is never "live" or "cache".
+    vi.setSystemTime(new Date("2026-11-14T12:01:00Z"));
+    const during = await cached("k", "src", loader, 300);
+    expect(during).toEqual({
+      data: "before",
+      source: "src",
+      freshness: "snapshot",
+      fetchedAt: "2026-11-14T12:00:00.000Z", // the time of the last live fetch
+      error: GROUND_LINK_DOWN,
+    });
+    vi.setSystemTime(new Date("2026-11-14T13:00:00Z"));
+    expect(await cached("k", "src", loader, 300)).toMatchObject({ freshness: "snapshot", data: "before", error: GROUND_LINK_DOWN });
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves the memory copy, labelled as a snapshot, when the snapshot could not be written", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-14T12:00:00Z"));
+    const readOnly = path.join(dir, "not-a-dir");
+    writeFileSync(readOnly, "x");
+    vi.stubEnv("DEMIFY_SNAPSHOT_DIR", path.join(readOnly, "runtime")); // mkdir fails: no refreshed snapshot
     const { cached } = await import("@/lib/sources/cache");
     const loader = vi.fn(async () => "before");
-    expect(await cached("k", "src", loader, 60)).toMatchObject({ freshness: "live", data: "before" });
+    expect(await cached("k", "src", loader, 300)).toMatchObject({ freshness: "live" });
     await (await link()).setGroundLink(false);
-    vi.setSystemTime(new Date("2026-11-14T12:05:00Z")); // memory is stale now
-    const r = await cached("k", "src", loader, 60);
-    expect(r).toMatchObject({ freshness: "cache", data: "before", error: "ground link down (simulated blackout)" });
+    // The seed (2026-01-01) is older than the last live fetch, which wins.
+    expect(await cached("k", "src", loader, 300)).toMatchObject({
+      freshness: "snapshot",
+      data: "before",
+      fetchedAt: "2026-11-14T12:00:00.000Z",
+      error: "ground link down (simulated blackout)",
+    });
+  });
+
+  it("route and page copies of the module share one memory cache", async () => {
+    // Next.js bundles server modules once for route handlers and once for pages.
+    const routes = await import("@/lib/sources/cache");
+    const loader = vi.fn(async () => "fetched by a route");
+    expect(await routes.cached("k", "src", loader)).toMatchObject({ freshness: "live" });
+    vi.resetModules();
+    const pages = await import("@/lib/sources/cache");
+    expect(pages).not.toBe(routes);
+    expect(await pages.cached("k", "src", loader)).toMatchObject({ freshness: "cache", data: "fetched by a route" });
     expect(loader).toHaveBeenCalledTimes(1);
   });
 
@@ -256,6 +313,74 @@ describe("GET /api/health", () => {
   });
 });
 
+describe("a database that accepts connections but never answers", () => {
+  /** A TCP server that accepts and then says nothing, like a frozen PostgreSQL. */
+  async function blackHole(): Promise<{ url: string; close(): Promise<void> }> {
+    const sockets = new Set<net.Socket>();
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.on("error", () => {});
+      socket.on("close", () => sockets.delete(socket));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as net.AddressInfo;
+    return {
+      url: `postgres://demify:x@127.0.0.1:${port}/demify`,
+      close: () =>
+        new Promise<void>((resolve) => {
+          for (const socket of sockets) socket.destroy();
+          server.close(() => resolve());
+        }),
+    };
+  }
+
+  it("getGroundLink answers from the file mirror within the deadline, then from the cache at once", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    writeFileSync(linkFile(), JSON.stringify({ up: false, changedAt: "2026-11-14T12:00:00.000Z", changedBy: "mirror" }));
+    const hole = await blackHole();
+    try {
+      vi.stubEnv("DATABASE_URL", hole.url);
+      const g = await link();
+      let t = Date.now();
+      expect(await g.getGroundLink()).toMatchObject({ up: false, switchedUp: false, changedBy: "mirror", backend: "file" });
+      expect(Date.now() - t).toBeLessThan(1_500);
+      t = Date.now();
+      expect(await g.getGroundLink()).toMatchObject({ switchedUp: false });
+      expect(await g.isGroundLinkUp()).toBe(false);
+      expect(Date.now() - t).toBeLessThan(50);
+      expect(g.lastKnownGroundLink()).toMatchObject({ switchedUp: false });
+    } finally {
+      await hole.close();
+    }
+  });
+
+  it("GET /api/health answers within about 2 s", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const hole = await blackHole();
+    try {
+      vi.stubEnv("DATABASE_URL", hole.url);
+      const t = Date.now();
+      const res = await (await healthRoute()).GET();
+      expect(Date.now() - t).toBeLessThan(2_800);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ status: "ok", database: "unreachable", groundLink: { up: true } });
+    } finally {
+      await hole.close();
+    }
+  });
+});
+
+describe("lastKnownGroundLink", () => {
+  it("answers synchronously from the cache or the file and never throws", async () => {
+    const g = await link();
+    expect(g.lastKnownGroundLink()).toMatchObject({ up: true, switchedUp: true, backend: "file" });
+    await g.setGroundLink(false, "test");
+    expect(g.lastKnownGroundLink()).toMatchObject({ up: false, switchedUp: false, changedBy: "test" });
+    vi.stubEnv("DEMIFY_DATA_DIR", path.join(dir, "nowhere"));
+    expect(g.lastKnownGroundLink()).toMatchObject({ up: true, backend: "file" });
+  });
+});
+
 describe.skipIf(!TEST_URL)("ground link: database backend", () => {
   async function row() {
     const client = new pg.Client({ connectionString: TEST_URL });
@@ -322,9 +447,46 @@ describe.skipIf(!TEST_URL)("ground link: database backend", () => {
     expect(await g.setGroundLink(false, "during outage")).toMatchObject({ up: false, backend: "file" });
     expect((await row()).up).toBe(true);
 
+    const switchedAt = JSON.parse(await fs.readFile(linkFile(), "utf8")).changedAt as string;
+    await new Promise((r) => setTimeout(r, 20)); // the write-back happens later than the switch
+
     await (await db()).closePool();
     vi.stubEnv("DATABASE_URL", TEST_URL!);
-    expect(await g.getGroundLink()).toMatchObject({ up: false, changedBy: "during outage", backend: "database" });
-    expect(await row()).toMatchObject({ up: false, changed_by: "during outage" });
+    expect(await g.getGroundLink()).toMatchObject({
+      up: false,
+      changedBy: "during outage",
+      changedAt: switchedAt, // the original switch time, not the write-back time
+      backend: "database",
+    });
+    const stored = await row();
+    expect(stored).toMatchObject({ up: false, changed_by: "during outage" });
+    expect(new Date(stored.changed_at).toISOString()).toBe(switchedAt);
+  });
+
+  it("writeGroundLinkRow with a switch time keeps it and never overwrites a newer change", async () => {
+    const { writeGroundLinkRow } = await import("@onboard/ground-link.mjs");
+    const pool = new pg.Pool({ connectionString: TEST_URL, max: 1 });
+    try {
+      await sql("UPDATE ground_link SET up = true, changed_at = '2026-11-14T12:00:00Z', changed_by = 'flight director' WHERE id = 1");
+      // Older than the stored change: nothing changes, the stored row comes back.
+      expect(await writeGroundLinkRow(pool, false, "late write-back", "2026-11-14T11:00:00.000Z")).toEqual({
+        up: true,
+        changedAt: "2026-11-14T12:00:00.000Z",
+        changedBy: "flight director",
+      });
+      // Newer: stored with its own time.
+      expect(await writeGroundLinkRow(pool, false, "write-back", new Date("2026-11-14T12:30:00.123Z"))).toEqual({
+        up: false,
+        changedAt: "2026-11-14T12:30:00.123Z",
+        changedBy: "write-back",
+      });
+      // Without a time: overwritten and stamped now().
+      const now = await writeGroundLinkRow(pool, true, "operator");
+      expect(now).toMatchObject({ up: true, changedBy: "operator" });
+      expect(Date.parse(now.changedAt)).toBeGreaterThan(Date.parse("2026-11-14T12:30:00.123Z"));
+      await expect(writeGroundLinkRow(pool, true, "x", "not a time")).rejects.toThrow(/Invalid ground link switch time/);
+    } finally {
+      await pool.end();
+    }
   });
 });

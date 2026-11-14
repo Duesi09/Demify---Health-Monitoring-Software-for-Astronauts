@@ -14,6 +14,11 @@ import type { Assessment, BodyRegionId, Status } from "@/lib/types";
  * links inside the page keep ?link=.
  */
 
+// The simulated ground-link switch stays up here (tests/ground-link-blackout.test.ts switches it down), so a
+// ground-link.json left in data/ by a dev server cannot change these renders.
+vi.mock("@/lib/onboard/ground-link", () => ({
+  getGroundLink: async () => ({ up: true, switchedUp: true, forcedOffline: false, changedAt: new Date(0).toISOString(), backend: "file" }),
+}));
 const fixture = vi.hoisted(() => ({ all: [] as CrewAssessment[] }));
 vi.mock("@/lib/health/assess", () => ({ assessAllCrew: async () => fixture.all }));
 

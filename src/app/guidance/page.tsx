@@ -4,9 +4,9 @@ import { CommDelay, EscalationProtocol, PrivateConferences } from "@/components/
 import { HazardCards } from "@/components/guidance/hazards";
 import { IndicatorReference } from "@/components/guidance/indicator-reference";
 import { PageHeader, tagClass } from "@/components/ui";
-import { currentLink, currentMission } from "@/lib/config";
+import { currentMission } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
-import { linkPolicy } from "@/lib/link";
+import { effectiveLink } from "@/lib/onboard/effective-link";
 
 export const metadata: Metadata = { title: "Guidance" };
 export const dynamic = "force-dynamic";
@@ -41,9 +41,10 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
   const mission = currentMission();
   // ?link= swaps the signal delay in the communication-delay card, and in a
   // blackout (no contact) the escalation tiers, the conferences and the crew
-  // actions follow the onboard procedures (linkPolicy mode).
-  const { profile: link, selected } = currentLink(sp.link);
-  const mode = linkPolicy(link.oneWayS).mode;
+  // actions follow the onboard procedures (linkPolicy mode). With the ground
+  // link switched down it is that blackout too (effectiveLink).
+  const { profile: link, selected, policy, groundLinkDown } = await effectiveLink(sp.link);
+  const mode = policy.mode;
   const blackout = mode === "blackout";
   return (
     <div className="space-y-12">
@@ -86,7 +87,7 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
           title="The five hazards of human spaceflight"
           description="NASA's Human Research Program groups the risks of long missions into five hazards, remembered as RIDGE. Every Demify indicator is mapped to the hazards that drive it."
         />
-        <HazardCards />
+        <HazardCards link={selected} />
       </section>
 
       <section aria-labelledby="escalation" className="scroll-mt-20">
@@ -102,7 +103,7 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <EscalationProtocol mode={mode} />
           <div className="space-y-4">
-            <CommDelay link={link} missionName={mission.name} />
+            <CommDelay link={link} missionName={mission.name} groundLinkDown={groundLinkDown} />
             <PrivateConferences mode={mode} />
           </div>
         </div>

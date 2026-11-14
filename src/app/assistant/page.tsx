@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui";
 import { onboardStatus } from "@/lib/assistant/status";
 import { ASSISTANT_NOTICE } from "@/lib/assistant/wording";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { parseLinkParam } from "@/lib/link";
 import { listCrew } from "@/lib/store/readings";
 
 export const metadata: Metadata = { title: "Onboard assistant" };
@@ -14,7 +15,9 @@ const LEAD = "Advises, never decides.";
 /** ASSISTANT_NOTICE without its lead sentence and the disclaimer (both shown separately). */
 const NOTICE_BODY = ASSISTANT_NOTICE.replace(LEAD, "").replace(DISCLAIMER_SHORT, "").trim();
 
-export default async function AssistantPage() {
+export default async function AssistantPage(props: PageProps<"/assistant">) {
+  // ?link= (signal delay profile): kept on this page's links and shown in its ground-link badge.
+  const link = parseLinkParam((await props.searchParams).link);
   // The status is read server-side (same functions as GET /api/onboard/status), so the page never starts blank.
   const [status, crew] = await Promise.all([onboardStatus(), listCrew().catch(() => [])]);
   const crewOptions: CrewOption[] = crew.map((c) => ({ id: c.id, name: c.name, role: c.role }));
@@ -43,7 +46,7 @@ export default async function AssistantPage() {
         </div>
       </section>
 
-      <AssistantConsole initialStatus={status} crew={crewOptions} />
+      <AssistantConsole initialStatus={status} crew={crewOptions} link={link} />
     </div>
   );
 }

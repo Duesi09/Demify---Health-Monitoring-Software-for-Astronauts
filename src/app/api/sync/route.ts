@@ -11,8 +11,10 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * library into the onboard database at once. Same guards as the other
  * write routes (same-origin, admin token when DEMIFY_ADMIN_TOKEN is set).
  * 409 while the ground link is down (nothing to sync from) or when there is
- * no database; 503 while the database is unreachable. The data snapshots are
- * refreshed by the sync service on its own schedule.
+ * no database; 503 while the database is unreachable. The crew store is
+ * initialised first (syncNow -> ensureCrewStore), so the crew-baselines
+ * document exists on a fresh database. The data snapshots are refreshed by
+ * the sync service on its own schedule.
  */
 export async function POST(req: Request) {
   if (isCrossOrigin(req)) return Response.json({ error: "Cross-origin requests are not allowed" }, { status: 403, headers: NO_STORE });

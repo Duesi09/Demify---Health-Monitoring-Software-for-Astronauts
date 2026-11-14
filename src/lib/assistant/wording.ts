@@ -18,7 +18,7 @@ export const ACT_NOW_LINE =
   "If this is a real emergency, act now: start the emergency checklist and alert the crew. Do not wait for the assistant.";
 
 /** The library has no good answer (ground link up / down). */
-export const NO_ANSWER_LINK_UP = "The onboard library has no good answer to this. Ask the flight surgeon when the ground link is up.";
+export const NO_ANSWER_LINK_UP = "The onboard library has no good answer to this. Ask the flight surgeon.";
 export const NO_ANSWER_LINK_DOWN = "The onboard library has no good answer to this. Ask the flight surgeon when contact returns.";
 
 /** What the model replies, exactly, when the passages do not answer the question. */
@@ -32,6 +32,14 @@ export const PASSAGES_ONLY_REASON = {
     `The language model ${model} is not loaded on the model server, so the matching library passages are shown instead.`,
   timeout: "The language model did not answer in time, so the matching library passages are shown instead.",
   failed: "The language model returned an error, so the matching library passages are shown instead.",
-  uncited: "The model's answer did not cite the library, so it is not shown. The matching library passages are shown instead.",
-  dose: "The model's answer contained a dose or an amount, which this prototype never shows. The matching library passages are shown instead.",
+  uncited: "The model's answer did not cite the library for every statement, so it is not shown. The matching library passages are shown instead.",
+  dose: "The model's answer contained a dose, an amount or a schedule, which this prototype never shows. The matching library passages are shown instead.",
+  ungrounded:
+    "The model's answer used words that the cited library passages do not contain, so it is not shown. The matching library passages are shown instead.",
 } as const;
+
+/** Reasons for a model answer withheld by the answer checks (the UI groups them). */
+export const WITHHELD_REASONS: readonly string[] = [PASSAGES_ONLY_REASON.uncited, PASSAGES_ONLY_REASON.dose, PASSAGES_ONLY_REASON.ungrounded];
+
+/** 503 from POST /api/assistant while the language model already answers other questions. */
+export const ASSISTANT_BUSY = "Assistant busy, try again in a moment.";

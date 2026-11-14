@@ -13,6 +13,11 @@
 # Air-gapped variant (no outbound network at all, bundled snapshots only):
 #   docker compose --profile offline up -d --build demify-offline
 #
+# Optional local language model for the onboard assistant (Ollama on this
+# machine): npm run model:setup, or scripts/setup-local-model.ps1 on Windows.
+# Without it the assistant shows matching library passages only. See
+# docs/LOCAL-MODEL.md.
+#
 # Every setting is an environment variable; see .env.example and
 # docs/DEPLOYMENT.md.
 
@@ -52,9 +57,25 @@ x-demify-env: &demify-env
   # the container, where 127.0.0.1 would mean the container itself.
   HTTPS_PROXY: ${DEMIFY_HTTPS_PROXY:-}
   HTTP_PROXY: ${DEMIFY_HTTP_PROXY:-}
-  NO_PROXY: ${DEMIFY_NO_PROXY:-localhost,127.0.0.1}
+  # host.docker.internal (a model server on this machine) is always added, so
+  # the onboard assistant never sends its questions through a proxy.
+  NO_PROXY: ${DEMIFY_NO_PROXY:-localhost,127.0.0.1},host.docker.internal
   # Path INSIDE the container, e.g. /etc/demify/ca.crt (see volume below).
   NODE_EXTRA_CA_CERTS: ${DEMIFY_NODE_EXTRA_CA_CERTS:-}
+  # Optional local language model (docs/LOCAL-MODEL.md). All empty = no
+  # model: the onboard assistant shows the matching library passages only,
+  # exactly as before. A model server on this machine is reached as
+  # host.docker.internal (extra_hosts on the demify service below), e.g.
+  #   DEMIFY_MODEL_URL=http://host.docker.internal:11434/v1
+  #   DEMIFY_LLM_MODEL=gemma3:4b
+  # npm run model:setup writes both lines into .env. No database here, so the
+  # assistant searches the bundled library by keywords and the model only
+  # phrases the answer from the passages it is given.
+  DEMIFY_MODEL_URL: ${DEMIFY_MODEL_URL:-}
+  DEMIFY_LLM_MODEL: ${DEMIFY_LLM_MODEL:-}
+  DEMIFY_EMBED_MODEL: ${DEMIFY_EMBED_MODEL:-}
+  DEMIFY_LLM_TIMEOUT_MS: ${DEMIFY_LLM_TIMEOUT_MS:-}
+  DEMIFY_ASSISTANT_MIN_SCORE: ${DEMIFY_ASSISTANT_MIN_SCORE:-}
 
 x-demify-common: &demify-common
   image: ${DEMIFY_IMAGE:-demify:latest}
@@ -111,6 +132,12 @@ services:
       - "${DEMIFY_BIND:-127.0.0.1}:${DEMIFY_PORT:-3000}:3000"
     environment:
       <<: *demify-env
+    # A model server on this machine (Ollama, port 11434) as
+    # host.docker.internal. Docker Desktop knows the name already; Docker
+    # Engine on Linux needs this line, and Ollama there must listen on more
+    # than 127.0.0.1 (docs/LOCAL-MODEL.md).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - demify-data:/data
       # Custom CA bundle for a TLS-intercepting proxy (then set
@@ -134,6 +161,9 @@ services:
       DEMIFY_OFFLINE: "true"
       HTTPS_PROXY: ""
       HTTP_PROXY: ""
+      # No route to a model server on the host from the air-gapped network:
+      # the assistant shows library passages only, as before.
+      DEMIFY_MODEL_URL: ""
     volumes:
       - demify-offline-data:/data
     networks:
@@ -178,7 +208,7 @@ secrets:
 
 networks:
   airgap:
-    internal: true # no egress / no internet
+    internal: true # no egress, no route out
 
 volumes:
   demify-data:

@@ -8,22 +8,24 @@ Research prototype, not a certified medical device. Every document is project te
 
 ## Curated, not everything
 
-The library holds a small, deliberate set of documents, not a collection of everything about space medicine. Each passage restates what Demify already uses elsewhere (the health knowledge base in `docs/research/health-knowledge-base.md` and `src/lib/health/knowledge.ts`, the drill checklists of the crew page, the alarm limits and the radiation page) with the same sources. A small library that the crew can trust and check beats a large one that nobody has read.
+The library holds a small, deliberate set of documents, not a collection of everything about space medicine. Each passage restates what Demify already uses elsewhere (the health knowledge base in `docs/research/health-knowledge-base.md` and `src/lib/health/knowledge.ts`, the drill checklists of the crew page, the alarm limits and the radiation page) with the same sources. The ISS medical operations document and the pack names of the inventory restate the team's research notes in `docs/research/iss-health-equipment.md`: only the facts the research marks as confirmed, each with its source URL. A small library that the crew can trust and check beats a large one that nobody has read.
 
-Not in this version: medicines. There are no drug names, doses, amounts or schedules anywhere in the library. The `drug-reference` category exists but stays empty until there is a licensed source and a clinical review.
+Demify is not connected to any ISS system, device or data link; the library describes how ISS medicine is organised so the crew and trainees can place Demify's advice in that chain.
+
+Not in this version: medicines. There are no drug names, doses, amounts or schedules anywhere in the library, and the inventory leaves the medicine packs out. The `drug-reference` category exists but stays empty until there is a licensed source and a clinical review.
 
 ## Layout
 
 | Folder | Category | Contents |
 |---|---|---|
 | `protocols/` | `protocol` | Drill response checklists (STEMI, VF, hypertensive crisis, general alarm), escalation and signal delay, ground link blackout |
-| `reference/` | `reference` | Vital-sign ranges and escalation rules, space radiation, spaceflight physiology, cabin environment and CO₂ |
-| `inventory/` | `inventory` | `med-kit.json`: the medical-kit inventory, devices and supplies without medicines (a representative training list, not the real ISS kit) |
+| `reference/` | `reference` | Vital-sign ranges and escalation rules, space radiation, spaceflight physiology, cabin environment and CO₂, ISS medical operations (crew medical officers, flight surgeons, biomedical engineers, private medical conferences, procedures with ground guidance, CPR on the Crew Medical Restraint System, ground-guided ultrasound, what the station cannot do, Crew-11 as published) |
+| `inventory/` | `inventory` | `med-kit.json`: the medical-kit inventory, devices and supplies without medicines, grouped by the ISS Crew Health Care System (CHeCS) pack names (Medical Diagnostics Pack, Minor Treatment Pack, Medical Supply Pack, IV Supply Pack, Physician Equipment Pack, Emergency Medical Treatment Pack, Advanced Life Support Pack, Respiratory Support Pack) plus the emergency equipment (Crew Medical Restraint System, AED LIFEPAK 1000). A representative training inventory, not the real ISS kit: the pack names come from public NASA sources (2011/2015), the contents are not confirmed for 2026 and the pouch numbers are training examples |
 
 Two documents are generated during every sync and are not files here:
 
-- `crew-baselines` (category `baseline`): the pre-flight baselines from the crew table, so a question like "What is the commander's resting heart rate baseline?" can be answered with a citation.
-- `med-kit-inventory` (category `inventory`): a readable version of `inventory/*.json`, so the assistant can say where an item is stowed.
+- `crew-baselines` (category `baseline`): the pre-flight baselines from the crew table (SIMULATED crew profiles), so a question like "What is the commander's resting heart rate baseline?" can be answered with a citation. The sync service also regenerates it as soon as crew rows exist and the document is missing or older than the newest crew record, with the ground link up or down (the crew table is onboard data).
+- `med-kit-inventory` (category `inventory`): a readable version of `inventory/*.json`, so the assistant can say where an item is stowed and which pack holds it.
 
 ## Front matter
 
@@ -48,7 +50,7 @@ updated: 2026-11-14
 - `reviewed`: the review status shown to the crew with every passage.
 - `updated`: the document date (YYYY-MM-DD).
 
-The inventory file is JSON: `{ "updated": "YYYY-MM-DD", "items": [ { "id", "name", "category", "location", "quantity", "unit", "expiresOn", "notes" } ] }`.
+The inventory file is JSON: `{ "updated": "YYYY-MM-DD", "items": [ { "id", "name", "category", "location", "quantity", "unit", "expiresOn", "notes" } ] }`. The `category` of an item is its pack, its `location` reads "Medical kit, <pack>, pouch <n>" (or "Emergency equipment, ..."), and every `notes` starts with "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026."
 
 ## How the library is stored and checked
 
@@ -63,3 +65,10 @@ Each document is split at its Markdown headings into passages of at most about 1
 5. Ingest: the sync service picks the change up at its next scheduled sync while the ground link is up, or run `npm run library:ingest` (add `--search "your question"` to see which passages a question finds).
 
 To remove a document, delete its file; the next sync removes it from the onboard library.
+
+## Safety guards of the sync
+
+- A ground folder without any Markdown document (an empty or missing bind mount, a copy that has not started) never empties the onboard library: the sync fails with the reason and changes nothing.
+- A sync that would remove more than half of the documents (a half-copied folder) fails the same way. To accept a large removal on purpose, run `npm run library:ingest -- --force`.
+- A failed sync is rolled back and recorded with its reason in the sync history; `library-ingest` prints the reason and exits with 1.
+- The sync history keeps the last 30 days, and at least the last 100 runs.

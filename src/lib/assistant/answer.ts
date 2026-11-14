@@ -5,17 +5,28 @@ import { chat, modelStatus } from "@onboard/model.mjs";
 import { isGroundLinkUp } from "../onboard/ground-link";
 import type { AssistantAnswer, Citation, Freshness } from "../onboard/types";
 import { crewContextFor, type CrewContext } from "./crew-context";
-import { libraryFreshness, maybeAutoSync, resolveLibrary, searchOnboardLibrary, type ResolvedLibrary } from "./library-source";
+import { EXCERPT_MAX, excerpt } from "./excerpt";
+import {
+  libraryFreshness,
+  libraryKnownWords,
+  maybeAutoSync,
+  resolveLibrary,
+  searchOnboardLibrary,
+  type ResolvedLibrary,
+} from "./library-source";
 import { buildMessages, type PromptPassage } from "./prompt";
 import { usableHits } from "./relevance";
-import { blockedReason, checkAnswer, isEmergency } from "./safety";
+import { blockedReason, checkAnswer, groundingCandidates, isEmergency, medicineLikeWords } from "./safety";
 import {
   ACT_NOW_LINE,
+  ASSISTANT_BUSY,
   ASSISTANT_NOTICE,
   NO_ANSWER_LINK_DOWN,
   NO_ANSWER_LINK_UP,
   PASSAGES_ONLY_REASON,
 } from "./wording";
+
+export { EXCERPT_MAX, excerpt };
 
 /**
  * The onboard assistant (POST /api/assistant): answers a crew question from
@@ -23,66 +34,124 @@ import {
  * good answer. It advises and never decides; it never raises or clears an
  * alarm (the rule engine stays primary).
  *
- *   blocked check -> retrieval (database or bundled, see library-source.ts)
- *   -> relevance gate -> model (when ready) -> answer check -> citations
+ *   blocked check -> model readiness (cached) -> retrieval (database or
+ *   bundled, see library-source.ts; no vector search while the model server
+ *   is known to be unreachable) -> relevance gate -> model (at most
+ *   MAX_CONCURRENT_CHATS at a time) -> answer checks (citations, doses,
+ *   grounding) -> citations
  *
  * Without a working model the matching passages are shown instead
- * ("passages-only"); the answer is never guessed.
+ * ("passages-only"); the answer is never guessed. Without a database the
+ * model writes the answer from the bundled keyword hits (no embeddings
+ * needed).
  */
 
 export const QUESTION_MIN = 3;
 export const QUESTION_MAX = 500;
-/** Citation excerpts are cut to this many characters (ellipsis included). */
-export const EXCERPT_MAX = 300;
 /** Token budget of one answer; reasoning models spend part of it thinking. */
 const MAX_TOKENS = 1500;
 const TEMPERATURE = 0.1;
-/** Model readiness (GET /models) is reused this long. */
+/** Model readiness (GET /models) is reused this long; an unreachable model server is remembered longer. */
 const MODEL_STATUS_TTL_MS = 10_000;
+const MODEL_DOWN_TTL_MS = 30_000;
 const MODEL_STATUS_TIMEOUT_MS = 2500;
+/** Chat calls to the model server at the same time; further questions get 503 (ASSISTANT_BUSY). */
+export const MAX_CONCURRENT_CHATS = 2;
+
+/** Thrown when MAX_CONCURRENT_CHATS chat calls are already running (POST /api/assistant answers 503). */
+export class AssistantBusyError extends Error {
+  constructor() {
+    super(ASSISTANT_BUSY);
+    this.name = "AssistantBusyError";
+  }
+}
 
 export interface AskInput {
   question: string;
   crewId?: string;
 }
 
-type ModelReady = { ready: true } | { ready: false; reason: string; detail: string };
+/** reachable: the model server answered (vector search may use it even when the language model is missing). */
+type ModelReady = { ready: true; reachable: true } | { ready: false; reachable: boolean; reason: string; detail: string };
 
 const holder = globalThis as typeof globalThis & {
-  __demifyModelReady?: { key: string; at: number; value: Promise<ModelReady> };
+  __demifyModelReady?: { key: string; at: number; ttl: number; value: Promise<ModelReady> };
+  __demifyChatsInFlight?: number;
 };
 
-/** Test helper: forget the cached model readiness. */
+/** Test helper: forget the cached model readiness and the running chat calls. */
 export function resetAssistantState(): void {
   delete holder.__demifyModelReady;
+  delete holder.__demifyChatsInFlight;
 }
 
 async function checkModel(cfg: OnboardConfig): Promise<ModelReady> {
-  if (!cfg.modelUrl) return { ready: false, reason: PASSAGES_ONLY_REASON.notConfigured, detail: "no language model configured" };
+  if (!cfg.modelUrl) {
+    return { ready: false, reachable: false, reason: PASSAGES_ONLY_REASON.notConfigured, detail: "no language model configured" };
+  }
   const s = await modelStatus(cfg, MODEL_STATUS_TIMEOUT_MS);
   if (!s.reachable) {
-    return { ready: false, reason: PASSAGES_ONLY_REASON.unreachable, detail: `language model unreachable${s.error ? ` (${s.error})` : ""}` };
+    return {
+      ready: false,
+      reachable: false,
+      reason: PASSAGES_ONLY_REASON.unreachable,
+      detail: `language model unreachable${s.error ? ` (${s.error})` : ""}`,
+    };
   }
   if (!s.llmReady) {
-    return { ready: false, reason: PASSAGES_ONLY_REASON.missing(cfg.llmModel), detail: `model ${cfg.llmModel} not listed by the model server` };
+    return {
+      ready: false,
+      reachable: true,
+      reason: PASSAGES_ONLY_REASON.missing(cfg.llmModel),
+      detail: `model ${cfg.llmModel} not listed by the model server`,
+    };
   }
-  return { ready: true };
+  return { ready: true, reachable: true };
 }
 
-/** Readiness of the language model, cached for MODEL_STATUS_TTL_MS. */
+const readinessKey = (cfg: OnboardConfig) => `${cfg.modelUrl ?? ""}|${cfg.llmModel}`;
+
+/** Readiness of the language model, cached (MODEL_STATUS_TTL_MS; MODEL_DOWN_TTL_MS while unreachable). */
 function modelReady(cfg: OnboardConfig): Promise<ModelReady> {
-  const key = `${cfg.modelUrl ?? ""}|${cfg.llmModel}`;
+  const key = readinessKey(cfg);
   const now = Date.now();
   const cached = holder.__demifyModelReady;
-  if (cached && cached.key === key && now - cached.at < MODEL_STATUS_TTL_MS && now >= cached.at) return cached.value;
+  if (cached && cached.key === key && now - cached.at < cached.ttl && now >= cached.at) return cached.value;
   const value = checkModel(cfg);
-  holder.__demifyModelReady = { key, at: now, value };
+  const entry = { key, at: now, ttl: MODEL_STATUS_TTL_MS, value };
+  holder.__demifyModelReady = entry;
+  void value.then((r) => {
+    if (!r.ready && !r.reachable) entry.ttl = MODEL_DOWN_TTL_MS;
+  });
   return value;
 }
 
-/** A failed chat call makes the next question check the model again. */
-function forgetModelReady(): void {
+/**
+ * After a failed chat call: an unreachable model server is remembered as
+ * unreachable for MODEL_DOWN_TTL_MS (the next questions skip vector search
+ * and the model at once); any other failure makes the next question check
+ * again.
+ */
+function noteChatFailure(cfg: OnboardConfig, err: unknown, reason: { reason: string; detail: string }): void {
+  if ((err as { kind?: unknown } | null)?.kind === "unreachable" && cfg.modelUrl) {
+    const value: Promise<ModelReady> = Promise.resolve({ ready: false, reachable: false, ...reason });
+    holder.__demifyModelReady = { key: readinessKey(cfg), at: Date.now(), ttl: MODEL_DOWN_TTL_MS, value };
+    return;
+  }
   delete holder.__demifyModelReady;
+}
+
+/** Takes one of the MAX_CONCURRENT_CHATS chat slots, or throws AssistantBusyError. Returns the release function. */
+function takeChatSlot(): () => void {
+  const running = holder.__demifyChatsInFlight ?? 0;
+  if (running >= MAX_CONCURRENT_CHATS) throw new AssistantBusyError();
+  holder.__demifyChatsInFlight = running + 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    holder.__demifyChatsInFlight = Math.max(0, (holder.__demifyChatsInFlight ?? 1) - 1);
+  };
 }
 
 function modelErrorReason(err: unknown): { reason: string; detail: string } {
@@ -103,16 +172,8 @@ function modelErrorReason(err: unknown): { reason: string; detail: string } {
   }
 }
 
-/** Cuts text at a word boundary so the result (with "…") has at most max characters. */
-export function excerpt(text: string, max = EXCERPT_MAX): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (flat.length <= max) return flat;
-  const cut = flat.slice(0, max - 1);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.–-]+$/, "")}…`;
-}
-
-export function toCitation(hit: LibraryHit, n: number): Citation {
+/** A retrieved passage as the crew sees it: excerpt around the question's words, plus the whole verified chunk. */
+export function toCitation(hit: LibraryHit, n: number, question = ""): Citation {
   return {
     n,
     docId: hit.docId,
@@ -125,7 +186,8 @@ export function toCitation(hit: LibraryHit, n: number): Citation {
     ...(hit.reviewed ? { reviewed: hit.reviewed } : {}),
     version: hit.version,
     sha256: hit.sha256,
-    excerpt: excerpt(hit.text),
+    excerpt: excerpt(hit.text, question),
+    text: hit.text,
     score: hit.score,
     ...(hit.syncedAt ? { syncedAt: hit.syncedAt } : {}),
   };
@@ -142,17 +204,19 @@ const joinReasons = (...reasons: (string | undefined | null)[]) => {
   return list.length ? list.join("; ") : undefined;
 };
 
-/** Answers one crew question. Never throws for library or model failures. */
+/** Answers one crew question. Never throws for library or model failures; throws AssistantBusyError when the model is busy. */
 export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboardConfig()): Promise<AssistantAnswer> {
   const askedAt = new Date().toISOString();
   const question = input.question.trim().slice(0, QUESTION_MAX);
   const emergency = isEmergency(question);
   const withActNow = (text: string, sep: string) => (emergency ? `${ACT_NOW_LINE}${sep}${text}` : text);
+  const blocked = blockedReason(question);
 
-  const [groundLinkUp, lib, crew] = await Promise.all([
+  const [groundLinkUp, lib, crew, ready] = await Promise.all([
     isGroundLinkUp(),
     resolveLibrary(cfg),
     input.crewId ? crewContextFor(input.crewId).catch((): CrewContext | null => null) : Promise.resolve(null),
+    blocked ? Promise.resolve(null) : modelReady(cfg),
   ]);
 
   const result = (
@@ -176,19 +240,18 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
   });
 
   // 1. Questions the prototype never answers.
-  const blocked = blockedReason(question);
-  if (blocked) {
+  if (blocked || !ready) {
     const freshness = await libraryFreshness(lib.source, lib, cfg);
     return result(
-      { status: "blocked", answer: null, reason: withActNow(blocked, " "), citations: [] },
+      { status: "blocked", answer: null, reason: withActNow(blocked ?? "", " "), citations: [] },
       { freshness, retrieval: expectedTier(lib, cfg), integrityFailures: 0 },
       null,
       lib.fallbackReason,
     );
   }
 
-  // 2. Retrieval.
-  const search = await searchOnboardLibrary(question, lib, cfg);
+  // 2. Retrieval. While the model server is known to be unreachable, vector search is skipped (no embedding wait).
+  const search = await searchOnboardLibrary(question, lib, cfg, { skipVector: !ready.ready && !ready.reachable });
   const freshness = await libraryFreshness(search.source, lib, cfg);
   if (groundLinkUp && lib.pool) {
     // A stale (or still empty) database library syncs in the background; this answer does not wait for it.
@@ -201,7 +264,7 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
   if (!hits.length) {
     return result({ status: "no-answer", answer: null, reason: noAnswer, citations: [] }, retrieval, null, search.fallbackReason);
   }
-  const citations = hits.map((h, i) => toCitation(h, i + 1));
+  const citations = hits.map((h, i) => toCitation(h, i + 1, question));
   const passagesOnly = (reason: string, detail?: string) =>
     result(
       { status: "passages-only", answer: null, reason: withActNow(reason, " "), citations },
@@ -210,8 +273,7 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
       joinReasons(search.fallbackReason, detail),
     );
 
-  // 3. The model, when it is ready.
-  const ready = await modelReady(cfg);
+  // 3. The model, when it is ready (at most MAX_CONCURRENT_CHATS at a time).
   if (!ready.ready) return passagesOnly(ready.reason, ready.detail);
 
   const passages: PromptPassage[] = hits.map((h, i) => ({
@@ -222,6 +284,7 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
     ...(h.reviewed ? { reviewed: h.reviewed } : {}),
     text: h.text,
   }));
+  const release = takeChatSlot();
   let raw: string;
   try {
     raw = await chat(
@@ -237,18 +300,29 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
       { temperature: TEMPERATURE, maxTokens: MAX_TOKENS },
     );
   } catch (err) {
-    forgetModelReady();
-    const { reason, detail } = modelErrorReason(err);
-    return passagesOnly(reason, detail);
+    const why = modelErrorReason(err);
+    noteChatFailure(cfg, err, why);
+    return passagesOnly(why.reason, why.detail);
+  } finally {
+    release();
   }
 
   // 4. Check the answer before anyone sees it.
-  const check = checkAnswer(raw, passages.length);
+  const check = checkAnswer(raw, passages.length, { crew: !!crew });
   if (!check.ok) {
     if (check.kind === "no-answer") {
       return result({ status: "no-answer", answer: null, reason: noAnswer, citations: [] }, retrieval, cfg.llmModel, search.fallbackReason);
     }
-    return passagesOnly(check.reason, check.kind === "dose" ? "model answer contained a dose pattern" : "model answer had no valid citation");
+    return passagesOnly(check.reason, check.detail);
+  }
+  const backing = [...check.cited.map((n) => `${hits[n - 1].title}\n${hits[n - 1].heading}\n${hits[n - 1].text}`), crew?.summary ?? ""];
+  const medicineLike = medicineLikeWords(check.text, backing);
+  const candidates = groundingCandidates(check.text, question, backing);
+  const known = await libraryKnownWords([...new Set([...medicineLike, ...candidates])], search.source, lib, cfg);
+  const unbacked = [...medicineLike, ...candidates.filter((w) => !known.has(w))];
+  if (unbacked.length) {
+    const n = new Set(unbacked).size;
+    return passagesOnly(PASSAGES_ONLY_REASON.ungrounded, `model answer used ${n} word${n === 1 ? "" : "s"} that no cited passage contains`);
   }
   const cited = new Set(check.cited);
   return result(

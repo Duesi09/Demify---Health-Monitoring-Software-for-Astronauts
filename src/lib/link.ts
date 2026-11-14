@@ -134,6 +134,30 @@ export const LINK_PROFILES: Record<LinkProfileId, LinkProfile> = {
   conjunction: conjunction(DEFAULT_BLACKOUT_DAYS),
 };
 
+/**
+ * Name of the no-contact link while the simulated ground-link switch is down
+ * (POST /api/ground-link). Same words as the nav chip.
+ */
+export const GROUND_LINK_DOWN_LABEL = "Ground link down (simulated blackout)";
+
+/**
+ * The link the pages use while the simulated ground-link switch is down: no
+ * contact (oneWayS null, so linkPolicy gives the blackout policy, exactly as
+ * under the conjunction profile), named after the switch. It keeps the id of
+ * the chosen profile so the selector still marks the choice, which applies
+ * again once the link is switched up. Server pages get it from effectiveLink
+ * (src/lib/onboard/effective-link.ts).
+ */
+export function groundLinkDownProfile(chosen: LinkProfile): LinkProfile {
+  return {
+    id: chosen.id,
+    label: GROUND_LINK_DOWN_LABEL,
+    name: GROUND_LINK_DOWN_LABEL,
+    oneWayS: null,
+    basis: `the simulated ground-link switch is down, so there is no contact with the ground; the ${chosen.label} profile applies again when the link is switched up`,
+  };
+}
+
 /** The conjunction profile with another blackout length (days, > 0). */
 export function conjunctionProfile(blackoutDays = DEFAULT_BLACKOUT_DAYS): LinkProfile {
   return conjunction(Number.isFinite(blackoutDays) && blackoutDays > 0 ? blackoutDays : DEFAULT_BLACKOUT_DAYS);

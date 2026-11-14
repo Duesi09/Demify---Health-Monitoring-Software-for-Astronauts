@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BODY_REGIONS,
@@ -121,7 +123,8 @@ describe("needsEscalation", () => {
 describe("escalationFlags", () => {
   it("describes every automatic rule from the rule fields", () => {
     expect(escalationFlags(INDICATORS.systolicBP)).toEqual(["< 80 mmHg", "> 180 mmHg"]);
-    expect(escalationFlags(INDICATORS.bodyTemp)).toEqual(["Any value ≤ 35.0 °C or ≥ 39.1 °C", "≥ 38.1 °C persisting 24 h"]);
+    // Rating ≥ 39.1 °C critical (and so escalating) is our project rule: the flag says so, like the ST flag.
+    expect(escalationFlags(INDICATORS.bodyTemp)).toEqual(["Any value ≤ 35.0 °C or ≥ 39.1 °C (project rule)", "≥ 38.1 °C persisting 24 h"]);
     expect(escalationFlags(INDICATORS.glucose)).toEqual(["< 54 mg/dL", "> 400 mg/dL", "> 250 mg/dL on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.stress)).toEqual(["≥ 8 /10 on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.spo2)).toEqual(["Any value ≤ 90 %"]);
@@ -129,6 +132,27 @@ describe("escalationFlags", () => {
     expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any value ≥ 1 /3"]);
     expect(escalationFlags(INDICATORS.radiationDoseRate)).toEqual(["> 10 mSv/day", "Any current S1+ solar radiation storm"]);
     expect(escalationFlags(INDICATORS.hydration)).toEqual([]);
+  });
+});
+
+describe("link-neutral measurement texts", () => {
+  it("ST: the 12-lead ECG is for the flight surgeon, not 'transmitted' (no contact in a blackout)", () => {
+    expect(INDICATORS.stDeviation.measurement).toBe("Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG for the flight surgeon.");
+    for (const def of Object.values(INDICATORS)) expect(def.measurement, def.id).not.toMatch(/transmit|immediately/i);
+  });
+});
+
+describe("library/reference/vital-sign-ranges.md restates knowledge.ts", () => {
+  const md = readFileSync(path.resolve(import.meta.dirname, "../library/reference/vital-sign-ranges.md"), "utf8");
+
+  it("the automatic escalation flags and the measurement lines, word for word", () => {
+    for (const def of Object.values(INDICATORS)) {
+      const flags = escalationFlags(def);
+      if (flags.length) expect(md, def.id).toContain(`- Automatic escalation flag: ${flags.join("; ")}\n`);
+      expect(md, def.id).toContain(`- Measured with: ${def.measurement}\n`);
+    }
+    expect(md).toContain("- Automatic escalation flag: Any value ≤ 35.0 °C or ≥ 39.1 °C (project rule); ≥ 38.1 °C persisting 24 h");
+    expect(md).not.toContain("12-lead ECG transmitted to the flight surgeon");
   });
 });
 

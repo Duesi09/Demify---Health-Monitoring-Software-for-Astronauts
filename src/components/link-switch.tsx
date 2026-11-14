@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { LINK_PROFILES, LINK_PROFILE_IDS, withLink, type LinkProfileId } from "@/lib/link";
+import { StatusBadge } from "@/components/ui";
+import { GROUND_LINK_DOWN_LABEL, LINK_PROFILES, LINK_PROFILE_IDS, withLink, type LinkProfileId } from "@/lib/link";
+
+/** Shown next to the selector while the simulated ground-link switch is down. */
+export const LINK_SWITCH_DOWN_NOTE = "No contact on any profile until the ground link is switched up.";
 
 /**
  * Signal-delay selector: plain links that keep the current path (and its
@@ -8,11 +12,16 @@ import { LINK_PROFILES, LINK_PROFILE_IDS, withLink, type LinkProfileId } from "@
  * without JavaScript and every server-rendered delay string on the page
  * changes together. Squared strip in the Segmented style; the current
  * profile is inverted and marked aria-current.
+ *
+ * While the simulated ground-link switch is down (groundLinkDown) the page
+ * runs the no-contact policy whatever is chosen here: the strip says so next
+ * to it and stays usable, and the choice applies again once the link is up.
  */
 export function LinkSwitch({
   active,
   path,
   query,
+  groundLinkDown = false,
   className = "",
 }: {
   active: LinkProfileId;
@@ -20,6 +29,8 @@ export function LinkSwitch({
   path: string;
   /** Other query parameters to keep, e.g. { crew: "cdr" }. */
   query?: Record<string, string | undefined>;
+  /** The simulated ground-link switch is down (effectiveLink). */
+  groundLinkDown?: boolean;
   className?: string;
 }) {
   const params = new URLSearchParams();
@@ -33,6 +44,7 @@ export function LinkSwitch({
       </span>
       <nav
         aria-label="Signal delay profile"
+        aria-describedby={groundLinkDown ? "link-switch-ground-down" : undefined}
         style={{ "--seg-cols": `repeat(${LINK_PROFILE_IDS.length}, auto)` } as CSSProperties}
         className="grid max-w-full grid-cols-(--seg-cols) gap-px overflow-hidden rounded-[3px] border border-border bg-border max-sm:grid-cols-3"
       >
@@ -53,6 +65,12 @@ export function LinkSwitch({
           );
         })}
       </nav>
+      {groundLinkDown && (
+        <span id="link-switch-ground-down" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <StatusBadge status="caution" label={GROUND_LINK_DOWN_LABEL} />
+          {LINK_SWITCH_DOWN_NOTE}
+        </span>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { ACT_NOW_LINE, PASSAGES_ONLY_REASON } from "@/lib/assistant/wording";
+import { parseLinkParam } from "@/lib/link";
 import type {
   AssistantAnswer,
   Citation,
@@ -94,30 +95,72 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /* Ground link                                                                */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * What the ground-link indicators show. One blackout: the simulated switch
+ * down ("down") is the blackout, everywhere. Otherwise the conjunction
+ * signal delay profile (?link=conjunction) is a blackout of the pages only
+ * ("conjunction"). DEMIFY_OFFLINE (an air-gapped deployment that never calls
+ * NOAA or NASA) is not a blackout ("air-gapped", neutral).
+ */
+export type GroundLinkView = "up" | "down" | "conjunction" | "air-gapped";
+
+export function groundLinkView(
+  state: Pick<GroundLinkState, "switchedUp" | "forcedOffline">,
+  link?: string | null,
+): GroundLinkView {
+  if (!state.switchedUp) return "down";
+  if (parseLinkParam(link) === "conjunction") return "conjunction";
+  return state.forcedOffline ? "air-gapped" : "up";
+}
+
+/** Text of the nav chip and the ground-link badges. */
+export const GROUND_LINK_LABEL: Record<GroundLinkView, string> = {
+  up: "Ground link up",
+  down: "Ground link down (simulated blackout)",
+  conjunction: "No contact (conjunction profile)",
+  "air-gapped": "Air-gapped (offline mode)",
+};
+
+/** "Ground link up" / "Ground link down (simulated blackout)" / … for a state and the page's ?link=. */
+export function groundLinkLabel(state: Pick<GroundLinkState, "switchedUp" | "forcedOffline">, link?: string | null): string {
+  return GROUND_LINK_LABEL[groundLinkView(state, link)];
+}
+
+/** What the chip means, shown under it on desktop and read with it on phones. */
+export const GROUND_LINK_EXPLANATION: Record<GroundLinkView, string> = {
+  up: "Simulated ground link up: live NOAA and NASA data when needed, and contact with the ground.",
+  down: "Simulated blackout: no contact with the ground. Demify works from the last data snapshots and the onboard library; advice follows the onboard procedures.",
+  conjunction:
+    "Signal delay profile Mars solar conjunction: no contact with the ground, advice follows the onboard procedures. The simulated ground-link switch is up.",
+  "air-gapped":
+    "This deployment never calls NOAA or NASA (DEMIFY_OFFLINE) and uses its data snapshots. Not a blackout: contact advice is unchanged.",
+};
+
 export const GROUND_LINK_DOWN_BANNER =
-  "Ground link down (simulated blackout): Demify is working from the onboard library and the last data snapshots.";
-export const GROUND_LINK_OFFLINE_BANNER =
-  "Ground link down (offline mode, DEMIFY_OFFLINE): Demify is working from the onboard library and the last data snapshots.";
+  "Ground link down (simulated blackout): Demify works from the last data snapshots and the onboard library; advice follows the onboard procedures.";
 
-/** The slim layout banner; null while the link is up. */
-export function groundLinkBanner(state: Pick<GroundLinkState, "up" | "forcedOffline"> | null): string | null {
-  if (!state || state.up) return null;
-  return state.forcedOffline ? GROUND_LINK_OFFLINE_BANNER : GROUND_LINK_DOWN_BANNER;
+/** The slim layout banner: only while the simulated switch is down (never for DEMIFY_OFFLINE alone). */
+export function groundLinkBanner(state: Pick<GroundLinkState, "switchedUp"> | null): string | null {
+  return state && !state.switchedUp ? GROUND_LINK_DOWN_BANNER : null;
 }
 
-/** "Ground link up" / "Ground link down". */
-export function groundLinkLabel(state: Pick<GroundLinkState, "up">): string {
-  return state.up ? "Ground link up" : "Ground link down";
-}
-
-/** What the current position means for the crew. */
-export function groundLinkMeaning(state: Pick<GroundLinkState, "up" | "forcedOffline">): string {
-  if (state.forcedOffline) {
-    return "Offline mode (DEMIFY_OFFLINE): a hard air-gap, the switch cannot bring the link up. Demify works from the onboard library and the last data snapshots.";
+/** What the ground link means for the crew, in the assistant's status strip. */
+export function groundLinkMeaning(view: GroundLinkView, database: OnboardStatus["database"]): string {
+  const bundled = database === "not-configured";
+  switch (view) {
+    case "down":
+      return bundled
+        ? "Simulated blackout: no contact with the ground. Demify works from the last data snapshots and the library bundled with this release; advice follows the onboard procedures."
+        : "Simulated blackout: no contact with the ground. Demify works from the last data snapshots and the onboard library (syncs paused); advice follows the onboard procedures.";
+    case "conjunction":
+      return "This view uses the conjunction signal delay profile: no contact with the ground, advice follows the onboard procedures. The simulated switch is up.";
+    case "air-gapped":
+      return "Air-gapped deployment (DEMIFY_OFFLINE): no calls to NOAA or NASA, the last data snapshots are used and the library does not sync. Not a blackout; move the switch down to simulate one.";
+    default:
+      return bundled
+        ? "Normal mode: NOAA and NASA data are fetched when needed. The library is bundled with this release, no sync on this machine."
+        : "Normal mode: the library syncs from the ground and NOAA and NASA data are fetched when needed.";
   }
-  return state.up
-    ? "Normal mode: the library syncs from the ground and NOAA and NASA data are fetched when needed."
-    : "Simulated blackout: Demify works from the onboard library and the last data snapshots, as during a loss of signal.";
 }
 
 /** "Switched down 12:03 UTC by operator" / "Never switched (starts up)". */
@@ -131,24 +174,39 @@ export function groundLinkChange(state: Pick<GroundLinkState, "switchedUp" | "ch
 /* Status strip                                                               */
 /* ------------------------------------------------------------------------- */
 
-export function modelStateText(model: OnboardStatus["model"]): string {
+/** "this server" with a database configured (the onboard server), "this machine" without (a laptop). */
+export function hostText(database: OnboardStatus["database"]): string {
+  return database === "not-configured" ? "this machine" : "this server";
+}
+
+/**
+ * The language model can write answers. Without a database the bundled
+ * library is searched by keywords, so the embedding model is not needed.
+ */
+export function modelReady(model: OnboardStatus["model"], database: OnboardStatus["database"]): boolean {
+  if (model.state === "ready") return true;
+  return model.state === "missing-models" && database === "not-configured" && model.available.includes(model.llm);
+}
+
+/** "gemma3:4b ready on this machine" / "gpt-oss:20b ready on this server" / why there is no model. */
+export function modelStateText(model: OnboardStatus["model"], database: OnboardStatus["database"]): string {
+  const where = hostText(database);
+  if (modelReady(model, database)) return `${model.llm} ready on ${where}`;
   switch (model.state) {
-    case "ready":
-      return `${model.llm} ready on this server`;
     case "missing-models":
       return model.available.includes(model.llm)
-        ? `${model.llm} ready on this server, ${model.embed} not loaded`
+        ? `${model.llm} ready on ${where}, ${model.embed || "the embedding model"} not loaded`
         : `${model.llm} not loaded: library passages only`;
     case "unreachable":
-      return "Model offline: library passages only";
+      return `Model server offline (${model.llm}): library passages only`;
     default:
       return "No model configured: library passages only";
   }
 }
 
 /** Shape of the model state (never a health status: neutral unless degraded). */
-export function modelStateStatus(model: OnboardStatus["model"]): Status {
-  if (model.state === "ready") return "nominal";
+export function modelStateStatus(model: OnboardStatus["model"], database: OnboardStatus["database"]): Status {
+  if (modelReady(model, database)) return "nominal";
   if (model.state === "not-configured") return "unknown";
   return "caution";
 }
@@ -381,14 +439,27 @@ const PASSAGES_ONLY_MODE: Record<PassagesOnlyKind, string> = {
   other: "Showing the matching library passages",
 };
 
+/** Why the bundled library was searched: no database configured, database unreachable, or its library empty. */
+function bundledWhy(fallbackReason: string | undefined): "none" | "unreachable" | "empty" {
+  const why = fallbackReason ?? "";
+  if (/database (unreachable|search failed)/i.test(why)) return "unreachable";
+  if (/database library is empty/i.test(why)) return "empty";
+  return "none";
+}
+
 /** Where the passages came from and how they were found. */
 export function retrievalModeText(mode: Pick<AssistantAnswer["mode"], "retrieval" | "fallbackReason">): string {
   if (mode.retrieval === "vector") return "Onboard database, vector search";
   if (mode.retrieval === "fulltext") return "Onboard database, full-text search";
-  const why = mode.fallbackReason ?? "";
-  if (/database (unreachable|search failed)/i.test(why)) return "Database unreachable: bundled library, keyword search";
-  if (/database library is empty/i.test(why)) return "Database library empty: bundled library, keyword search";
+  const why = bundledWhy(mode.fallbackReason);
+  if (why === "unreachable") return "Database unreachable: bundled library, keyword search";
+  if (why === "empty") return "Database library empty: bundled library, keyword search";
   return "No database: bundled library, keyword search";
+}
+
+/** "this server" when the answer involved the onboard database, "this machine" on a setup without one. */
+function answerHost(mode: Pick<AssistantAnswer["mode"], "retrieval" | "fallbackReason">): string {
+  return mode.retrieval === "bundled" && bundledWhy(mode.fallbackReason) === "none" ? "this machine" : "this server";
 }
 
 /**
@@ -400,7 +471,7 @@ export function modeLine(a: Pick<AssistantAnswer, "status" | "citations" | "mode
   const n = a.citations.length;
   switch (a.status) {
     case "answered":
-      return `Answered by ${a.mode.model ?? "the language model"} on this server from ${plural(n, "library passage")} · ${retrievalModeText(a.mode)}`;
+      return `Answered by ${a.mode.model ?? "the language model"} on ${answerHost(a.mode)} from ${plural(n, "library passage")} · ${retrievalModeText(a.mode)}`;
     case "passages-only":
       return `${PASSAGES_ONLY_MODE[passagesOnlyKind(a.reason)]} · ${retrievalModeText(a.mode)}`;
     case "no-answer":
@@ -408,6 +479,78 @@ export function modeLine(a: Pick<AssistantAnswer, "status" | "citations" | "mode
     default:
       return "Not searched: this prototype never names medicines or doses";
   }
+}
+
+/** Under passages-only answers: "it" for one passage, "them" for several. */
+export function passagesNote(n: number): string {
+  return n === 1
+    ? "The passage below matched the question. Read it yourself; nothing was written by a model."
+    : "The passages below matched the question. Read them yourself; nothing was written by a model.";
+}
+
+const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** The excerpt already is the whole passage (only whitespace differs): no "Show the whole passage" needed. */
+export function excerptIsWhole(excerpt: string, text: string | null | undefined): boolean {
+  return !text?.trim() || flat(text) === flat(excerpt);
+}
+
+export type PassageBlock =
+  | { kind: "lines"; lines: string[] }
+  | { kind: "h"; text: string }
+  | { kind: "ul"; items: string[] }
+  | { kind: "ol"; start: number; items: string[] };
+
+const NUMBERED_FROM = /^\s*(\d{1,3})[.)]\s+(.*)$/;
+
+/**
+ * A library passage as plain data for React text: "- " lines become a
+ * bulleted list, "1. " lines a numbered list that keeps its first number
+ * (a passage can start mid-checklist), "# " lines headings, and every other
+ * line stays its own line (blank lines separate blocks). Nothing here is
+ * HTML.
+ */
+export function passageBlocks(text: string): PassageBlock[] {
+  const blocks: PassageBlock[] = [];
+  let open: PassageBlock | null = null;
+  for (const raw of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) {
+      if (open) blocks.push(open);
+      open = null;
+      continue;
+    }
+    const heading = HEADING.exec(line);
+    const bullet = heading ? null : BULLET.exec(line);
+    const numbered = heading || bullet ? null : NUMBERED_FROM.exec(line);
+    const prev: PassageBlock | null = open;
+    if (heading) {
+      if (prev) blocks.push(prev);
+      blocks.push({ kind: "h", text: heading[1].trim() });
+      open = null;
+    } else if (bullet) {
+      if (prev?.kind === "ul") prev.items.push(bullet[1].trim());
+      else {
+        if (prev) blocks.push(prev);
+        open = { kind: "ul", items: [bullet[1].trim()] };
+      }
+    } else if (numbered) {
+      if (prev?.kind === "ol") prev.items.push(numbered[2].trim());
+      else {
+        if (prev) blocks.push(prev);
+        open = { kind: "ol", start: Number(numbered[1]), items: [numbered[2].trim()] };
+      }
+    } else if ((prev?.kind === "ul" || prev?.kind === "ol") && /^\s+/.test(line)) {
+      prev.items[prev.items.length - 1] += ` ${line.trim()}`;
+    } else if (prev?.kind === "lines") {
+      prev.lines.push(line.trim());
+    } else {
+      if (prev) blocks.push(prev);
+      open = { kind: "lines", lines: [line.trim()] };
+    }
+  }
+  if (open) blocks.push(open);
+  return blocks;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -510,8 +653,10 @@ export function syncDetailText(run: Pick<SyncRunSummary, "kind" | "status" | "de
 }
 
 /** Why "Sync now" cannot run, or null. */
-export function syncBlockedReason(link: Pick<GroundLinkState, "up">, database: OnboardStatus["database"]): string | null {
-  if (!link.up) return "Ground link is down (blackout): nothing to sync from.";
+export function syncBlockedReason(view: GroundLinkView, database: OnboardStatus["database"]): string | null {
+  if (view === "down") return "Ground link is down (blackout): nothing to sync from.";
+  if (view === "conjunction") return "No contact in the conjunction profile: nothing to sync from.";
+  if (view === "air-gapped") return "Air-gapped deployment (DEMIFY_OFFLINE): it does not contact the ground, so there is nothing to sync from.";
   if (database === "not-configured") {
     return "No database on this machine: the library is the copy bundled with this release, so there is nothing to sync.";
   }

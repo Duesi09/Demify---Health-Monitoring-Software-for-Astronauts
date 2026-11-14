@@ -12,12 +12,67 @@ import { MIGRATIONS } from "./migrations.mjs";
 export const LOCK_MIGRATE = 7_311_001;
 export const LOCK_SYNC = 7_311_002;
 
-/** @type {{ __demifyPg?: { url: string; pool: import("pg").Pool; schema?: Promise<string[]> } }} */
+/** Client-side limit per query: a frozen server or a dead link (no RST) must not hang a request. */
+export const QUERY_TIMEOUT_MS = 10_000;
+/** Pool 'error' lines: at most one a minute; the rest are counted and reported in one line. */
+const POOL_ERROR_LOG_MS = 60_000;
+
+/**
+ * @typedef {{ url: string; pool: import("pg").Pool; schema?: Promise<string[]> }} PoolState
+ * @typedef {{ last: number; suppressed: number; timer?: ReturnType<typeof setTimeout> }} PoolErrorLog
+ * @typedef {{ key: string; env: Record<string, string | undefined>; cfg: import("./config.d.mts").OnboardConfig }} ConfigMemo
+ */
+/** @type {{ __demifyPg?: PoolState; __demifyPgErrorLog?: PoolErrorLog; __demifyPgConfig?: ConfigMemo }} */
 const g = /** @type {any} */ (globalThis);
+
+/**
+ * onboardConfig() for this env, recomputed only when DATABASE_URL or a
+ * DEMIFY_* value changes, so an invalid DEMIFY_* value is warned about once
+ * and not on every database operation.
+ * @param {Record<string, string | undefined>} env
+ */
+function configFor(env) {
+  const key = Object.keys(env)
+    .filter((k) => k === "DATABASE_URL" || k.startsWith("DEMIFY_"))
+    .sort()
+    .map((k) => `${k}=${env[k] ?? ""}`)
+    .join("\n");
+  const memo = g.__demifyPgConfig;
+  if (memo && memo.env === env && memo.key === key) return memo.cfg;
+  const cfg = onboardConfig(env);
+  g.__demifyPgConfig = { key, env, cfg };
+  return cfg;
+}
 
 /** @param {Record<string, string | undefined>} [env] */
 export function databaseUrl(env = process.env) {
-  return onboardConfig(env).databaseUrl;
+  return configFor(env).databaseUrl;
+}
+
+/**
+ * Logs a lost pool connection at most once a minute per process; further
+ * errors in that minute are counted and reported in one line when it ends.
+ * @param {Error} err
+ */
+function logPoolError(err) {
+  const log = (g.__demifyPgErrorLog ??= { last: 0, suppressed: 0 });
+  const now = Date.now();
+  if (now - log.last >= POOL_ERROR_LOG_MS || now < log.last) {
+    log.last = now;
+    console.warn(`[demify] PostgreSQL connection lost: ${err.message}`);
+    return;
+  }
+  log.suppressed++;
+  if (log.timer) return;
+  log.timer = setTimeout(() => {
+    log.timer = undefined;
+    if (!log.suppressed) return;
+    const n = log.suppressed;
+    log.suppressed = 0;
+    log.last = Date.now();
+    console.warn(`[demify] PostgreSQL connection lost: ${n} more pool connection error(s) in the last minute.`);
+  }, Math.max(0, log.last + POOL_ERROR_LOG_MS - now));
+  log.timer.unref?.();
 }
 
 /** Process-wide pool (kept on globalThis so Next.js module copies share it). */
@@ -31,13 +86,16 @@ export function getPool() {
     connectionTimeoutMillis: 3000,
     idleTimeoutMillis: 30_000,
     statement_timeout: 15_000,
+    // statement_timeout is enforced by the server; a frozen server or a
+    // silently dropped link needs a client-side limit too. A client whose
+    // query timed out is released with the error and so leaves the pool.
+    query_timeout: QUERY_TIMEOUT_MS,
+    keepAlive: true,
     application_name: "demify",
   });
   // An idle client that loses its connection (database restart) emits
   // 'error' on the pool; without a listener that would crash the process.
-  pool.on("error", (err) => {
-    console.warn(`[demify] PostgreSQL connection lost: ${err.message}`);
-  });
+  pool.on("error", logPoolError);
   g.__demifyPg = { url, pool };
   return pool;
 }

@@ -145,6 +145,8 @@ describe.skipIf(!TEST_DB)("onboard assistant on PostgreSQL with the fake model s
     expect(a.mode.retrieval).toBe("bundled");
     expect(a.mode.fallbackReason).toMatch(/database library is empty/);
     expect(a.citations[0].docId).toBe("med-kit-inventory");
+    // Never presented as the station's synced library.
+    expect(a.freshness).toMatchObject({ librarySyncedAt: null, libraryAgeText: "release copy bundled with the app (onboard library empty, not synced yet)" });
 
     const run = await waitFor(async () => {
       const { rows } = await pool.query("SELECT status, detail FROM sync_runs WHERE trigger = 'auto' AND status <> 'running' ORDER BY id DESC LIMIT 1");
@@ -214,7 +216,8 @@ describe.skipIf(!TEST_DB)("onboard assistant on PostgreSQL with the fake model s
     const a = await askAssistant({ question: EXAMPLES[0][0] }, cfg);
     expect(a.status).toBe("passages-only");
     expect(a.mode.retrieval).toBe("fulltext");
-    expect(a.mode.fallbackReason).toMatch(/embedding model unreachable/);
+    // The model server did not answer its status check: vector search is skipped at once.
+    expect(a.mode.fallbackReason).toMatch(/vector search skipped/);
     expect(a.citations[0].docId).toBe("alarm-response");
     const none = await askAssistant({ question: NO_ANSWER_QUESTION }, cfg);
     expect(none.status).toBe("no-answer");
@@ -265,6 +268,41 @@ describe.skipIf(!TEST_DB)("onboard assistant on PostgreSQL with the fake model s
     expect(run.status).toBe("ok");
   });
 
+  it("withholds a model answer that copies a question word the library does not contain (grounding check on PostgreSQL)", async () => {
+    const { libraryKnownWords, resolveLibrary } = await source();
+    const lib = await resolveLibrary();
+    expect(lib.source).toBe("database");
+    // English stemming: "fibrillations" meets "fibrillation"; the made-up "placebin" is in no chunk.
+    expect([...(await libraryKnownWords(["fibrillations", "oximeter", "placebin", "the"], "database", lib))].sort()).toEqual(["fibrillations", "oximeter"]);
+  });
+
+  it("a library that was only seeded from the release copy says so", async () => {
+    await pool.query("UPDATE sync_runs SET trigger = 'startup' WHERE kind = 'library'");
+    (await source()).resetLibrarySourceState();
+    const { setGroundLink } = await import("@/lib/onboard/ground-link");
+    await setGroundLink(false, "test");
+    try {
+      const a = await (await answer()).askAssistant({ question: EXAMPLES[3][0] });
+      expect(a.freshness).toMatchObject({ librarySyncedAt: null, stale: true });
+      expect(a.freshness.libraryAgeText).toMatch(/^seeded from the release copy \(\d{4}-\d{2}-\d{2}\); not synced from the ground yet$/);
+    } finally {
+      await setGroundLink(true, "test");
+    }
+  });
+
+  it("Sync now on a fresh crew table: the crew store is initialised first, so the crew baselines are there", async () => {
+    await pool.query("DELETE FROM crew");
+    await pool.query("DELETE FROM library_documents WHERE id = 'crew-baselines'");
+    // A fresh app process: the readings store has not run yet (it adds the default crew on first use).
+    delete (globalThis as Record<string, unknown>).__demifyReadingsPg;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { POST } = await import("@/app/api/sync/route");
+    const res = await POST(post("/api/sync"));
+    expect(res.status).toBe(200);
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM library_documents WHERE id = 'crew-baselines'");
+    expect(rows[0].n).toBe(1);
+  });
+
   it("falls back to the bundled library when the database is unreachable", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { onboardConfig } = await import("@onboard/config.mjs");
@@ -274,7 +312,10 @@ describe.skipIf(!TEST_DB)("onboard assistant on PostgreSQL with the fake model s
     try {
       const lib = await resolveLibrary(cfg);
       expect(lib).toMatchObject({ source: "bundled", database: "unreachable", pool: null });
-      expect(lib.fallbackReason).toMatch(/^database unreachable/);
+      // The driver's reason (checker C1 finding 13), not "no answer within 2 s".
+      expect(lib.fallbackReason).toBe("database unreachable (connect ECONNREFUSED 127.0.0.1:1); using the release copy bundled with the app");
+      const { libraryFreshness } = await source();
+      expect((await libraryFreshness("bundled", lib, cfg)).libraryAgeText).toBe("release copy bundled with the app (database unreachable)");
     } finally {
       // getPool() made a pool for the unreachable URL; close it and go back to the test database.
       await (await db()).closePool();

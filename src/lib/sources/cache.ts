@@ -22,9 +22,19 @@ import type { SourceResult } from "../types";
  * on every request. Concurrent callers for the same key share one in-flight
  * load.
  *
- * While the simulated ground link is down (src/lib/onboard/ground-link.ts)
- * there is no live fetch at all: requests are served from memory or the
- * snapshots, with the error GROUND_LINK_DOWN.
+ * While the simulated ground link switch is down (src/lib/onboard/ground-link.ts)
+ * there is no live fetch and no memory hit: every request is answered from
+ * the snapshot (freshness "snapshot", error GROUND_LINK_DOWN), so pages show
+ * SNAPSHOT <date> for the whole blackout. The last live fetch wrote that
+ * snapshot; if the write failed (read-only disk), the in-memory copy of that
+ * fetch is served instead, labelled the same way with its own fetch time.
+ * DEMIFY_OFFLINE=true (air-gapped deployment) is not a blackout and keeps its
+ * own path: no live fetch, memory or snapshot, error "offline mode".
+ *
+ * The memory, failure and in-flight maps are process-wide (globalThis, per
+ * snapshot directory pair): Next.js bundles this module once for route
+ * handlers and once for pages, and both copies must agree on what was
+ * fetched and when.
  */
 
 interface Entry {
@@ -32,11 +42,26 @@ interface Entry {
   fetchedAt: number;
 }
 
-const memory = new Map<string, Entry>();
-/** Last failed live fetch per key, for the retry backoff. */
-const failures = new Map<string, { at: number; error: string }>();
-/** Loads in progress per key, shared by concurrent callers. */
-const inflight = new Map<string, Promise<SourceResult<unknown>>>();
+interface CacheState {
+  memory: Map<string, Entry>;
+  /** Last failed live fetch per key, for the retry backoff. */
+  failures: Map<string, { at: number; error: string }>;
+  /** Loads in progress per key, shared by concurrent callers. */
+  inflight: Map<string, Promise<SourceResult<unknown>>>;
+}
+
+const holder = globalThis as typeof globalThis & { __demifySourceCache?: Map<string, CacheState> };
+
+function state(): CacheState {
+  const all = (holder.__demifySourceCache ??= new Map());
+  const key = `${config.snapshotDir}|${config.snapshotSeedDir}`;
+  let s = all.get(key);
+  if (!s) {
+    s = { memory: new Map(), failures: new Map(), inflight: new Map() };
+    all.set(key, s);
+  }
+  return s;
+}
 
 /** Longest time a failed source is left alone before the next live attempt. */
 const MAX_FAILURE_BACKOFF_MS = 60_000;
@@ -90,13 +115,14 @@ async function readSnapshot<T>(
   return best;
 }
 
-async function writeSnapshot(key: string, data: unknown) {
+/** fetchedAt = the time of the live fetch, so the snapshot and the memory copy carry the same date. */
+async function writeSnapshot(key: string, data: unknown, fetchedAt: number) {
   try {
     await fs.mkdir(config.snapshotDir, { recursive: true });
     const tmp = snapshotPath(key) + ".tmp";
     await fs.writeFile(
       tmp,
-      JSON.stringify({ fetchedAt: new Date().toISOString(), data }),
+      JSON.stringify({ fetchedAt: new Date(fetchedAt).toISOString(), data }),
     );
     await fs.rename(tmp, snapshotPath(key));
   } catch {
@@ -115,6 +141,14 @@ export async function cached<T>(
   loader: () => Promise<T>,
   ttlSeconds: number = config.cacheTtlSeconds,
 ): Promise<SourceResult<T>> {
+  const { memory, inflight } = state();
+  if (!config.offline) {
+    // Usually answered synchronously (cached or file-backed); awaited only
+    // when it has to ask the database, so the common path adds no extra tick.
+    const link = groundLinkUpNow();
+    if (!(typeof link === "boolean" ? link : await link)) return blackout<T>(key, source);
+  }
+
   const hit = memory.get(key);
   if (hit && Date.now() - hit.fetchedAt < ttlSeconds * 1000) {
     return {
@@ -137,26 +171,43 @@ export async function cached<T>(
   return { ...(await pending) };
 }
 
+/**
+ * Ground link switch down (simulated blackout): the snapshot, never a live
+ * fetch or a memory hit. The snapshot normally holds the last live fetch;
+ * when that write failed, the memory copy of the fetch is newer and is
+ * served instead, labelled as a snapshot of its fetch time.
+ */
+async function blackout<T>(key: string, source: string): Promise<SourceResult<T>> {
+  const snap = await readSnapshot<T>(key);
+  const hit = state().memory.get(key);
+  if (hit && (!snap || !(Date.parse(snap.fetchedAt) >= hit.fetchedAt))) {
+    return {
+      data: hit.value as T,
+      source,
+      freshness: "snapshot",
+      fetchedAt: new Date(hit.fetchedAt).toISOString(),
+      error: GROUND_LINK_DOWN,
+    };
+  }
+  if (snap) {
+    return { data: snap.data, source, freshness: "snapshot", fetchedAt: snap.fetchedAt, error: GROUND_LINK_DOWN };
+  }
+  throw new Error(`No data for ${key}: ${GROUND_LINK_DOWN}`);
+}
+
 async function load<T>(
   key: string,
   source: string,
   loader: () => Promise<T>,
   ttlSeconds: number,
 ): Promise<SourceResult<T>> {
+  const { memory, failures } = state();
   const now = Date.now();
   let error: string | undefined;
   const failed = failures.get(key);
   const backoffMs = Math.min(ttlSeconds * 1000, MAX_FAILURE_BACKOFF_MS);
-  // Usually answered synchronously (cached or file-backed); awaited only
-  // when it has to ask the database, so the common path adds no extra tick.
-  const link = config.offline ? false : groundLinkUpNow();
-  const linkUp = typeof link === "boolean" ? link : await link;
   if (config.offline) {
     error = "offline mode";
-  } else if (!linkUp) {
-    // Simulated blackout: no live fetch, and no failure recorded, so the
-    // first request after the link comes back goes live again.
-    error = GROUND_LINK_DOWN;
   } else if (failed && now - failed.at < backoffMs) {
     // Failed moments ago: don't block this request on another timeout.
     error = failed.error;
@@ -165,7 +216,7 @@ async function load<T>(
       const value = await loader();
       memory.set(key, { value, fetchedAt: now });
       failures.delete(key);
-      void writeSnapshot(key, value);
+      void writeSnapshot(key, value, now);
       return {
         data: value,
         source,

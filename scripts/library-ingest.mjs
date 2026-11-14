@@ -5,13 +5,19 @@
  * what a question retrieves. Plain Node, same image as the app.
  *
  *   npm run library:ingest
- *   npm run library:ingest -- --force                 sync even while the ground link is down
+ *   npm run library:ingest -- --force                 sync even while the ground link is down, and accept
+ *                                                     removing more than half of the documents
  *   npm run library:ingest -- --dir ./library         another ground library folder
  *   npm run library:ingest -- --search "Where is the pulse oximeter in the medical kit?" [--k 5]
  *   npm run library:ingest -- --no-sync --search "..." search without syncing first
  *
  * Needs DATABASE_URL. Reads DEMIFY_GROUND_LIBRARY_DIR (default ./library) and,
  * for embeddings and vector search, DEMIFY_MODEL_URL.
+ *
+ * A ground folder without Markdown documents never empties the onboard
+ * library: the sync fails with the reason and changes nothing. One that would
+ * remove more than half of the documents (half-copied?) fails the same way
+ * unless --force.
  *
  * Exit codes: 0 ok, 1 sync failed or database error, 2 usage or configuration
  * error, 3 sync skipped (ground link down without --force, or another sync running).
@@ -25,7 +31,8 @@ import { searchLibrary, syncLibrary } from "../onboard/library.mjs";
 
 const USAGE = `Usage: node scripts/library-ingest.mjs [--force] [--dir <path>] [--search "question"] [--k <n>] [--no-sync]
 
-  --force        sync even while the ground link is down (first local ingest)
+  --force        sync even while the ground link is down (first local ingest),
+                 and accept removing more than half of the documents
   --dir <path>   ground library folder (default: DEMIFY_GROUND_LIBRARY_DIR or ./library)
   --search <q>   print the top passages for a question after the sync
   --k <n>        number of passages to print (default: DEMIFY_ASSISTANT_TOP_K or 5)
@@ -144,8 +151,10 @@ async function main() {
         ["time", `${seconds.toFixed(1)} s`],
       ]),
     );
-    if (r.status === "failed") code = 1;
-    else if (r.status === "skipped") code = 3;
+    if (r.status === "failed") {
+      console.error(`\nLibrary sync failed: ${r.reason ?? "unknown reason"}`);
+      code = 1;
+    } else if (r.status === "skipped") code = 3;
   }
 
   if (args.search) {

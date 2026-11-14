@@ -641,7 +641,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     hazards: ["gravity", "radiation", "distance"],
     spaceflightEffect:
       "Spaceflight remodels the heart and radiation adds long-term cardiovascular risk. A heart attack far from Earth must be recognised and treated by the crew itself: there is no emergency room and evacuation takes days. Reference: new ST elevation ≥ 1 mm in two contiguous leads is the STEMI criterion, a medical emergency; crewed vehicles carry a defibrillator (AED) and an advanced cardiac life support kit for the onboard procedures.",
-    measurement: "Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG transmitted to the flight surgeon.",
+    measurement: "Continuous ECG (CSA Bio-Monitor shirt, ISS ECG kit); 12-lead ECG for the flight surgeon.",
     actions: [
       "Stop all activity; the crew member rests, monitored, with the Crew Medical Officer.",
       "Record and transmit a 12-lead ECG to the flight surgeon immediately.",
@@ -716,15 +716,18 @@ export function persistenceLabel(def: IndicatorDef): string | null {
 
 /**
  * The values an escalateFromBand rule covers, as a phrase that follows
- * "any value": the critical range text without its notes except a plain
- * "(project rule)" label ("≤ 35.0 °C or ≥ 39.1 °C", "≥ 1 mm elevation or
- * > 2 mm depression (project rule)"), or for a caution band the open ends
+ * "any value": the critical range text without its notes, except that a note
+ * naming a project rule becomes a plain "(project rule)" label ("≤ 35.0 °C or
+ * ≥ 39.1 °C (project rule)", "≥ 1 mm elevation or > 2 mm depression (project
+ * rule)"), or for a caution band the open ends
  * derived from the steps ("≥ 1 /3", "< 50 bpm or ≥ 101 bpm"). A band with a
  * closed interval in the middle falls back to "in the caution or critical
  * band".
  */
 export function bandEscalationLabel(def: IndicatorDef): string | null {
-  if (def.escalateFromBand === "critical") return def.ranges.critical.replace(/\s*\((?!project rule\))[^)]*\)/g, "").trim();
+  if (def.escalateFromBand === "critical") {
+    return def.ranges.critical.replace(/\s*\(([^)]*)\)/g, (_, note: string) => (/project rule/.test(note) ? " (project rule)" : "")).trim();
+  }
   if (def.escalateFromBand === "caution") {
     const flagged = (s: Status) => RANK[s] >= RANK.caution;
     // Intervals [lower, upper) of the classification, ascending; null = open end.

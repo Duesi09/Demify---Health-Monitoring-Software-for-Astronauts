@@ -58,7 +58,10 @@ export interface Citation {
   version: string;
   /** Chunk checksum, verified before the chunk was used. */
   sha256: string;
+  /** Up to ~300 characters around the words that match the question. */
   excerpt: string;
+  /** The whole checksum-verified chunk, for "Show the whole passage". */
+  text: string;
   score: number;
   syncedAt?: string;
 }

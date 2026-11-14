@@ -58,11 +58,33 @@ const INVENTORY_DOC_ID = "med-kit-inventory";
 const GENERATED_IDS = new Set([CREW_DOC_ID, INVENTORY_DOC_ID]);
 
 const REVIEWED = "Project text, not clinically reviewed";
-const INVENTORY_NOTE = "Representative training inventory, not the real ISS kit.";
+/** The note every inventory item carries (library/inventory/med-kit.json); the generated document says it once. */
+const INVENTORY_NOTE =
+  "Representative training inventory; pack names from public NASA sources (2011/2015), contents not confirmed for 2026.";
+/** The note of the first inventory version, still dropped from items so an older ground copy reads the same. */
+const INVENTORY_NOTE_V1 = "Representative training inventory, not the real ISS kit.";
+/** Source of the generated crew-baseline document: the demo crew is simulated. */
+const CREW_SOURCE = "Demify crew records (SIMULATED crew profiles, pre-flight baselines)";
 
 /** Same wording as POST /api/sync answers with 409. */
 const LINK_DOWN_REASON = "Ground link is down (blackout): nothing to sync from";
 const LOCKED_REASON = "Another library sync is running";
+
+/**
+ * sync_runs rows that came from the ground: a successful library sync while
+ * the ground link was up. Not the startup seed from the release copy, and
+ * not a run forced while the ground link was down (a local ingest).
+ */
+const FROM_GROUND_SQL = "trigger <> 'startup' AND coalesce(detail->>'groundLinkUp', 'true') <> 'false'";
+
+/** sync_runs pruning: keep this many days, and at least this many of the newest rows. */
+const SYNC_RUNS_KEEP_DAYS = 30;
+const SYNC_RUNS_KEEP_ROWS = 100;
+
+/** Time limit for embedding a question (ms); document embeddings during a sync keep cfg.embedTimeoutMs. */
+const QUERY_EMBED_TIMEOUT_MS = 3000;
+/** After a failed query embedding, vector search stays off this long (ms). */
+const EMBED_BACKOFF_MS = 30_000;
 
 const ID_RE = /^[a-z0-9][a-z0-9._-]*$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -472,7 +494,7 @@ export function crewBaselineDoc(crew, updated) {
   const lines = [
     "# Crew baselines",
     "",
-    "Pre-flight baseline values from the crew records of this Demify installation. Demify compares each continuous signal (heart rate, blood pressure, SpO₂, temperature, respiratory rate, ST segment) with the crew member's own baseline: a change of 25 % or more raises the status to caution even when the value is still inside the population range. This personal-baseline rule is a project rule; it never escalates on its own.",
+    "Pre-flight baseline values from the crew records of this Demify installation. The crew profiles are SIMULATED: demo crew members for training, not real people. Demify compares each continuous signal (heart rate, blood pressure, SpO₂, temperature, respiratory rate, ST segment) with the crew member's own baseline: a change of 25 % or more raises the status to caution even when the value is still inside the population range. This personal-baseline rule is a project rule; it never escalates on its own.",
   ];
   for (const m of members) {
     const name = oneLine(m.name);
@@ -499,7 +521,7 @@ export function crewBaselineDoc(crew, updated) {
     id: CREW_DOC_ID,
     title: "Crew baselines",
     category: "baseline",
-    source: "Demify crew records (pre-flight baselines)",
+    source: CREW_SOURCE,
     license: "Project data, MIT",
     reviewed: REVIEWED,
     path: "generated/crew-baselines.md",
@@ -528,7 +550,7 @@ export function inventoryDoc(items, updated) {
   const lines = [
     "# Medical kit inventory",
     "",
-    `${INVENTORY_NOTE} Devices and supplies; this prototype lists no medicines. Every entry gives the stowage location, the quantity and, where it applies, the expiry date. Check the physical kit and the onboard procedures before use.`,
+    "Representative training inventory, not the real ISS kit. The medical kit is grouped by the pack names of the ISS Crew Health Care System (CHeCS) as described in public NASA sources (2011/2015), with the AED and the Crew Medical Restraint System as emergency equipment; the contents of each pack are not confirmed for 2026, and the pouch numbers are training examples. Devices and supplies; this prototype lists no medicines and leaves the medicine packs out. Every entry gives the stowage location, the quantity and, where it applies, the expiry date. Check the physical kit and the onboard procedures before use.",
   ];
   for (const category of [...groups.keys()].sort((a, b) => cmp(a.toLowerCase(), b.toLowerCase()) || cmp(a, b))) {
     const heading = category.charAt(0).toUpperCase() + category.slice(1);
@@ -540,7 +562,7 @@ export function inventoryDoc(items, updated) {
       const parts = [`${oneLine(it.name)}: ${it.location ? `stowed in ${oneLine(it.location)}` : "location not recorded"}`];
       if (it.quantity != null) parts.push(`quantity ${it.quantity}${it.unit && it.unit !== "each" ? ` ${oneLine(it.unit)}` : ""}`);
       if (it.expiresOn) parts.push(`expires ${it.expiresOn}`);
-      const extra = it.notes ? oneLine(it.notes.replace(INVENTORY_NOTE, "")) : "";
+      const extra = it.notes ? oneLine(it.notes.replace(INVENTORY_NOTE, "").replace(INVENTORY_NOTE_V1, "")) : "";
       if (extra) parts.push(extra.replace(/\.$/, "").replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()));
       parts.push(`item id ${it.id}`);
       lines.push(`- ${parts.join("; ")}.`);
@@ -553,7 +575,7 @@ export function inventoryDoc(items, updated) {
     id: INVENTORY_DOC_ID,
     title: "Medical kit inventory",
     category: "inventory",
-    source: "Demify medical-kit inventory (representative training list, not the real ISS kit)",
+    source: "Demify medical-kit inventory (representative training list, not the real ISS kit; CHeCS pack names from public NASA sources)",
     license: "Project data, MIT",
     reviewed: REVIEWED,
     path: "inventory/",
@@ -799,6 +821,8 @@ export async function embedPending(pool, cfg, limit = 256) {
       [batch.map((r) => r.id), vectors.map(vectorLiteral), batch.map((r) => r.sha256), cfg.embedModel],
     );
     done += res.rowCount ?? 0;
+    // The model embeds again: a remembered query-embedding failure is over.
+    embedFailures().delete(embedKey(cfg));
   }
   return done;
 }
@@ -856,6 +880,106 @@ function dateOnly(v) {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
+/** @param {unknown} v @returns {string | null} */
+function isoOrNull(v) {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+const CREW_SQL = "SELECT id, name, role, baseline, updated_at FROM crew ORDER BY id";
+const DOC_COLUMNS = "id, title, category, source, url, license, reviewed, updated, path, body, body_sha256, synced_at";
+/**
+ * Marks the crew-baseline document current when it is older than the newest
+ * crew record (its content was just checked against the crew table).
+ */
+const CREW_DOC_TOUCH_SQL =
+  "UPDATE library_documents SET synced_at = now() WHERE id = $1 AND synced_at < (SELECT max(updated_at) FROM crew)";
+
+/**
+ * The crew-baseline document for crew table rows (dated by the newest row).
+ * @param {Record<string, any>[]} rows
+ * @returns {LibraryDoc}
+ */
+function crewDocOf(rows) {
+  const updated = rows.map((r) => dateOnly(r.updated_at)).sort().at(-1) ?? "";
+  return crewBaselineDoc(
+    rows.map((r) => ({ id: String(r.id), name: String(r.name), role: String(r.role), baseline: r.baseline ?? {} })),
+    updated,
+  );
+}
+
+/**
+ * Stored chunks per document id (all documents, or one).
+ * @param {PoolClient} client
+ * @param {string} [docId]
+ * @returns {Promise<Map<string, { ord: number; sha256: string; text: string }[]>>}
+ */
+async function storedChunks(client, docId) {
+  const { rows } = docId
+    ? await client.query("SELECT doc_id, ord, sha256, text FROM library_chunks WHERE doc_id = $1 ORDER BY ord", [docId])
+    : await client.query("SELECT doc_id, ord, sha256, text FROM library_chunks ORDER BY doc_id, ord");
+  /** @type {Map<string, { ord: number; sha256: string; text: string }[]>} */
+  const out = new Map();
+  for (const r of rows) {
+    const list = out.get(r.doc_id) ?? [];
+    list.push({ ord: Number(r.ord), sha256: r.sha256, text: r.text });
+    out.set(r.doc_id, list);
+  }
+  return out;
+}
+
+/**
+ * Writes one document and its chunks unless the stored copy is current and
+ * intact (inside the caller's transaction). A new version is "updated"; a
+ * stored body or chunk that no longer matches its checksum is rewritten and
+ * reported as repaired.
+ * @param {PoolClient} client
+ * @param {LibraryDoc} doc
+ * @param {Record<string, any> | undefined} old  its library_documents row
+ * @param {{ ord: number; sha256: string; text: string }[] | undefined} oldChunks
+ * @returns {Promise<{ change: "added" | "updated" | "unchanged"; repaired: boolean }>}
+ */
+async function upsertDoc(client, doc, old, oldChunks) {
+  const chunks = chunkDoc(doc);
+  if (!old) {
+    await client.query(
+      `INSERT INTO library_documents (id, title, category, source, url, license, reviewed, updated, path, body, body_sha256, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())`,
+      docParams(doc),
+    );
+    await writeChunks(client, doc, chunks);
+    return { change: "added", repaired: false };
+  }
+  const bodyIntact = sha256(String(old.body)) === old.body_sha256;
+  if (old.body_sha256 !== doc.version || !bodyIntact) {
+    // New version (or a stored body that no longer matches its checksum): rewrite it.
+    await client.query(
+      `UPDATE library_documents SET title = $2, category = $3, source = $4, url = $5, license = $6, reviewed = $7,
+              updated = $8, path = $9, body = $10, body_sha256 = $11, synced_at = now()
+        WHERE id = $1`,
+      docParams(doc),
+    );
+    await writeChunks(client, doc, chunks);
+    return old.body_sha256 !== doc.version ? { change: "updated", repaired: false } : { change: "unchanged", repaired: true };
+  }
+  const meta = metaDiffers(old, doc);
+  if (meta) {
+    await client.query(
+      `UPDATE library_documents SET title = $2, category = $3, source = $4, url = $5, license = $6, reviewed = $7,
+              updated = $8, path = $9
+        WHERE id = $1`,
+      docParams(doc).slice(0, 9),
+    );
+  }
+  let repaired = false;
+  if (!chunksIntact(oldChunks, chunks)) {
+    await writeChunks(client, doc, chunks);
+    repaired = true;
+  }
+  return { change: meta ? "updated" : "unchanged", repaired };
+}
+
 /**
  * The sync itself (caller holds LOCK_SYNC on client). Mutates and returns detail counts.
  * @param {Pool} pool
@@ -863,9 +987,10 @@ function dateOnly(v) {
  * @param {OnboardConfig} cfg
  * @param {SyncResult} result
  * @param {number} runId
+ * @param {boolean} force  accept removing more than half of the documents
  * @returns {Promise<Record<string, unknown>>}
  */
-async function runSync(pool, client, cfg, result, runId) {
+async function runSync(pool, client, cfg, result, runId, force) {
   /** @type {Record<string, unknown>} */
   const extra = {};
   // Runs left "running" by a process that died (we hold the lock, so none is live).
@@ -877,92 +1002,47 @@ async function runSync(pool, client, cfg, result, runId) {
   );
   if (stale.rowCount) extra.staleRunsClosed = stale.rowCount;
 
-  const lib = await readLibraryTree(cfg.groundLibraryDir);
+  const dir = path.resolve(cfg.groundLibraryDir);
+  const lib = await readLibraryTree(dir);
+  // An empty folder (a bind mount of a missing ./library, a copy not yet
+  // started) must never empty the onboard library.
+  if (!lib.docs.length) {
+    throw new Error(`the ground library ${dir} has no Markdown documents (empty, or not mounted?); nothing was changed`);
+  }
   /** @type {LibraryDoc[]} */
   const target = [...lib.docs];
   if (lib.inventory.length) target.push(inventoryDoc(lib.inventory, lib.inventoryUpdated));
-  const crewRows = (await client.query("SELECT id, name, role, baseline, updated_at FROM crew ORDER BY id")).rows;
-  if (crewRows.length) {
-    const updated = crewRows.map((r) => dateOnly(r.updated_at)).sort().at(-1) ?? "";
-    target.push(
-      crewBaselineDoc(
-        crewRows.map((r) => ({ id: String(r.id), name: String(r.name), role: String(r.role), baseline: r.baseline ?? {} })),
-        updated,
-      ),
-    );
-  }
+  const crewRows = (await client.query(CREW_SQL)).rows;
+  if (crewRows.length) target.push(crewDocOf(crewRows));
+  const keep = new Set(target.map((d) => d.id));
 
   let repaired = 0;
   await client.query("BEGIN");
   try {
-    const existing = new Map(
-      (
-        await client.query(
-          "SELECT id, title, category, source, url, license, reviewed, updated, path, body, body_sha256 FROM library_documents",
-        )
-      ).rows.map((r) => [String(r.id), r]),
-    );
-    /** @type {Map<string, { ord: number; sha256: string; text: string }[]>} */
-    const stored = new Map();
-    for (const r of (await client.query("SELECT doc_id, ord, sha256, text FROM library_chunks ORDER BY doc_id, ord")).rows) {
-      const list = stored.get(r.doc_id) ?? [];
-      list.push({ ord: Number(r.ord), sha256: r.sha256, text: r.text });
-      stored.set(r.doc_id, list);
+    const existing = new Map((await client.query(`SELECT ${DOC_COLUMNS} FROM library_documents`)).rows.map((r) => [String(r.id), r]));
+    // A half-copied ground folder: refuse to remove most of the library unless forced.
+    const fromGround = [...existing.keys()].filter((id) => !GENERATED_IDS.has(id));
+    const removed = fromGround.filter((id) => !keep.has(id));
+    if (!force && removed.length > fromGround.length / 2) {
+      throw new Error(
+        `the ground library ${dir} would remove ${removed.length} of ${fromGround.length} documents (more than half), ` +
+          "so it looks empty or half-copied; nothing was changed. Check the ground folder, or run library-ingest with --force to accept the removal",
+      );
     }
+    const stored = await storedChunks(client);
 
     for (const doc of target) {
-      const chunks = chunkDoc(doc);
-      const old = existing.get(doc.id);
-      if (!old) {
-        await client.query(
-          `INSERT INTO library_documents (id, title, category, source, url, license, reviewed, updated, path, body, body_sha256, synced_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())`,
-          docParams(doc),
-        );
-        await writeChunks(client, doc, chunks);
-        result.docsAdded++;
-        continue;
-      }
-      const bodyIntact = sha256(String(old.body)) === old.body_sha256;
-      if (old.body_sha256 !== doc.version || !bodyIntact) {
-        // New version (or a stored body that no longer matches its checksum): rewrite it.
-        await client.query(
-          `UPDATE library_documents SET title = $2, category = $3, source = $4, url = $5, license = $6, reviewed = $7,
-                  updated = $8, path = $9, body = $10, body_sha256 = $11, synced_at = now()
-            WHERE id = $1`,
-          docParams(doc),
-        );
-        await writeChunks(client, doc, chunks);
-        if (old.body_sha256 !== doc.version) result.docsUpdated++;
-        else {
-          repaired++;
-          result.docsUnchanged++;
-        }
-        continue;
-      }
-      const meta = metaDiffers(old, doc);
-      if (meta) {
-        await client.query(
-          `UPDATE library_documents SET title = $2, category = $3, source = $4, url = $5, license = $6, reviewed = $7,
-                  updated = $8, path = $9
-            WHERE id = $1`,
-          docParams(doc).slice(0, 9),
-        );
-      }
-      if (!chunksIntact(stored.get(doc.id), chunks)) {
-        await writeChunks(client, doc, chunks);
-        repaired++;
-      }
-      if (meta) result.docsUpdated++;
+      const out = await upsertDoc(client, doc, existing.get(doc.id), stored.get(doc.id));
+      if (out.change === "added") result.docsAdded++;
+      else if (out.change === "updated") result.docsUpdated++;
       else result.docsUnchanged++;
+      if (out.repaired) repaired++;
     }
-
-    const keep = new Set(target.map((d) => d.id));
-    for (const id of existing.keys()) {
-      if (keep.has(id) || GENERATED_IDS.has(id)) continue;
+    for (const id of removed) {
       await client.query("DELETE FROM library_documents WHERE id = $1", [id]);
       result.docsRemoved++;
     }
+    if (crewRows.length) await client.query(CREW_DOC_TOUCH_SQL, [CREW_DOC_ID]);
 
     if (lib.inventory.length) {
       await client.query("DELETE FROM med_kit_items");
@@ -1052,10 +1132,24 @@ function runDetail(r, extra = {}) {
 }
 
 /**
+ * pruneSyncRuns after a run; a failure only leaves old rows for the next run.
+ * @param {Pool} pool
+ */
+async function pruneQuietly(pool) {
+  try {
+    await pruneSyncRuns(pool);
+  } catch {
+    // Best effort: the run itself is recorded.
+  }
+}
+
+/**
  * Pulls the ground library into PostgreSQL (see library.d.mts). Records a
  * sync_runs row (running -> ok / skipped / failed). Errors inside the sync
  * are returned as status "failed" (with the reason) after the transaction is
  * rolled back; only a database that cannot record the run makes this throw.
+ * A ground library without Markdown documents fails the sync; one that would
+ * remove more than half of the documents fails it unless opts.force.
  * @param {Pool} pool
  * @param {OnboardConfig} cfg
  * @param {{ trigger: SyncResult["trigger"]; groundLinkUp: boolean; force?: boolean }} opts
@@ -1078,9 +1172,10 @@ export async function syncLibrary(pool, cfg, opts) {
     startedAt,
     finishedAt: startedAt,
   };
-  const context = { force: opts.force === true, groundLinkUp: opts.groundLinkUp, dir: cfg.groundLibraryDir };
+  const force = opts.force === true;
+  const context = { force, groundLinkUp: opts.groundLinkUp, dir: cfg.groundLibraryDir };
 
-  if (!opts.groundLinkUp && !opts.force) {
+  if (!opts.groundLinkUp && !force) {
     result.status = "skipped";
     result.reason = LINK_DOWN_REASON;
     result.finishedAt = new Date().toISOString();
@@ -1088,6 +1183,7 @@ export async function syncLibrary(pool, cfg, opts) {
       "INSERT INTO sync_runs (kind, trigger, status, started_at, finished_at, detail) VALUES ('library', $1, 'skipped', $2, $3, $4)",
       [opts.trigger, result.startedAt, result.finishedAt, JSON.stringify({ reason: result.reason, ...context })],
     );
+    await pruneQuietly(pool);
     return result;
   }
 
@@ -1099,7 +1195,7 @@ export async function syncLibrary(pool, cfg, opts) {
   /** @type {Record<string, unknown>} */
   let extra = {};
   try {
-    const out = await withAdvisoryLock(pool, LOCK_SYNC, (client) => runSync(pool, client, cfg, result, runId));
+    const out = await withAdvisoryLock(pool, LOCK_SYNC, (client) => runSync(pool, client, cfg, result, runId, force));
     if (out === null) {
       result.status = "skipped";
       result.reason = LOCKED_REASON;
@@ -1117,7 +1213,125 @@ export async function syncLibrary(pool, cfg, opts) {
     result.finishedAt,
     JSON.stringify({ ...runDetail(result, extra), ...context }),
   ]);
+  await pruneQuietly(pool);
   return result;
+}
+
+/* ------------------------------------------------------------------------- */
+/* PostgreSQL: crew baselines                                                 */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Whether the crew-baseline document needs regenerating: crew rows exist and
+ * the document is missing or older than the newest crew record.
+ * @param {Pool} pool
+ * @returns {Promise<import("./library.d.mts").CrewBaselinesState>}
+ */
+export async function crewBaselinesState(pool) {
+  const { rows } = await pool.query(
+    `SELECT c.n, c.crew_at, d.synced_at AS doc_at,
+            (c.n > 0 AND (d.synced_at IS NULL OR d.synced_at < c.crew_at)) AS due
+       FROM (SELECT count(*)::int AS n, max(updated_at) AS crew_at FROM crew) c
+       LEFT JOIN library_documents d ON d.id = $1`,
+    [CREW_DOC_ID],
+  );
+  const r = rows[0] ?? {};
+  return {
+    crewMembers: Number(r.n ?? 0),
+    crewUpdatedAt: isoOrNull(r.crew_at),
+    documentSyncedAt: isoOrNull(r.doc_at),
+    due: r.due === true,
+  };
+}
+
+/**
+ * Regenerates the crew-baseline document from the crew table (onboard data:
+ * no ground link needed). Holds LOCK_SYNC; status "skipped" while a library
+ * sync runs (that sync regenerates it). New chunks wait for embeddings
+ * (embedPending); full-text search covers them meanwhile.
+ * @param {Pool} pool
+ * @returns {Promise<import("./library.d.mts").CrewBaselinesRefresh>}
+ */
+export async function refreshCrewBaselines(pool) {
+  const out = await withAdvisoryLock(pool, LOCK_SYNC, async (client) => {
+    await client.query("BEGIN");
+    try {
+      const crewRows = (await client.query(CREW_SQL)).rows;
+      if (!crewRows.length) {
+        await client.query("COMMIT");
+        return /** @type {const} */ ({ status: "no-crew" });
+      }
+      const old = (await client.query(`SELECT ${DOC_COLUMNS} FROM library_documents WHERE id = $1`, [CREW_DOC_ID])).rows[0];
+      const stored = await storedChunks(client, CREW_DOC_ID);
+      const r = await upsertDoc(client, crewDocOf(crewRows), old, stored.get(CREW_DOC_ID));
+      await client.query(CREW_DOC_TOUCH_SQL, [CREW_DOC_ID]);
+      await client.query("COMMIT");
+      /** @type {"added" | "updated" | "unchanged"} */
+      const status = r.change === "unchanged" && r.repaired ? "updated" : r.change;
+      return { status, crewMembers: crewRows.length };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    }
+  });
+  return out ?? { status: "skipped", reason: LOCKED_REASON };
+}
+
+/* ------------------------------------------------------------------------- */
+/* PostgreSQL: sync history                                                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Deletes sync_runs rows older than keepDays (default 30), keeping at least
+ * the keepRows (default 100) newest rows and the latest successful run of
+ * each kind (library sync from the ground, library seed, snapshots), so the
+ * "last synced" time never loses its row. Returns how many rows it deleted.
+ * @param {Pool} pool
+ * @param {{ keepDays?: number; keepRows?: number }} [opts]
+ * @returns {Promise<number>}
+ */
+export async function pruneSyncRuns(pool, opts = {}) {
+  const days = Math.max(1, Math.floor(opts.keepDays ?? SYNC_RUNS_KEEP_DAYS));
+  const keepRows = Math.max(1, Math.floor(opts.keepRows ?? SYNC_RUNS_KEEP_ROWS));
+  const res = await pool.query(
+    `WITH keep AS (
+       (SELECT id FROM sync_runs ORDER BY started_at DESC, id DESC LIMIT $2)
+       UNION SELECT max(id) FROM sync_runs WHERE kind = 'library' AND status = 'ok' AND (${FROM_GROUND_SQL})
+       UNION SELECT max(id) FROM sync_runs WHERE kind = 'library' AND status = 'ok' AND NOT (${FROM_GROUND_SQL})
+       UNION SELECT max(id) FROM sync_runs WHERE kind = 'snapshots' AND status = 'ok'
+     )
+     DELETE FROM sync_runs s
+      WHERE s.started_at < now() - make_interval(days => $1::int)
+        AND NOT EXISTS (SELECT 1 FROM keep WHERE keep.id = s.id)`,
+    [days, keepRows],
+  );
+  return res.rowCount ?? 0;
+}
+
+/**
+ * When the library last came from the ground, and when it was last loaded
+ * without the ground (see library.d.mts).
+ * @param {Pool} pool
+ * @returns {Promise<{ lastGroundSync: string | null; seededAt: string | null }>}
+ */
+export async function librarySyncInfo(pool) {
+  const { rows } = await pool.query(
+    `SELECT max(finished_at) FILTER (WHERE ${FROM_GROUND_SQL}) AS ground,
+            max(finished_at) FILTER (WHERE NOT (${FROM_GROUND_SQL})) AS seeded
+       FROM sync_runs
+      WHERE kind = 'library' AND status = 'ok'`,
+  );
+  return { lastGroundSync: isoOrNull(rows[0]?.ground), seededAt: isoOrNull(rows[0]?.seeded) };
+}
+
+/**
+ * Latest successful library sync from the ground (finished_at, ISO), or
+ * null. The startup seed and runs forced during a blackout do not count.
+ * @param {Pool} pool
+ * @returns {Promise<string | null>}
+ */
+export async function lastLibrarySync(pool) {
+  return (await librarySyncInfo(pool)).lastGroundSync;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1166,18 +1380,57 @@ function toHits(rows, tier, k) {
 }
 
 /**
+ * Remembered query-embedding failures per model (modelUrl + embedModel),
+ * shared by every copy of this module in the process (Next.js bundles one
+ * per route), so one failure keeps every route off the vector tier.
+ * @returns {Map<string, { until: number; reason: string }>}
+ */
+function embedFailures() {
+  const g = /** @type {Record<symbol, unknown>} */ (/** @type {unknown} */ (globalThis));
+  const key = Symbol.for("demify.onboard.library.embedFailures");
+  if (!(g[key] instanceof Map)) g[key] = new Map();
+  return /** @type {Map<string, { until: number; reason: string }>} */ (g[key]);
+}
+
+/** @param {OnboardConfig} cfg */
+function embedKey(cfg) {
+  return `${cfg.modelUrl ?? ""}|${cfg.embedModel}`;
+}
+
+/**
+ * Why embedding the question failed, in the crew's words: an HTTP error is
+ * the model's own error, not an unreachable server.
+ * @param {unknown} err
+ */
+function embedFailureReason(err) {
+  const e = /** @type {{ kind?: unknown; status?: unknown }} */ (err && typeof err === "object" ? err : {});
+  const msg = message(err);
+  if (e.kind === "http" || typeof e.status === "number" || /\bHTTP \d{3}\b/.test(msg)) return `embedding model error (${msg})`;
+  if (e.kind === "timeout") return `embedding model did not answer in time (${msg})`;
+  if (e.kind === "bad-response") return `embedding model returned an unusable answer (${msg})`;
+  return `embedding model unreachable (${msg})`;
+}
+
+/**
  * Retrieval with fallbacks: vector (pgvector cosine; needs the embedding
  * model, a matching embedding width and no pending chunks) -> full-text
  * (OR of the question's terms, ranked by ts_rank_cd). Re-checks every hit's
  * SHA-256 and drops mismatches. Returns the top k without applying minScore
  * (the assistant does). Throws only when the database itself fails.
+ *
+ * The question is embedded with a short time limit (opts.embedTimeoutMs,
+ * default 3 s); after a failure the vector tier stays off for 30 s, so a
+ * hung model server costs one short wait, not one per question.
+ * opts.skipVector goes straight to full-text (the caller knows the model
+ * server is not ready).
  * @param {Pool} pool
  * @param {OnboardConfig} cfg
  * @param {string} query
  * @param {number} [k]
+ * @param {import("./library.d.mts").SearchOptions} [opts]
  * @returns {Promise<SearchResult>}
  */
-export async function searchLibrary(pool, cfg, query, k = cfg.topK) {
+export async function searchLibrary(pool, cfg, query, k = cfg.topK, opts = {}) {
   const q = query.trim();
   const limit = Math.max(1, Math.floor(k || 5));
   const fetchN = limit + 10; // room to replace hits that fail the checksum
@@ -1186,30 +1439,43 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK) {
 
   if (!cfg.modelUrl) fallbackReason = "no embedding model configured";
   else if (!cfg.vectorSearch) fallbackReason = "embedding width does not match the database column";
+  else if (opts.skipVector) fallbackReason = "vector search skipped (the model server was not ready at the last check)";
   else {
-    const pending = await countPending(pool, cfg);
-    if (pending > 0) {
-      fallbackReason = `${pending} library chunks are still waiting for embeddings`;
+    const failures = embedFailures();
+    const key = embedKey(cfg);
+    const failed = failures.get(key);
+    const now = Date.now();
+    if (failed && now < failed.until && now >= failed.until - EMBED_BACKOFF_MS) {
+      fallbackReason = `${failed.reason}; vector search paused for ${Math.ceil((failed.until - now) / 1000)} s`;
     } else {
-      /** @type {number[] | null} */
-      let vector = null;
-      try {
-        const [v] = await (await model()).embed(cfg, [q], "query");
-        if (Array.isArray(v) && v.length === cfg.embedDim && v.every(Number.isFinite)) vector = v;
-        else fallbackReason = "embedding model returned an unusable vector";
-      } catch (err) {
-        fallbackReason = `embedding model unreachable (${message(err)})`;
-      }
-      if (vector) {
-        const { rows } = await pool.query(
-          `SELECT ${HIT_COLUMNS}, 1 - (c.embedding <=> $1::vector) AS score
-             FROM library_chunks c JOIN library_documents d ON d.id = c.doc_id
-            WHERE c.embedding IS NOT NULL AND c.embed_model = $2
-            ORDER BY c.embedding <=> $1::vector, c.doc_id, c.ord
-            LIMIT $3`,
-          [vectorLiteral(vector), cfg.embedModel, fetchN],
-        );
-        return { tier: "vector", ...toHits(rows, "vector", limit) };
+      const pending = await countPending(pool, cfg);
+      if (pending > 0) {
+        fallbackReason = `${pending} library chunks are still waiting for embeddings`;
+      } else {
+        const t = opts.embedTimeoutMs;
+        const embedTimeoutMs = typeof t === "number" && Number.isFinite(t) && t > 0 ? Math.max(100, Math.floor(t)) : QUERY_EMBED_TIMEOUT_MS;
+        /** @type {number[] | null} */
+        let vector = null;
+        try {
+          const [v] = await (await model()).embed({ ...cfg, embedTimeoutMs }, [q], "query");
+          if (Array.isArray(v) && v.length === cfg.embedDim && v.every(Number.isFinite)) vector = v;
+          else fallbackReason = "embedding model returned an unusable vector";
+        } catch (err) {
+          fallbackReason = embedFailureReason(err);
+        }
+        if (vector) {
+          failures.delete(key);
+          const { rows } = await pool.query(
+            `SELECT ${HIT_COLUMNS}, 1 - (c.embedding <=> $1::vector) AS score
+               FROM library_chunks c JOIN library_documents d ON d.id = c.doc_id
+              WHERE c.embedding IS NOT NULL AND c.embed_model = $2
+              ORDER BY c.embedding <=> $1::vector, c.doc_id, c.ord
+              LIMIT $3`,
+            [vectorLiteral(vector), cfg.embedModel, fetchN],
+          );
+          return { tier: "vector", ...toHits(rows, "vector", limit) };
+        }
+        failures.set(key, { until: Date.now() + EMBED_BACKOFF_MS, reason: fallbackReason ?? "embedding failed" });
       }
     }
   }
@@ -1231,17 +1497,4 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK) {
   const result = { tier: "fulltext", ...toHits(rows, "fulltext", limit) };
   if (fallbackReason) result.fallbackReason = fallbackReason;
   return result;
-}
-
-/**
- * Latest successful library sync (finished_at, ISO), or null.
- * @param {Pool} pool
- * @returns {Promise<string | null>}
- */
-export async function lastLibrarySync(pool) {
-  const { rows } = await pool.query(
-    "SELECT max(finished_at) AS at FROM sync_runs WHERE kind = 'library' AND status = 'ok'",
-  );
-  const at = rows[0]?.at;
-  return at ? new Date(at).toISOString() : null;
 }

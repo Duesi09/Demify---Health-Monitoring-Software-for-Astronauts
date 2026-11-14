@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AU_KM,
   BLACKOUT_ADVICE,
@@ -25,6 +25,12 @@ import { buildProtocol } from "@/components/crew/protocols";
 import { EscalationBanner, type EscalationItem } from "@/components/overview/escalation-banner";
 import { CommDelay } from "@/components/guidance/escalation-protocol";
 import { LinkSwitch } from "@/components/link-switch";
+
+// The simulated ground-link switch stays up here (tests/ground-link-blackout.test.ts switches it down), so a
+// ground-link.json left in data/ by a dev server cannot change these renders.
+vi.mock("@/lib/onboard/ground-link", () => ({
+  getGroundLink: async () => ({ up: true, switchedUp: true, forcedOffline: false, changedAt: new Date(0).toISOString(), backend: "file" }),
+}));
 
 /** Relative error |a - b| / b. */
 const rel = (a: number, b: number) => Math.abs(a - b) / b;
@@ -304,7 +310,7 @@ describe("README: the Signal delay bullet matches the app", () => {
     };
     for (const [name, file] of Object.entries(pages)) {
       expect(bullet, name).toContain(name);
-      expect(readFileSync(path.join(root, file), "utf8"), file).toMatch(/currentLink\(sp\.link\)/);
+      expect(readFileSync(path.join(root, file), "utf8"), file).toMatch(/effectiveLink\(sp\.link\)/);
     }
   });
 });

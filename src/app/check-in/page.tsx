@@ -3,9 +3,10 @@ import { CheckInForm } from "@/components/check-in/check-in-form";
 import { RecentEntries } from "@/components/check-in/recent-entries";
 import { CrewSwitcher } from "@/components/crew-switcher";
 import { Card, PageHeader, StatusBadge } from "@/components/ui";
-import { currentLink, currentMission, missionDay } from "@/lib/config";
+import { currentMission, missionDay } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
-import { CRITICAL_BAND_ESCALATION, linkPolicy, withLink } from "@/lib/link";
+import { CRITICAL_BAND_ESCALATION, withLink } from "@/lib/link";
+import { effectiveLink } from "@/lib/onboard/effective-link";
 import { listCrew, listReadings } from "@/lib/store/readings";
 import { submitCheckIn } from "./actions";
 
@@ -24,11 +25,11 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
   const member = crew.find((c) => c.id === crewParam) ?? crew[0];
   const mission = currentMission();
   // ?link= swaps the signal delay; ?crew= picks the crew member. Both work together.
-  const { profile: link, selected } = currentLink(sp.link);
-  const policy = linkPolicy(link.oneWayS);
+  // With the ground link switched down the page runs the no-contact policy (effectiveLink).
+  const { profile: link, selected, policy, groundLinkDown } = await effectiveLink(sp.link);
   const delayText =
     policy.mode === "blackout"
-      ? `Signal delay profile ${link.label}: no contact (blackout); act on the onboard procedures and transmit when contact returns.`
+      ? `${groundLinkDown ? link.label : `Signal delay profile ${link.label}`}: no contact (blackout); act on the onboard procedures and transmit when contact returns.`
       : selected
         ? `Signal delay profile ${link.label}: ${policy.label} one way.`
         : `Current mission ${mission.name}: ${policy.label} one-way signal delay.`;

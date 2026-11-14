@@ -313,6 +313,10 @@ services:
       # crew readings while PostgreSQL is unreachable.
       - app-data:/data
       - ./library:/ground/library:ro
+      # Custom CA bundle for a TLS-intercepting proxy (then set
+      # DEMIFY_NODE_EXTRA_CA_CERTS=/etc/demify/ca.crt in .env; it applies to
+      # app and sync, so uncomment the same line under sync):
+      # - ./certs/ca.crt:/etc/demify/ca.crt:ro
     healthcheck:
       test:
         - CMD
@@ -364,6 +368,8 @@ services:
       - /data:uid=1001,gid=1001,mode=0755
     volumes:
       - ./library:/ground/library:ro
+      # Custom CA bundle for a TLS-intercepting proxy (see the app service):
+      # - ./certs/ca.crt:/etc/demify/ca.crt:ro
     healthcheck:
       # Healthy while the sync loop touches its heartbeat file (every tick,
       # also while it waits for PostgreSQL): younger than 5 minutes.

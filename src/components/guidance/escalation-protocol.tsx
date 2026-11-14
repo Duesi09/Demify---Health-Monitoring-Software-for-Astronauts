@@ -1,6 +1,7 @@
 import { CircleCheck, Lock, PhoneCall, PhoneOff, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
 import { INDICATORS, bandEscalationLabel, escalationFlags, type IndicatorDef } from "@/lib/health/knowledge";
 import {
+  GROUND_LINK_DOWN_LABEL,
   LINK_PROFILES,
   LINK_PROFILE_IDS,
   LIVE_LIMIT_RULE,
@@ -226,9 +227,19 @@ export function EscalationProtocol({ mode = "live" }: { mode?: LinkMode }) {
 /**
  * Signal delay for the selected link profile (?link=, else the mission's
  * own), every profile for comparison, and what the crew does under it
- * (linkPolicy: live, delayed or blackout).
+ * (linkPolicy: live, delayed or blackout). While the simulated ground-link
+ * switch is down (groundLinkDown) `link` is the no-contact profile from
+ * effectiveLink and the card names the switch instead of a profile.
  */
-export function CommDelay({ link, missionName }: { link: LinkProfile; missionName: string }) {
+export function CommDelay({
+  link,
+  missionName,
+  groundLinkDown = false,
+}: {
+  link: LinkProfile;
+  missionName: string;
+  groundLinkDown?: boolean;
+}) {
   const policy = linkPolicy(link.oneWayS);
   return (
     <section className="rounded-xl border border-border bg-surface p-4 md:p-5" aria-labelledby="comm-delay-title">
@@ -241,8 +252,15 @@ export function CommDelay({ link, missionName }: { link: LinkProfile; missionNam
             Communication delay
           </h3>
           <p className="mt-0.5 text-sm text-muted">
-            Current mission <span className="text-fg">{missionName}</span>, signal delay profile{" "}
-            <span className="text-fg">{link.label}</span>:{" "}
+            Current mission <span className="text-fg">{missionName}</span>,{" "}
+            {groundLinkDown ? (
+              <span className="text-fg">ground link down (simulated blackout)</span>
+            ) : (
+              <>
+                signal delay profile <span className="text-fg">{link.label}</span>
+              </>
+            )}
+            :{" "}
             {policy.mode === "blackout" ? (
               <span className="text-fg">{policy.label}</span>
             ) : (
@@ -259,10 +277,19 @@ export function CommDelay({ link, missionName }: { link: LinkProfile; missionNam
       </header>
 
       <ul className="mt-4 space-y-1.5 text-sm">
+        {groundLinkDown && (
+          <li className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-1.5 text-fg">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {GROUND_LINK_DOWN_LABEL}
+              <Tag size="xs">Current</Tag>
+            </span>
+            <span className="shrink-0 whitespace-nowrap tabular">{capitalized(policy.label)}</span>
+          </li>
+        )}
         {LINK_PROFILE_IDS.map((id) => {
           const p = LINK_PROFILES[id];
           const pp = linkPolicy(p.oneWayS);
-          const current = id === link.id;
+          const current = !groundLinkDown && id === link.id;
           return (
             <li
               key={id}

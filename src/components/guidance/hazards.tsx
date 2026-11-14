@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AirVent, ArrowUpRight, Orbit, Radiation, UsersRound, Weight, type LucideIcon } from "lucide-react";
 import { BODY_REGIONS, HAZARDS, INDICATORS } from "@/lib/health/knowledge";
+import { withLink, type LinkProfileId } from "@/lib/link";
 import type { HazardId } from "@/lib/types";
 import { tagClass } from "@/components/ui";
 
@@ -17,7 +18,8 @@ export const RIDGE_LETTER: Record<HazardId, string> = { radiation: "R", isolatio
 /** NASA's RIDGE order. */
 export const HAZARD_ORDER: HazardId[] = ["radiation", "isolation", "distance", "gravity", "environment"];
 
-export function HazardCards() {
+/** The five RIDGE hazards; body-system links keep the selected signal-delay profile (?link=). */
+export function HazardCards({ link = null }: { link?: LinkProfileId | null }) {
   const regions = Object.values(BODY_REGIONS);
   const indicators = Object.values(INDICATORS);
   return (
@@ -61,7 +63,7 @@ export function HazardCards() {
                 {affected.map((r) => (
                   <li key={r.id}>
                     <Link
-                      href={`/body?region=${r.id}`}
+                      href={withLink(`/body?region=${r.id}`, link)}
                       className={tagClass("sm", true)}
                     >
                       {r.name}

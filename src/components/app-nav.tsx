@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useRef } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
   BookOpen,
@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { GroundLinkChip } from "@/components/onboard/ground-link-indicators";
+import { parseLinkParam, withLink, type LinkProfileId } from "@/lib/link";
 
 interface NavItem {
   href: string;
@@ -81,11 +82,33 @@ function NavLabel({ label }: { label: string }) {
   );
 }
 
+/** The accent darkened a quarter towards the text colour: above 4.5:1 on the active item's tint (plain accent is 3.6:1). */
+const ACTIVE_TEXT = "text-[color:color-mix(in_srgb,var(--accent)_75%,var(--fg))]";
+
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * Every nav link keeps the page's signal delay profile (?link=), so a
+ * chosen profile (e.g. the conjunction blackout) stays on while moving
+ * between pages. useSearchParams sits under Suspense: a prerendered page
+ * gets the plain links in its HTML and the profile once it hydrates.
+ */
 export function AppNav() {
+  return (
+    <Suspense fallback={<NavBar link={null} />}>
+      <NavBarWithLink />
+    </Suspense>
+  );
+}
+
+function NavBarWithLink() {
+  const link = parseLinkParam(useSearchParams().get("link"));
+  return <NavBar link={link} />;
+}
+
+function NavBar({ link }: { link: LinkProfileId | null }) {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement>(null);
 
@@ -102,7 +125,7 @@ export function AppNav() {
       className="sticky top-0 z-20 flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-3 py-2 backdrop-blur md:h-screen md:w-56 md:flex-col md:items-stretch md:gap-0 md:self-start md:overflow-y-auto md:border-b-0 md:border-r md:px-3 md:py-5"
     >
       <Link
-        href="/"
+        href={withLink("/", link)}
         aria-label="Demify Health Monitoring, overview"
         className="mr-2 flex shrink-0 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-accent md:mb-5 md:mr-0 md:mt-1 md:justify-center md:px-2"
       >
@@ -138,10 +161,10 @@ export function AppNav() {
             return (
               <Link
                 key={href}
-                href={href}
+                href={withLink(href, link)}
                 aria-current={active ? "page" : undefined}
                 className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-                  active ? "bg-accent/15 text-accent" : "text-muted hover:bg-surface-2 hover:text-fg"
+                  active ? `bg-accent/15 ${ACTIVE_TEXT}` : "text-muted hover:bg-surface-2 hover:text-fg"
                 }`}
               >
                 <Icon size={16} aria-hidden />
@@ -151,8 +174,11 @@ export function AppNav() {
           })}
         </div>
       ))}
-      {/* Ground link up/down (simulated blackout switch); hidden until GET /api/ground-link answers. */}
-      <GroundLinkChip className="ml-1 border-l border-border pl-2 md:mt-auto md:ml-0 md:border-l-0 md:px-3 md:pb-1 md:pl-3 md:pt-4" />
+      {/* Ground link (simulated blackout switch, conjunction profile, air-gapped); hidden until GET /api/ground-link answers. */}
+      <GroundLinkChip
+        link={link}
+        className="ml-1 border-l border-border pl-2 md:mt-auto md:ml-0 md:border-l-0 md:px-3 md:pb-1 md:pl-3 md:pt-4"
+      />
     </nav>
   );
 }

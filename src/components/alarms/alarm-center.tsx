@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowUpRight, BellOff, BellRing, ChevronDown, Volume2, VolumeX, WifiOff } from "lucide-react";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import type { LiveVitals, MonitorAlarm } from "@/lib/types";
@@ -15,6 +15,7 @@ import {
   formatCountdown,
   groupByCrew,
   isCrewPage,
+  monitorHref,
   resumeTracker,
   serverStateKey,
   telemetryLabel,
@@ -102,6 +103,39 @@ async function fetchLive(outer: AbortSignal): Promise<LiveVitals[]> {
     clearTimeout(timer);
     outer.removeEventListener("abort", onAbort);
   }
+}
+
+interface MonitorLinkProps {
+  crewId: string;
+  crewName: string;
+}
+
+function MonitorAnchor({ href, crewName }: { href: string; crewName: string }) {
+  return (
+    <Link href={href} className="ac-btn ac-primary">
+      Open monitor<span className="sr-only"> for {crewName}</span>
+      <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
+    </Link>
+  );
+}
+
+function MonitorLinkFromUrl({ crewId, crewName }: MonitorLinkProps) {
+  const search = useSearchParams();
+  return <MonitorAnchor href={monitorHref(crewId, search?.get("link"))} crewName={crewName} />;
+}
+
+/**
+ * "Open monitor" for one crew member. Keeps the page's ?link= (signal-delay
+ * profile), so the monitor opens under the same link. useSearchParams sits in
+ * its own Suspense boundary: on a prerendered page the plain link renders
+ * until the URL is known, and the rest of the alarm bar is unaffected.
+ */
+export function MonitorLink(props: MonitorLinkProps) {
+  return (
+    <Suspense fallback={<MonitorAnchor href={monitorHref(props.crewId)} crewName={props.crewName} />}>
+      <MonitorLinkFromUrl {...props} />
+    </Suspense>
+  );
 }
 
 /**
@@ -388,10 +422,7 @@ export function AlarmCenter() {
               )}
               {top && !isCrewPage(pathname, groups[0].crewId) && (
                 <span className="hidden shrink-0 md:inline-flex">
-                  <Link href={`/crew/${groups[0].crewId}`} className="ac-btn ac-primary">
-                    Open monitor<span className="sr-only"> for {groups[0].crewName}</span>
-                    <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
-                  </Link>
+                  <MonitorLink crewId={groups[0].crewId} crewName={groups[0].crewName} />
                 </span>
               )}
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -483,10 +514,7 @@ export function AlarmCenter() {
                       {here ? (
                         <span className="text-xs font-medium opacity-80">Shown on this page</span>
                       ) : (
-                        <Link href={`/crew/${g.crewId}`} className="ac-btn ac-primary">
-                          Open monitor<span className="sr-only"> for {g.crewName}</span>
-                          <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden />
-                        </Link>
+                        <MonitorLink crewId={g.crewId} crewName={g.crewName} />
                       )}
                     </div>
                   </li>

@@ -20,11 +20,11 @@ import { buildRecord } from "@/components/crew/record-data";
 import { LinkSwitch } from "@/components/link-switch";
 import { PatientMonitor } from "@/components/monitor/patient-monitor";
 import { StatusBadge } from "@/components/ui";
-import { currentLink } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
-import { linkPolicy, withLink } from "@/lib/link";
+import { withLink } from "@/lib/link";
 import { getLiveVitals } from "@/lib/monitor/live";
+import { effectiveLink } from "@/lib/onboard/effective-link";
 import { getCrew } from "@/lib/store/readings";
 import { listScenarios } from "@/lib/store/scenarios";
 import type { LiveVitals } from "@/lib/types";
@@ -69,9 +69,9 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
   if (!a || !live) notFound();
 
   const crew = a.crew;
-  // ?link= swaps the signal delay for every delay string on this page.
-  const { profile: link, selected } = currentLink(sp.link);
-  const policy = linkPolicy(link.oneWayS);
+  // ?link= swaps the signal delay for every delay string on this page; with
+  // the ground link switched down it is no contact (effectiveLink).
+  const { profile: link, selected, policy, groundLinkDown } = await effectiveLink(sp.link);
   const readings = await readingsFor(crew, 24 * 7);
   const rows = buildRecord(a, readings, now);
   // Server view of the drill; the client poll (CrewLiveProvider) refreshes the
@@ -124,7 +124,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
               hrefFor={(cid) => withLink(`/crew/${encodeURIComponent(cid)}`, selected)}
               tags={drillTags}
             />
-            <LinkSwitch active={link.id} path={`/crew/${encodeURIComponent(crew.id)}`} />
+            <LinkSwitch active={link.id} path={`/crew/${encodeURIComponent(crew.id)}`} groundLinkDown={groundLinkDown} />
           </div>
         </header>
 
@@ -184,7 +184,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
             </Link>
           </SectionTitle>
           <RecordBasisNote crewName={crew.name} />
-          <HealthRecord rows={rows} />
+          <HealthRecord rows={rows} link={selected} />
           <p className="mt-3 text-[11px] text-muted">
             Trends: continuous signals over 24 h, daily check-ins over 7 days; shaded strip = normal range. Values marked
             SIMULATED come from the demo telemetry generator until crew entries or DEVICE readings replace them.{" "}

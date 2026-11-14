@@ -118,7 +118,11 @@ export function inventoryDoc(items: MedKitItem[], updated: string): LibraryDoc;
  * then embeds pending chunks when the model is reachable (otherwise they stay
  * pending and full-text search covers them). Holds LOCK_SYNC; returns status
  * "skipped" when another sync runs or the ground link is down (unless
- * opts.force for the first local ingest). Records a sync_runs row.
+ * opts.force for the first local ingest). Returns status "failed" (nothing
+ * changed, with the reason) when the ground library has no Markdown
+ * documents, or when it would remove more than half of the stored documents
+ * (an empty or half-copied ground folder) unless opts.force. Records a
+ * sync_runs row and prunes old ones (pruneSyncRuns).
  */
 export function syncLibrary(
   pool: Pool,
@@ -129,15 +133,68 @@ export function syncLibrary(
 /** Embeds up to limit (default 256) chunks whose embedding is NULL. Returns how many were embedded. */
 export function embedPending(pool: Pool, cfg: OnboardConfig, limit?: number): Promise<number>;
 
+export interface SearchOptions {
+  /** Go straight to full-text search (e.g. the cached model status says the model server is not ready). */
+  skipVector?: boolean;
+  /** Time limit for embedding the question, ms (default 3000; document embeddings keep cfg.embedTimeoutMs). */
+  embedTimeoutMs?: number;
+}
+
 /**
  * Retrieval with fallbacks: vector (pgvector cosine, needs DB + embedding
  * model) -> full-text (PostgreSQL) -> never "bundled" here. Re-checks every
  * hit's SHA-256. Throws only when the database itself is unreachable.
+ * A failed question embedding keeps the vector tier off for about 30 s
+ * (process-wide, per model); an HTTP error from the embeddings endpoint is
+ * reported as "embedding model error (...)", a connection failure as
+ * "embedding model unreachable (...)".
  */
-export function searchLibrary(pool: Pool, cfg: OnboardConfig, query: string, k?: number): Promise<SearchResult>;
+export function searchLibrary(pool: Pool, cfg: OnboardConfig, query: string, k?: number, opts?: SearchOptions): Promise<SearchResult>;
 
 /** Keyword search over bundled documents (no database). Deterministic BM25-style score. */
 export function searchBundled(docs: LibraryDoc[], query: string, k?: number): SearchResult;
 
-/** Latest successful library sync (finished_at), or null. */
+/**
+ * Latest successful library sync that came from the ground (finished_at, ISO), or null:
+ * the startup seed from the release copy and runs forced while the ground link was down do not count.
+ */
 export function lastLibrarySync(pool: Pool): Promise<string | null>;
+
+export interface LibrarySyncInfo {
+  /** Latest successful library sync from the ground (ISO), or null (same as lastLibrarySync). */
+  lastGroundSync: string | null;
+  /** Latest successful load without the ground link: the startup seed from the release copy, or a forced local ingest during a blackout (ISO), or null. */
+  seededAt: string | null;
+}
+/** When the onboard library last came from the ground, and when it was last seeded locally. */
+export function librarySyncInfo(pool: Pool): Promise<LibrarySyncInfo>;
+
+/**
+ * Deletes sync_runs rows older than keepDays (default 30), keeping at least the keepRows (default 100)
+ * newest rows and the latest successful run of each kind. syncLibrary calls it after every run. Returns rows deleted.
+ */
+export function pruneSyncRuns(pool: Pool, opts?: { keepDays?: number; keepRows?: number }): Promise<number>;
+
+export interface CrewBaselinesState {
+  crewMembers: number;
+  /** Newest crew.updated_at (ISO), or null without crew. */
+  crewUpdatedAt: string | null;
+  /** synced_at of the crew-baselines document (ISO), or null when it is missing. */
+  documentSyncedAt: string | null;
+  /** Crew rows exist and the document is missing or older than the newest crew record. */
+  due: boolean;
+}
+/** Whether the crew-baselines document must be regenerated. */
+export function crewBaselinesState(pool: Pool): Promise<CrewBaselinesState>;
+
+export interface CrewBaselinesRefresh {
+  status: "added" | "updated" | "unchanged" | "no-crew" | "skipped";
+  crewMembers?: number;
+  /** Why it was skipped (another library sync holds the lock and regenerates it). */
+  reason?: string;
+}
+/**
+ * Regenerates only the crew-baselines document from the crew table (onboard data, no ground link
+ * needed). Holds LOCK_SYNC ("skipped" while a library sync runs). New chunks wait for embedPending.
+ */
+export function refreshCrewBaselines(pool: Pool): Promise<CrewBaselinesRefresh>;

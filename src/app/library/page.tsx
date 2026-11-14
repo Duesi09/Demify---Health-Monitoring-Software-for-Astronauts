@@ -23,6 +23,7 @@ import { Card, PageHeader, StatusBadge, Tag } from "@/components/ui";
 import { libraryListing } from "@/lib/assistant/library-source";
 import type { LibraryListing } from "@/lib/onboard/types";
 import { onboardStatus } from "@/lib/assistant/status";
+import { parseLinkParam } from "@/lib/link";
 
 export const metadata: Metadata = { title: "Onboard library" };
 export const dynamic = "force-dynamic";
@@ -70,10 +71,18 @@ function Expiry({ expiresOn, today }: { expiresOn?: string; today: string }) {
   );
 }
 
+/** Sync run status; the OK badge keeps dark text (contrast above 4.5:1 at 9.5 px). */
+function SyncStatusBadge({ status }: { status: LibraryListing["syncRuns"][number]["status"] }) {
+  const s = SYNC_STATUS[status];
+  return <StatusBadge status={s.status} label={s.label} size="xs" className={s.status === "nominal" ? "text-fg!" : ""} />;
+}
+
 const TH = "py-1.5 pr-4 text-left text-xs font-normal text-muted whitespace-nowrap";
 const TD = "py-2 pr-4 align-top";
 
-export default async function LibraryPage() {
+export default async function LibraryPage(props: PageProps<"/library">) {
+  // ?link= (signal delay profile): the conjunction profile means no contact, so no sync from this page.
+  const link = parseLinkParam((await props.searchParams).link);
   // Same functions as GET /api/library and GET /api/onboard/status.
   const [listing, status] = await Promise.all([libraryListing(), onboardStatus()]);
   const today = todayUtc();
@@ -123,9 +132,12 @@ export default async function LibraryPage() {
           </p>
         </Card>
 
-        <Card title="Sync from the ground">
-          <SyncPanel initialLink={status.groundLink} database={status.database} />
-        </Card>
+        {/* The nav's ground-link chip links here (#ground-link). */}
+        <div id="ground-link" className="scroll-mt-24">
+          <Card title="Sync from the ground" className="h-full">
+            <SyncPanel initialLink={status.groundLink} database={status.database} link={link} />
+          </Card>
+        </div>
       </div>
 
       <Card title="Documents" subtitle="Ordered by category. Version = first 8 characters of the document's SHA-256.">
@@ -277,7 +289,7 @@ export default async function LibraryPage() {
                       <td className={`${TD} whitespace-nowrap`}>{SYNC_KIND_LABEL[r.kind]}</td>
                       <td className={`${TD} whitespace-nowrap text-muted`}>{SYNC_TRIGGER_LABEL[r.trigger] ?? capitalise(r.trigger)}</td>
                       <td className={TD}>
-                        <StatusBadge status={SYNC_STATUS[r.status].status} label={SYNC_STATUS[r.status].label} size="xs" />
+                        <SyncStatusBadge status={r.status} />
                       </td>
                       <td className={`${TD} whitespace-nowrap tabular text-muted`}>{utcDateTime(r.startedAt)}</td>
                       <td className={`${TD} whitespace-nowrap tabular text-muted`}>{durationText(r.startedAt, r.finishedAt)}</td>
@@ -291,7 +303,7 @@ export default async function LibraryPage() {
               {listing.syncRuns.map((r, i) => (
                 <li key={r.id ?? `${r.kind}-${r.startedAt}-${i}`} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge status={SYNC_STATUS[r.status].status} label={SYNC_STATUS[r.status].label} size="xs" />
+                    <SyncStatusBadge status={r.status} />
                     <span className="text-sm font-medium">{SYNC_KIND_LABEL[r.kind]}</span>
                     <span className="text-xs text-muted">{SYNC_TRIGGER_LABEL[r.trigger] ?? capitalise(r.trigger)}</span>
                   </div>

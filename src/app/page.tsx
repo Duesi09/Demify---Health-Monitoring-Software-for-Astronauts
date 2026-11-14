@@ -9,10 +9,11 @@ import { byEscalation } from "@/components/overview/format";
 import { SimulatedTag } from "@/components/overview/status-icon";
 import { buildCrewTrends } from "@/components/overview/trends-data";
 import { Provenance, StatusBadge } from "@/components/ui";
-import { currentLink, currentMission, missionDay } from "@/lib/config";
+import { currentMission, missionDay } from "@/lib/config";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
-import { MARS_DELAY_RANGE, findingUnderLink, linkPolicy, withLink } from "@/lib/link";
+import { MARS_DELAY_RANGE, findingUnderLink, withLink } from "@/lib/link";
 import { getAllLiveVitals } from "@/lib/monitor/live";
+import { effectiveLink } from "@/lib/onboard/effective-link";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
 
 export const dynamic = "force-dynamic";
@@ -57,9 +58,10 @@ export default async function OverviewPage(props: PageProps<"/">) {
   const mission = currentMission();
   const day = missionDay(now);
   // ?link= swaps the signal delay only (gravity, duration and dose stay with
-  // the mission); every delay string on this page follows `link`.
-  const { profile: link, selected } = currentLink(sp.link);
-  const policy = linkPolicy(link.oneWayS);
+  // the mission); every delay string on this page follows `link`. With the
+  // ground link switched down the page runs the no-contact policy, as under
+  // ?link=conjunction (effectiveLink).
+  const { profile: link, selected, policy, groundLinkDown } = await effectiveLink(sp.link);
   const crewParam = typeof sp.crew === "string" ? sp.crew : undefined;
 
   const [all, initialVitals] = await Promise.all([assessAllCrew(), getAllLiveVitals(now)]);
@@ -134,7 +136,13 @@ export default async function OverviewPage(props: PageProps<"/">) {
             <ClipboardPlus size={15} aria-hidden /> Daily check-in
           </Link>
         </div>
-        <LinkSwitch active={link.id} path="/" query={{ crew: crewParam }} className="basis-full" />
+        <LinkSwitch
+          active={link.id}
+          path="/"
+          query={{ crew: crewParam }}
+          groundLinkDown={groundLinkDown}
+          className="basis-full"
+        />
       </header>
 
       {/* Crew grid */}

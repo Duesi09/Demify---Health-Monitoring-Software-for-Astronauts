@@ -2,12 +2,12 @@ import "server-only";
 import path from "node:path";
 import type { Pool } from "pg";
 import { onboardConfig, type OnboardConfig } from "@onboard/config.mjs";
-import { ensureSchema, getPool, pingDatabase } from "@onboard/db.mjs";
+import { ensureSchema, getPool } from "@onboard/db.mjs";
 import {
   chunkDoc,
   crewBaselineDoc,
   inventoryDoc,
-  lastLibrarySync,
+  librarySyncInfo,
   readLibraryDir,
   searchBundled,
   searchLibrary,
@@ -19,7 +19,8 @@ import {
 } from "@onboard/library.mjs";
 import { listCrew } from "../store/readings";
 import type { LibraryListing, OnboardStatus, SyncRunSummary } from "../onboard/types";
-import { bundledFreshness, databaseFreshness, type LibraryFreshness } from "./freshness";
+import { bundledFreshness, releaseCopyFreshness, stationFreshness, type LibraryFreshness } from "./freshness";
+import { foldWord, stemSet, stemWord } from "./safety";
 
 /**
  * The one place that decides where the onboard library comes from:
@@ -29,7 +30,8 @@ import { bundledFreshness, databaseFreshness, type LibraryFreshness } from "./fr
  * - bundled: the files shipped with this release (<cwd>/library), read
  *   directly. Used without a database (the laptop setup), and as the
  *   fallback when the database is configured but unreachable or still empty
- *   (with a fallbackReason).
+ *   (with a fallbackReason; its freshness then reads "release copy bundled
+ *   with the app (…)", never like the station's synced library).
  *
  * Listing, counts, pending embeddings, freshness, last sync and search all
  * go through here, so the library page, the status endpoint and the
@@ -68,6 +70,8 @@ const BUNDLED_TTL_MS = 30_000;
 /** Automatic syncs (stale library, ground link up) start at most this often. */
 const AUTO_SYNC_EVERY_MS = 10 * 60_000;
 const PING_TIMEOUT_MS = 2000;
+/** The question embedding gets this long before search falls back to full text. */
+const QUERY_EMBED_TIMEOUT_MS = 3000;
 const LOG_EVERY_MS = 60_000;
 const SYNC_RUNS_LISTED = 20;
 
@@ -116,6 +120,26 @@ export function markDatabaseDown(cfg: OnboardConfig, err: unknown): void {
   logLimited(`db-down:${cfg.databaseUrl}`, `PostgreSQL is unreachable for the onboard library (${error}); using the bundled library.`);
 }
 
+/**
+ * SELECT 1 within timeoutMs. Rejects with the driver's error ("connect
+ * ECONNREFUSED …") or "no answer within 2 s" when the server stays silent.
+ */
+async function ping(pool: Pool, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const query = pool.query("SELECT 1");
+  query.catch(() => {}); // a late failure after the time limit is not unhandled
+  try {
+    await Promise.race([
+      query,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`no answer within ${timeoutMs / 1000} s`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Connected pool, or why there is none. Never throws. */
 export async function connectDatabase(
   cfg: OnboardConfig = onboardConfig(),
@@ -125,7 +149,7 @@ export async function connectDatabase(
   if (down && down.url === cfg.databaseUrl && Date.now() < down.until) return { state: "unreachable", error: down.error };
   try {
     const pool = getPool();
-    if (!(await pingDatabase(pool, PING_TIMEOUT_MS))) throw new Error(`no answer within ${PING_TIMEOUT_MS / 1000} s`);
+    await ping(pool, PING_TIMEOUT_MS);
     await ensureSchema(pool);
     shared().dbDown = null;
     return { state: "connected", pool };
@@ -144,7 +168,7 @@ export async function resolveLibrary(cfg: OnboardConfig = onboardConfig()): Prom
       source: "bundled",
       database: "unreachable",
       pool: null,
-      fallbackReason: `database unreachable (${db.error}); using the library bundled with this release`,
+      fallbackReason: `database unreachable (${db.error}); using the release copy bundled with the app`,
     };
   }
   try {
@@ -154,7 +178,7 @@ export async function resolveLibrary(cfg: OnboardConfig = onboardConfig()): Prom
       source: "bundled",
       database: "connected",
       pool: db.pool,
-      fallbackReason: "the onboard database library is empty (not synced yet); using the library bundled with this release",
+      fallbackReason: "the onboard database library is empty (not synced yet); using the release copy bundled with the app",
     };
   } catch (err) {
     markDatabaseDown(cfg, err);
@@ -162,7 +186,7 @@ export async function resolveLibrary(cfg: OnboardConfig = onboardConfig()): Prom
       source: "bundled",
       database: "unreachable",
       pool: null,
-      fallbackReason: `database unreachable (${describe(err)}); using the library bundled with this release`,
+      fallbackReason: `database unreachable (${describe(err)}); using the release copy bundled with the app`,
     };
   }
 }
@@ -226,6 +250,18 @@ export function bundledLibrary(): Promise<BundledLibrary> {
 /* Freshness                                                                  */
 /* ------------------------------------------------------------------------- */
 
+/** Why the release copy answers although a database is configured (null without a database). */
+function releaseCopyWhy(lib: Pick<ResolvedLibrary, "database">): string | null {
+  if (lib.database === "not-configured") return null;
+  return lib.database === "connected" ? "onboard library empty, not synced yet" : "database unreachable";
+}
+
+/** Freshness of the bundled files: the release date without a database, else "release copy bundled with the app (…)". */
+async function bundledFreshnessFor(lib: Pick<ResolvedLibrary, "database">, why = releaseCopyWhy(lib)): Promise<LibraryFreshness> {
+  if (why) return releaseCopyFreshness(why);
+  return bundledFreshness((await bundledLibrary()).date);
+}
+
 /** Freshness of the library the source serves. Never throws. */
 export async function libraryFreshness(
   source: "database" | "bundled",
@@ -234,12 +270,14 @@ export async function libraryFreshness(
 ): Promise<LibraryFreshness> {
   if (source === "database" && lib.pool) {
     try {
-      return databaseFreshness(await lastLibrarySync(lib.pool), cfg.syncMaxAgeHours);
+      return stationFreshness(await librarySyncInfo(lib.pool), cfg.syncMaxAgeHours);
     } catch (err) {
       markDatabaseDown(cfg, err);
+      return releaseCopyFreshness("database unreachable");
     }
   }
-  return bundledFreshness((await bundledLibrary()).date);
+  // A database search that failed falls back to the release copy: the database is the reason.
+  return bundledFreshnessFor(lib, source === "bundled" && lib.source === "database" ? "database unreachable" : undefined);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -256,15 +294,19 @@ export async function searchOnboardLibrary(
   question: string,
   lib: ResolvedLibrary,
   cfg: OnboardConfig = onboardConfig(),
+  opts: { skipVector?: boolean } = {},
 ): Promise<LibrarySearch> {
   let fallbackReason = lib.fallbackReason;
   if (lib.source === "database" && lib.pool) {
     try {
-      const result = await searchLibrary(lib.pool, cfg, question, cfg.topK);
+      const result = await searchLibrary(lib.pool, cfg, question, cfg.topK, {
+        skipVector: !!opts.skipVector,
+        embedTimeoutMs: QUERY_EMBED_TIMEOUT_MS,
+      });
       return { ...result, source: "database" };
     } catch (err) {
       markDatabaseDown(cfg, err);
-      fallbackReason = `database search failed (${describe(err)}); using the library bundled with this release`;
+      fallbackReason = `database search failed (${describe(err)}); using the release copy bundled with the app`;
     }
   }
   const bundled = await bundledLibrary();
@@ -272,6 +314,51 @@ export async function searchOnboardLibrary(
   const reasons = [fallbackReason, bundled.error ? `the bundled library could not be read (${bundled.error})` : undefined, result.fallbackReason];
   const reason = reasons.filter(Boolean).join("; ");
   return { ...result, source: "bundled", ...(reason ? { fallbackReason: reason } : {}) };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Library vocabulary (grounding check)                                       */
+/* ------------------------------------------------------------------------- */
+
+const bundledStems = new WeakMap<BundledLibrary, Set<string>>();
+
+/**
+ * Which of these words (folded, lower case) the library contains anywhere:
+ * the database library (PostgreSQL full-text, English stemming) or the
+ * bundled files. A failed lookup counts as "not contained" (the answer is
+ * then withheld, never shown on a guess). Never throws.
+ */
+export async function libraryKnownWords(
+  words: string[],
+  source: "database" | "bundled",
+  lib: ResolvedLibrary,
+  cfg: OnboardConfig = onboardConfig(),
+): Promise<Set<string>> {
+  const known = new Set<string>();
+  if (!words.length) return known;
+  if (source === "database" && lib.pool) {
+    try {
+      const { rows } = await lib.pool.query(
+        `SELECT w FROM unnest($1::text[]) AS w
+          WHERE numnode(plainto_tsquery('english', w)) > 0
+            AND (EXISTS (SELECT 1 FROM library_chunks c WHERE c.tsv @@ plainto_tsquery('english', w))
+                 OR EXISTS (SELECT 1 FROM library_documents d WHERE to_tsvector('english', d.title) @@ plainto_tsquery('english', w)))`,
+        [words],
+      );
+      for (const r of rows) known.add(String(r.w));
+    } catch (err) {
+      markDatabaseDown(cfg, err);
+    }
+    return known;
+  }
+  const bundled = await bundledLibrary();
+  let stems = bundledStems.get(bundled);
+  if (!stems) {
+    stems = stemSet(bundled.docs.map((d) => `${d.title}\n${d.body}`));
+    bundledStems.set(bundled, stems);
+  }
+  for (const w of words) if (stems.has(stemWord(foldWord(w)))) known.add(w);
+  return known;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -305,7 +392,7 @@ const byCategoryThenTitle = (a: { category: string; title: string }, b: { catego
   (CATEGORY_ORDER.indexOf(a.category) + 1 || 99) - (CATEGORY_ORDER.indexOf(b.category) + 1 || 99) || a.title.localeCompare(b.title);
 
 async function databaseListing(pool: Pool, cfg: OnboardConfig): Promise<LibraryListing> {
-  const [docs, items, runs, syncedAt] = await Promise.all([
+  const [docs, items, runs, syncInfo] = await Promise.all([
     pool.query(
       `SELECT d.id, d.title, d.category, d.source, d.url, d.license, d.reviewed, d.updated, d.body_sha256, d.synced_at,
               count(c.id)::int AS chunks
@@ -320,7 +407,7 @@ async function databaseListing(pool: Pool, cfg: OnboardConfig): Promise<LibraryL
       `SELECT id, kind, trigger, status, started_at, finished_at, detail FROM sync_runs ORDER BY started_at DESC, id DESC LIMIT $1`,
       [SYNC_RUNS_LISTED],
     ),
-    lastLibrarySync(pool),
+    librarySyncInfo(pool),
   ]);
   const documents: LibraryListing["documents"] = docs.rows
     .map((r) => ({
@@ -352,13 +439,13 @@ async function databaseListing(pool: Pool, cfg: OnboardConfig): Promise<LibraryL
     documents,
     inventory,
     syncRuns: runs.rows.map(toRun),
-    freshness: databaseFreshness(syncedAt, cfg.syncMaxAgeHours),
+    freshness: stationFreshness(syncInfo, cfg.syncMaxAgeHours),
   };
 }
 
-async function bundledListing(): Promise<LibraryListing> {
-  const lib = await bundledLibrary();
-  const documents: LibraryListing["documents"] = lib.docs
+async function bundledListing(lib: Pick<ResolvedLibrary, "database">): Promise<LibraryListing> {
+  const bundled = await bundledLibrary();
+  const documents: LibraryListing["documents"] = bundled.docs
     .map((d) => ({
       id: d.id,
       title: d.title,
@@ -372,7 +459,7 @@ async function bundledListing(): Promise<LibraryListing> {
       chunks: chunkDoc(d).length,
     }))
     .sort(byCategoryThenTitle);
-  return { source: "bundled", documents, inventory: lib.inventory, syncRuns: [], freshness: bundledFreshness(lib.date) };
+  return { source: "bundled", documents, inventory: bundled.inventory, syncRuns: [], freshness: await bundledFreshnessFor(lib) };
 }
 
 /** GET /api/library. Never throws. */
@@ -383,9 +470,10 @@ export async function libraryListing(cfg: OnboardConfig = onboardConfig()): Prom
       return await databaseListing(lib.pool, cfg);
     } catch (err) {
       markDatabaseDown(cfg, err);
+      return bundledListing({ database: "unreachable" });
     }
   }
-  return bundledListing();
+  return bundledListing(lib);
 }
 
 /** The library part of GET /api/onboard/status. Never throws. */
@@ -395,7 +483,7 @@ export async function libraryStatus(
   const lib = await resolveLibrary(cfg);
   if (lib.pool) {
     try {
-      const [counts, last, syncedAt] = await Promise.all([
+      const [counts, last, syncInfo] = await Promise.all([
         lib.pool.query(
           `SELECT (SELECT count(*)::int FROM library_documents) AS documents,
                   (SELECT count(*)::int FROM library_chunks) AS chunks,
@@ -406,7 +494,7 @@ export async function libraryStatus(
           `SELECT id, kind, trigger, status, started_at, finished_at, detail FROM sync_runs
             WHERE kind = 'library' ORDER BY started_at DESC, id DESC LIMIT 1`,
         ),
-        lastLibrarySync(lib.pool),
+        librarySyncInfo(lib.pool),
       ]);
       const lastSync = last.rows[0] ? toRun(last.rows[0]) : null;
       if (lib.source === "database") {
@@ -418,29 +506,33 @@ export async function libraryStatus(
             documents: Number(c.documents ?? 0),
             chunks: Number(c.chunks ?? 0),
             pendingEmbeddings: Number(c.pending ?? 0),
-            freshness: databaseFreshness(syncedAt, cfg.syncMaxAgeHours),
+            freshness: stationFreshness(syncInfo, cfg.syncMaxAgeHours),
             lastSync,
           },
         };
       }
       // Connected but empty: the bundled library answers; show its counts and the last (failed or skipped) sync.
-      return { database: "connected", library: { ...(await bundledStatus()), lastSync }, fallbackReason: lib.fallbackReason };
+      return { database: "connected", library: { ...(await bundledStatus(lib)), lastSync }, fallbackReason: lib.fallbackReason };
     } catch (err) {
       markDatabaseDown(cfg, err);
-      return { database: "unreachable", library: await bundledStatus(), fallbackReason: `database unreachable (${describe(err)})` };
+      return {
+        database: "unreachable",
+        library: await bundledStatus({ database: "unreachable" }),
+        fallbackReason: `database unreachable (${describe(err)})`,
+      };
     }
   }
-  return { database: lib.database, library: await bundledStatus(), ...(lib.fallbackReason ? { fallbackReason: lib.fallbackReason } : {}) };
+  return { database: lib.database, library: await bundledStatus(lib), ...(lib.fallbackReason ? { fallbackReason: lib.fallbackReason } : {}) };
 }
 
-async function bundledStatus(): Promise<OnboardStatus["library"]> {
-  const lib = await bundledLibrary();
+async function bundledStatus(lib: Pick<ResolvedLibrary, "database">): Promise<OnboardStatus["library"]> {
+  const bundled = await bundledLibrary();
   return {
     source: "bundled",
-    documents: lib.docs.length,
-    chunks: lib.docs.reduce((n, d) => n + chunkDoc(d).length, 0),
+    documents: bundled.docs.length,
+    chunks: bundled.docs.reduce((n, d) => n + chunkDoc(d).length, 0),
     pendingEmbeddings: 0,
-    freshness: bundledFreshness(lib.date),
+    freshness: await bundledFreshnessFor(lib),
     lastSync: null,
   };
 }
@@ -464,7 +556,8 @@ export function maybeAutoSync(
   const now = Date.now();
   if (now - sh.autoSyncAt < AUTO_SYNC_EVERY_MS && now >= sh.autoSyncAt) return false;
   sh.autoSyncAt = now;
-  void syncLibrary(lib.pool, cfg, { trigger: "auto", groundLinkUp: true }).then(
+  const pool = lib.pool;
+  void ensureCrewStore().then(() => syncLibrary(pool, cfg, { trigger: "auto", groundLinkUp: true })).then(
     (r) => {
       if (r.status === "failed") logLimited("auto-sync", `Automatic library sync failed: ${r.reason ?? "unknown reason"}`);
     },
@@ -481,12 +574,27 @@ export const SYNC_LINK_DOWN_REASON = "Ground link is down (blackout): nothing to
 export const SYNC_NO_DATABASE_REASON =
   "No database is set up on this machine: the library is read from the files bundled with this release, so there is nothing to sync.";
 
+/**
+ * Initialises the crew store before a library sync: the readings store adds
+ * the default crew on its first use, and syncLibrary builds the
+ * crew-baselines document from the crew table (empty on a fresh database).
+ * Never throws: a sync without crew rows still syncs the rest.
+ */
+export async function ensureCrewStore(): Promise<void> {
+  try {
+    await listCrew();
+  } catch (err) {
+    logLimited("sync-crew", `Could not read the crew before the library sync (${describe(err)}); crew baselines may be missing.`);
+  }
+}
+
 /** POST /api/sync ("Sync now"). The caller checks the ground link first. */
 export async function syncNow(cfg: OnboardConfig = onboardConfig()): Promise<ManualSync> {
   const db = await connectDatabase(cfg);
   if (db.state === "not-configured") return { ok: false, status: 409, reason: SYNC_NO_DATABASE_REASON };
   if (db.state === "unreachable") return { ok: false, status: 503, reason: `The database is unreachable (${db.error}); try again when it is back.` };
   try {
+    await ensureCrewStore();
     const library = await syncLibrary(db.pool, cfg, { trigger: "manual", groundLinkUp: true });
     return { ok: true, library };
   } catch (err) {

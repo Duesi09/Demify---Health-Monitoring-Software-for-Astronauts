@@ -5,6 +5,7 @@ import { INDICATORS } from "@/lib/health/knowledge";
 import { addReadings, getCrew, listReadings } from "@/lib/store/readings";
 import { simulateDaily, simulateLive, simulateSeries } from "@/lib/sources/simulator";
 import { getScenario } from "@/lib/store/scenarios";
+import { isStorableText } from "@/lib/store/text";
 import type { IndicatorId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +19,24 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const RATE_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT = 600;
 
+/**
+ * Strings are rejected (400), not silently changed, when they hold a NUL
+ * character or an unpaired UTF-16 surrogate: PostgreSQL cannot store either,
+ * and a crew note should reach the record exactly as it was written. The
+ * PostgreSQL store still cleans every string it inserts (other writers,
+ * spooled or legacy files), see src/lib/store/text.ts.
+ */
+const storable = (field: string) =>
+  z.string().refine(isStorableText, {
+    message: `${field} must not contain NUL characters (U+0000) or unpaired UTF-16 surrogates`,
+  });
+
 const ReadingIn = z
   .object({
-    crewId: z.string().min(1).max(64),
+    crewId: storable("crewId").min(1).max(64),
     indicator: z.enum(INDICATOR_IDS),
     value: z.number().finite(),
-    unit: z.string().max(16),
+    unit: storable("unit").max(16),
     takenAt: z.iso
       .datetime()
       .refine((t) => Date.parse(t) <= Date.now() + MAX_FUTURE_SKEW_MS, {
@@ -31,7 +44,7 @@ const ReadingIn = z
       })
       .optional(),
     source: z.enum(["manual", "sensor"]).default("manual"),
-    note: z.string().max(500).optional(),
+    note: storable("note").max(500).optional(),
   })
   .superRefine((r, ctx) => {
     const def = INDICATORS[r.indicator];

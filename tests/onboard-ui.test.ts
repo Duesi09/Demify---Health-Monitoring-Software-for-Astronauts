@@ -4,9 +4,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AnswerCard } from "@/components/onboard/answer-card";
+import { GroundLinkBadge, GroundLinkBanner } from "@/components/onboard/ground-link-indicators";
 import {
   EXAMPLE_QUESTIONS,
   GROUND_LINK_DOWN_BANNER,
+  GROUND_LINK_EXPLANATION,
+  GROUND_LINK_LABEL,
   OUT_OF_LIBRARY_EXAMPLE,
   QUESTION_MAX,
   QUESTION_MIN,
@@ -15,14 +18,22 @@ import {
   citationTitle,
   databaseText,
   durationText,
+  excerptIsWhole,
   expiryState,
   freshnessLine,
   groundLinkBanner,
   groundLinkChange,
   groundLinkLabel,
+  groundLinkMeaning,
+  groundLinkView,
+  hostText,
   kitItemNote,
   modeLine,
+  modelReady,
+  modelStateStatus,
   modelStateText,
+  passageBlocks,
+  passagesNote,
   passagesOnlyKind,
   questionProblem,
   retrievalModeText,
@@ -55,6 +66,7 @@ function citation(n: number, over: Partial<Citation> = {}): Citation {
     version: "0123456789abcdef0123456789abcdef",
     sha256: "fedcba9876543210",
     excerpt: "Start the drill checklist.",
+    text: "Start the drill checklist.",
     score: 0.8,
     ...over,
   };
@@ -218,12 +230,29 @@ describe("status strip", () => {
     available,
   });
 
-  it("describes the model state", () => {
-    expect(modelStateText(model("ready"))).toBe("gpt-oss:20b ready on this server");
-    expect(modelStateText(model("unreachable"))).toBe("Model offline: library passages only");
-    expect(modelStateText(model("not-configured"))).toBe("No model configured: library passages only");
-    expect(modelStateText(model("missing-models", ["nomic-embed-text"]))).toBe("gpt-oss:20b not loaded: library passages only");
-    expect(modelStateText(model("missing-models", ["gpt-oss:20b"]))).toMatch(/ready on this server, nomic-embed-text not loaded/);
+  it("names the configured model and where it runs", () => {
+    expect(modelStateText(model("ready"), "connected")).toBe("gpt-oss:20b ready on this server");
+    expect(modelStateText(model("ready"), "unreachable")).toBe("gpt-oss:20b ready on this server");
+    expect(modelStateText({ ...model("ready"), llm: "gemma3:4b" }, "not-configured")).toBe("gemma3:4b ready on this machine");
+    expect(modelStateText(model("unreachable"), "connected")).toBe("Model server offline (gpt-oss:20b): library passages only");
+    expect(modelStateText(model("not-configured"), "not-configured")).toBe("No model configured: library passages only");
+    expect(modelStateText(model("missing-models", ["nomic-embed-text"]), "connected")).toBe("gpt-oss:20b not loaded: library passages only");
+    expect(modelStateText(model("missing-models", ["gpt-oss:20b"]), "connected")).toBe(
+      "gpt-oss:20b ready on this server, nomic-embed-text not loaded",
+    );
+    expect(hostText("not-configured")).toBe("this machine");
+    expect(hostText("connected")).toBe("this server");
+  });
+
+  it("needs no embedding model without a database (keyword search over the bundled library)", () => {
+    const laptop = { ...model("missing-models", ["gemma3:4b"]), llm: "gemma3:4b" };
+    expect(modelReady(laptop, "not-configured")).toBe(true);
+    expect(modelStateText(laptop, "not-configured")).toBe("gemma3:4b ready on this machine");
+    expect(modelStateStatus(laptop, "not-configured")).toBe("nominal");
+    expect(modelReady(laptop, "connected")).toBe(false);
+    expect(modelStateStatus(laptop, "connected")).toBe("caution");
+    expect(modelStateStatus(model("not-configured"), "not-configured")).toBe("unknown");
+    expect(modelReady({ ...model("missing-models", ["nomic-embed-text"]) }, "not-configured")).toBe(false);
   });
 
   it("describes the database and the retrieval mode", () => {
@@ -243,20 +272,72 @@ describe("status strip", () => {
     expect(retrievalText({ library: library("database"), model: model("unreachable") })).toBe("Full-text search (PostgreSQL)");
   });
 
-  it("shows the ground-link banner only while the link is down", () => {
+  const link = (switchedUp: boolean, forcedOffline = false) => ({ switchedUp, forcedOffline });
+
+  it("shows one blackout: the switch, then the conjunction profile, then the air-gapped deployment", () => {
+    expect(groundLinkView(link(true))).toBe("up");
+    expect(groundLinkView(link(false))).toBe("down");
+    expect(groundLinkView(link(true), "conjunction")).toBe("conjunction");
+    expect(groundLinkView(link(true), "Conjunction")).toBe("conjunction");
+    expect(groundLinkView(link(false), "conjunction")).toBe("down");
+    expect(groundLinkView(link(true, true))).toBe("air-gapped");
+    expect(groundLinkView(link(true, true), "conjunction")).toBe("conjunction");
+    expect(groundLinkView(link(false, true))).toBe("down");
+    expect(groundLinkView(link(true), "iss")).toBe("up");
+    expect(groundLinkView(link(true), "nonsense")).toBe("up");
+    expect(GROUND_LINK_LABEL).toEqual({
+      up: "Ground link up",
+      down: "Ground link down (simulated blackout)",
+      conjunction: "No contact (conjunction profile)",
+      "air-gapped": "Air-gapped (offline mode)",
+    });
+    expect(groundLinkLabel(link(true), "conjunction")).toBe("No contact (conjunction profile)");
+    expect(groundLinkLabel(link(true, true))).toBe("Air-gapped (offline mode)");
+    for (const text of Object.values(GROUND_LINK_EXPLANATION)) expect(text.length).toBeGreaterThan(40);
+  });
+
+  it("shows the banner only while the switch is down, never for DEMIFY_OFFLINE alone", () => {
     expect(groundLinkBanner(null)).toBeNull();
-    expect(groundLinkBanner({ up: true, forcedOffline: false })).toBeNull();
-    expect(groundLinkBanner({ up: false, forcedOffline: false })).toBe(GROUND_LINK_DOWN_BANNER);
+    expect(groundLinkBanner(link(true))).toBeNull();
+    expect(groundLinkBanner(link(true, true))).toBeNull();
+    expect(groundLinkBanner(link(false))).toBe(GROUND_LINK_DOWN_BANNER);
+    expect(groundLinkBanner(link(false, true))).toBe(GROUND_LINK_DOWN_BANNER);
     expect(GROUND_LINK_DOWN_BANNER).toBe(
-      "Ground link down (simulated blackout): Demify is working from the onboard library and the last data snapshots.",
+      "Ground link down (simulated blackout): Demify works from the last data snapshots and the onboard library; advice follows the onboard procedures.",
     );
-    expect(groundLinkBanner({ up: false, forcedOffline: true })).toMatch(/offline mode/);
-    expect(groundLinkLabel({ up: true })).toBe("Ground link up");
-    expect(groundLinkLabel({ up: false })).toBe("Ground link down");
     expect(groundLinkChange({ switchedUp: true, changedAt: new Date(0).toISOString() })).toBe("Never switched (starts up)");
     expect(groundLinkChange({ switchedUp: false, changedAt: "2026-11-14T12:03:00Z", changedBy: "operator" })).toBe(
       "Switched down 2026-11-14 12:03 UTC by operator",
     );
+  });
+
+  it("keeps the banner's live region mounted while there is nothing to say", () => {
+    // Server snapshot = no ground-link state yet: an empty, visually hidden status region.
+    const html = renderToStaticMarkup(createElement(GroundLinkBanner));
+    expect(html).toBe('<div role="status" class="sr-only"></div>');
+  });
+
+  it("says in the status strip that a bundled library does not sync", () => {
+    expect(groundLinkMeaning("up", "not-configured")).toMatch(/bundled with this release, no sync on this machine/);
+    expect(groundLinkMeaning("up", "not-configured")).not.toMatch(/syncs from the ground/);
+    expect(groundLinkMeaning("up", "connected")).toMatch(/^Normal mode: the library syncs from the ground/);
+    expect(groundLinkMeaning("down", "connected")).toMatch(/^Simulated blackout: no contact with the ground/);
+    expect(groundLinkMeaning("down", "not-configured")).toMatch(/library bundled with this release/);
+    expect(groundLinkMeaning("conjunction", "connected")).toMatch(/conjunction signal delay profile/);
+    expect(groundLinkMeaning("air-gapped", "connected")).toMatch(/^Air-gapped deployment \(DEMIFY_OFFLINE\).*Not a blackout/);
+  });
+
+  it("renders ground-link badges with dark text (contrast at small sizes)", () => {
+    const up = renderToStaticMarkup(createElement(GroundLinkBadge, { view: "up" }));
+    expect(up).toContain("Ground link up");
+    // The label colour sits on the outer span; text-nominal only colours the icon.
+    const outer = /^<span class="([^"]*)"/.exec(up)?.[1].split(/\s+/) ?? [];
+    expect(outer).toContain("text-fg");
+    expect(outer).not.toContain("text-nominal");
+    const down = renderToStaticMarkup(createElement(GroundLinkBadge, { view: "down" }));
+    expect(down).toContain("Ground link down (simulated blackout)");
+    expect(down).toContain("text-on-caution");
+    expect(renderToStaticMarkup(createElement(GroundLinkBadge, { view: "air-gapped" }))).toContain("Air-gapped (offline mode)");
   });
 });
 
@@ -299,10 +380,12 @@ describe("library page helpers", () => {
   });
 
   it("disables Sync now with the reason", () => {
-    expect(syncBlockedReason({ up: false }, "connected")).toBe("Ground link is down (blackout): nothing to sync from.");
-    expect(syncBlockedReason({ up: true }, "not-configured")).toMatch(/^No database on this machine/);
-    expect(syncBlockedReason({ up: true }, "unreachable")).toMatch(/unreachable/);
-    expect(syncBlockedReason({ up: true }, "connected")).toBeNull();
+    expect(syncBlockedReason("down", "connected")).toBe("Ground link is down (blackout): nothing to sync from.");
+    expect(syncBlockedReason("conjunction", "connected")).toBe("No contact in the conjunction profile: nothing to sync from.");
+    expect(syncBlockedReason("air-gapped", "connected")).toMatch(/^Air-gapped deployment \(DEMIFY_OFFLINE\)/);
+    expect(syncBlockedReason("up", "not-configured")).toMatch(/^No database on this machine/);
+    expect(syncBlockedReason("up", "unreachable")).toMatch(/unreachable/);
+    expect(syncBlockedReason("up", "connected")).toBeNull();
   });
 
   it("marks expired and soon-expiring kit items and drops the repeated training note", () => {
@@ -364,6 +447,113 @@ describe("answer card crew context", () => {
     const html = render("Contact the flight surgeon [1].");
     expect(html).not.toContain('href="#a2-crew"');
     expect(html).not.toMatch(/<details[^>]*id="a2-crew"[^>]*open=""/);
+  });
+});
+
+describe("whole library passages", () => {
+  const VF = [
+    'Checklist "Cardiac arrest (VF / pulseless VT)":',
+    "",
+    "6. Contact the flight surgeon and report: time of onset, rhythm, vital signs, actions taken.",
+    "7. Keep this sheet: record every shock, rhythm check and **medication time**.",
+    "",
+    "Location: Monitoring devices pack",
+    "Quantity: 1 each",
+    "- Pulse oximeter, fingertip [1]",
+    "- Blood pressure cuff",
+    "  with spare bladder",
+    "## Notes",
+    "<script>alert(1)</script>",
+  ].join("\n");
+
+  it("keeps line breaks, lists (with their first number) and headings", () => {
+    expect(passageBlocks(VF)).toEqual([
+      { kind: "lines", lines: ['Checklist "Cardiac arrest (VF / pulseless VT)":'] },
+      {
+        kind: "ol",
+        start: 6,
+        items: [
+          "Contact the flight surgeon and report: time of onset, rhythm, vital signs, actions taken.",
+          "Keep this sheet: record every shock, rhythm check and **medication time**.",
+        ],
+      },
+      { kind: "lines", lines: ["Location: Monitoring devices pack", "Quantity: 1 each"] },
+      { kind: "ul", items: ["Pulse oximeter, fingertip [1]", "Blood pressure cuff with spare bladder"] },
+      { kind: "h", text: "Notes" },
+      { kind: "lines", lines: ["<script>alert(1)</script>"] },
+    ]);
+    expect(passageBlocks("")).toEqual([]);
+    expect(passageBlocks("1.5 mmHg is not a list\r\nsecond line")).toEqual([{ kind: "lines", lines: ["1.5 mmHg is not a list", "second line"] }]);
+  });
+
+  it("knows when the excerpt already is the whole passage", () => {
+    expect(excerptIsWhole("A b c.", "A\nb   c.")).toBe(true);
+    expect(excerptIsWhole("A b…", "A b c d.")).toBe(false);
+    expect(excerptIsWhole("A b", "")).toBe(true);
+    expect(excerptIsWhole("A b", undefined)).toBe(true);
+  });
+
+  it("says 'it' for one passage and 'them' for several", () => {
+    expect(passagesNote(1)).toBe("The passage below matched the question. Read it yourself; nothing was written by a model.");
+    expect(passagesNote(3)).toBe("The passages below matched the question. Read them yourself; nothing was written by a model.");
+  });
+
+  it("names this machine for answers without a database, this server otherwise", () => {
+    const bundled = answer({ mode: { retrieval: "bundled", model: "gemma3:4b", groundLink: "up" } });
+    expect(modeLine(bundled)).toBe("Answered by gemma3:4b on this machine from 1 library passage · No database: bundled library, keyword search");
+    const outage = answer({
+      mode: { retrieval: "bundled", model: "gpt-oss:20b", groundLink: "up", fallbackReason: "database unreachable (ECONNREFUSED)" },
+    });
+    expect(modeLine(outage)).toMatch(/^Answered by gpt-oss:20b on this server from 1 library passage · Database unreachable/);
+  });
+
+  const render = (a: AssistantAnswer) => renderToStaticMarkup(createElement(AnswerCard, { entry: { key: "a3", question: "VF?", answer: a } }));
+
+  it("offers the whole passage under a cut excerpt, rendered as text with its lists", () => {
+    const html = render(
+      answer({
+        citations: [citation(1, { excerpt: "…Contact the flight surgeon and report…", text: VF, syncedAt: "2026-11-13T09:06:00Z" })],
+      }),
+    );
+    expect(html).toMatch(/<details[^>]*>\s*<summary[^>]*>[\s\S]*Show the whole passage<\/summary>/);
+    expect(html).toContain('<ol start="6"');
+    expect(html).toContain("<strong");
+    expect(html).toContain("Location: Monitoring devices pack<br/>Quantity: 1 each");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>");
+    // [1] inside a library passage is the library's own text, not a link to this answer's sources.
+    expect(html).toContain("Pulse oximeter, fingertip [1]");
+    // Synced the day before the question: the date is shown.
+    expect(html).toContain("synced 2026-11-13 09:06 UTC");
+  });
+
+  it("shows a short passage whole, without a disclosure", () => {
+    const html = render(answer({ citations: [citation(1, { excerpt: "Kit: - oximeter - cuff", text: "Kit:\n- oximeter\n- cuff" })] }));
+    expect(html).not.toContain("Show the whole passage");
+    expect(html).toContain("<ul");
+    expect(html).toContain("<li>oximeter</li>");
+  });
+
+  it("drops the repeated fallback line and keeps a visible focus on the heading", () => {
+    const html = render(
+      answer({
+        status: "passages-only",
+        answer: null,
+        reason: PASSAGES_ONLY_REASON.notConfigured,
+        mode: { retrieval: "bundled", model: null, groundLink: "up", fallbackReason: "no language model configured" },
+      }),
+    );
+    expect(html).not.toContain("Fallback:");
+    expect(html).toContain("Read it yourself");
+    expect(html).toMatch(/<h3[^>]*tabindex="-1"[^>]*class="[^"]*focus:outline-2/);
+    expect(html).not.toContain("focus:outline-none");
+  });
+
+  it("uses dark text for small labels (contrast)", () => {
+    const html = render(answer({ citations: [citation(1, { url: "https://example.org/doc" })] }));
+    expect(html).not.toMatch(/font-mono text-xs font-semibold text-accent/);
+    expect(html).toMatch(/text-fg[^"]*"><svg[^>]*text-nominal[^>]*>[\s\S]*?<\/svg>checksum verified/);
+    expect(html).toMatch(/class="[^"]*text-fg underline decoration-accent[^"]*"[^>]*>Source document/);
   });
 });
 

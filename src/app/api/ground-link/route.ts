@@ -5,6 +5,7 @@ import { getGroundLink, setGroundLink } from "@/lib/onboard/ground-link";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+const MAX_BODY_BYTES = 4096;
 
 const Switch = z.object({
   up: z.boolean(),
@@ -27,10 +28,13 @@ export async function POST(req: Request) {
   const denied = requireAdmin(req);
   if (denied) return denied;
   if (!isJson(req)) return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
+  // Refuse a declared oversize body before reading it; the length check below covers bodies without Content-Length.
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return Response.json({ error: "Body too large" }, { status: 413 });
   let body: unknown;
   try {
     const text = await req.text();
-    if (text.length > 4096) return Response.json({ error: "Body too large" }, { status: 413 });
+    if (text.length > MAX_BODY_BYTES) return Response.json({ error: "Body too large" }, { status: 413 });
     body = JSON.parse(text);
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
