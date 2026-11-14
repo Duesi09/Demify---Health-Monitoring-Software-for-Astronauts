@@ -102,6 +102,54 @@ Amounts and deadlines change; check each programme's site before applying.
 | **Hosting and pipeline** | Small | The app runs as one container; the automatic checks run free for public repositories |
 | **Travel, conferences, sales** | Small to medium | Analog missions and operators are a small, reachable community |
 
+### Three-year calculation (CHF, all **estimates**)
+
+Assumptions:
+- Two founders on a modest salary of CHF 4,000 a month each in years 1 and 2, CHF 6,000 in year 3.
+- Employer social contributions add about 15 % to every salary.
+- A medical advisor at 20 % from year 2 (CHF 24,000 a year); one developer from year 3 (CHF 100,000 a year).
+- Hosted price: CHF 40 per person per month; a typical site has 30 people, so one site brings 30 × 40 × 12 = **CHF 14,400 a year**.
+- An integration project brings CHF 40,000; a support contract CHF 10,000 a year.
+- ESA BIC: EUR 200,000, about CHF 190,000 at an exchange rate of about 0.95.
+
+**Costs**
+
+| Item | Year 1 | Year 2 | Year 3 |
+|---|---|---|---|
+| Founders (salary × 12 × 2 × 1.15) | 110,400 | 110,400 | 165,600 |
+| Developer (100,000 × 1.15) | | | 115,000 |
+| Medical advisor | | 24,000 | 24,000 |
+| Medical validation with a research partner (our share) | | 40,000 | 40,000 |
+| Security audit | | 20,000 | |
+| Hosting and tools | 3,000 | 6,000 | 12,000 |
+| Company founding, accounting, insurance | 8,000 | 6,000 | 8,000 |
+| Travel, conferences, sales | 10,000 | 15,000 | 20,000 |
+| **Total costs** | **131,400** | **221,400** | **384,600** |
+
+**Funding and revenue**
+
+| Item | Year 1 | Year 2 | Year 3 |
+|---|---|---|---|
+| Venture Kick (all three stages) | 150,000 | | |
+| ESA BIC Switzerland | | 190,000 | |
+| Hosted sites (3 in year 2, 10 in year 3, × 14,400) | | 43,200 | 144,000 |
+| Integration projects (1, then 2, × 40,000) | | 40,000 | 80,000 |
+| Support contracts (5 × 10,000) | | | 50,000 |
+| **Total in** | **150,000** | **273,200** | **274,000** |
+
+**Result**
+
+| | Year 1 | Year 2 | Year 3 |
+|---|---|---|---|
+| In minus costs | +18,600 | +51,800 | −110,600 |
+| Running total | +18,600 | +70,400 | **−40,200** |
+
+Over three years the gap is about **CHF 40,000**. It is closed by a small seed round (for example Venture Kick's follow-on fund) or by lower founder salaries.
+
+**Break-even from year 4** (without grants): year-3 costs of 384,600 minus integration and support income of 130,000 leaves 254,600 to cover with hosting. 254,600 ÷ 14,400 per site = **about 18 hosted sites**. For scale: there are 70 to 77 stations in Antarctica alone.
+
+The first thing to test with pilot customers is the price of CHF 40 per person per month.
+
 ---
 
 ## 6. Business Model Canvas
