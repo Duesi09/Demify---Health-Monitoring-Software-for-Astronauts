@@ -10,6 +10,7 @@ variables**, so the image stays the same.
 | `Dockerfile` | Multi-stage build (deps → builder → runner) on `node:24-alpine`, using the Next.js `standalone` output |
 | `docker/entrypoint.sh` | Seeds offline snapshots into the data volume, then `exec`s the server |
 | `docker-compose.yml` | `demify` service plus an air-gapped `offline` profile |
+| `scripts/setup-local-model.sh`, `scripts/setup-local-model.ps1` | Optional local language model (Ollama on the same machine) for the onboard assistant with `docker-compose.yml`; see [`LOCAL-MODEL.md`](LOCAL-MODEL.md) |
 | `docker-compose.spark.yml`, `.env.spark.example` | Optional onboard server on an NVIDIA DGX Spark (PostgreSQL + pgvector, local model, app, sync service); see [`SPARK.md`](SPARK.md) |
 | `.env.example` | Every setting, documented. Copy it to `.env` |
 | `.dockerignore` | Keeps `node_modules`, `.next`, `.git`, secrets and local crew data out of the build context |
@@ -211,6 +212,10 @@ Then uncomment the CA volume of the `demify` service in `docker-compose.yml`:
       - demify-data:/data
       - ./certs/ca.crt:/etc/demify/ca.crt:ro
 ```
+
+`docker-compose.yml` always adds `host.docker.internal` to `NO_PROXY`, so a
+local model server on the same machine ([`LOCAL-MODEL.md`](LOCAL-MODEL.md))
+is never reached through the proxy.
 
 **Runtime with plain Docker.** Use the standard names directly:
 

@@ -45,6 +45,14 @@ jobs:
           docker compose -f docker-compose.yml --profile offline config -q
           POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml config -q
           POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml --profile models config -q
+      # The local model setup scripts (docs/LOCAL-MODEL.md) run on the team's
+      # laptops: the shell script must pass bash -n and shellcheck, the
+      # PowerShell script must parse (shellcheck and pwsh are on the runner).
+      - name: Check local model setup scripts
+        run: |
+          bash -n scripts/setup-local-model.sh
+          shellcheck scripts/setup-local-model.sh
+          pwsh -NoProfile -Command '$t = $null; $e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/setup-local-model.ps1").Path, [ref]$t, [ref]$e); if ($e.Count -gt 0) { $e | ForEach-Object { Write-Host $_.Message }; exit 1 }'
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6

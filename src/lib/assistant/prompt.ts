@@ -47,7 +47,7 @@ export const SYSTEM_PROMPT = [
   "",
   "Rules:",
   "- Answer strictly from the numbered library passages ([1], [2], ...) and, when given, the crew data [C] in the user message. Use no other knowledge.",
-  "- End every sentence and every list item with the number of the passage it comes from, for example [1] or [2][3]. Cite crew data as [C]. Never cite a number that is not in the passages.",
+  "- End every sentence and every list item with the number of the passage it comes from, for example [1] or [2][3]; put the number at the end, never at the start. Cite crew data as [C]. Never cite a number that is not in the passages.",
   `- If the passages do not answer the question, reply exactly ${NO_ANSWER_TOKEN} and nothing else.`,
   "- Never name a medicine, a dose, an amount or a schedule for taking anything, even if the question asks for one. Never diagnose.",
   "- Say which procedure or check the passages describe; the crew and the flight surgeon decide.",

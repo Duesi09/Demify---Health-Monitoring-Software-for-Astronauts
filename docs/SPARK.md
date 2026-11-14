@@ -11,6 +11,8 @@ desktop unit used as a prototype stand-in, not flight hardware and not
 radiation-hardened (see [Reliability and flight hardware](#11-reliability-and-flight-hardware)).
 
 The one-page overview for the pitch is [`ARCHITECTURE.md`](ARCHITECTURE.md).
+A local model on the pitch laptop instead (no database, no Spark) is in
+[`LOCAL-MODEL.md`](LOCAL-MODEL.md).
 
 **Contents**
 
@@ -25,6 +27,7 @@ The one-page overview for the pitch is [`ARCHITECTURE.md`](ARCHITECTURE.md).
 9. [Troubleshooting](#9-troubleshooting)
 10. [Settings reference](#10-settings-reference)
 11. [Reliability and flight hardware](#11-reliability-and-flight-hardware)
+12. [Does a DGX Spark make sense?](#12-does-a-dgx-spark-make-sense)
 
 ---
 
@@ -66,8 +69,8 @@ Four long-running containers in one compose file,
 |---|---|---|---|---|
 | `db` | `pgvector/pgvector:pg17` | Crew readings, the onboard library (passages, 768-d embeddings, full-text index), medical-kit inventory, sync history, the simulated ground link switch. Cluster created with `--data-checksums` | onboard only, never published | volume `pgdata` |
 | `model` | `ollama/ollama` (set `DEMIFY_OLLAMA_IMAGE`) | The local language model and the embedding model on the GPU. The app uses only its OpenAI-compatible API (`http://model:11434/v1`), so it can be swapped for vLLM, llama.cpp or TensorRT-LLM | onboard + default (downloads) | volume `models` |
-| `app` | Demify, built from the [`Dockerfile`](../Dockerfile) | The crew UI, the deterministic rule engine and alarms, the onboard assistant (library assistant, local language model) | onboard + default | volume `app-data` (snapshots, JSON spool) |
-| `sync` | the same Demify image | Library sync from the ground every `DEMIFY_SYNC_INTERVAL_HOURS` (default 6) while the ground link is up, data snapshot refresh, embeddings for new passages | onboard + default | none (tmpfs) |
+| `app` | Demify, built from the [`Dockerfile`](../Dockerfile) | The crew UI, the deterministic rule engine and alarms, the onboard assistant (library assistant, local language model), and "Sync now" (it runs the library sync itself) | onboard + default | volume `app-data` (snapshots, JSON spool) |
+| `sync` | the same Demify image | Scheduled library sync from the ground every `DEMIFY_SYNC_INTERVAL_HOURS` (default 6) while the ground link is up, data snapshot refresh, embeddings for new passages, pruning of the sync history | onboard + default | none (tmpfs) |
 | `model-pull` | `ollama/ollama` | One-shot, explicit model download (profile `models`, never started by `up`) | onboard | none |
 | `model-port` | the Demify image | Optional: publishes the model API on `127.0.0.1` when `DEMIFY_MODEL_BIND` is set; not running otherwise | default | none |
 
@@ -113,7 +116,8 @@ You also need:
   `gpt-oss:20b` or about 65 GB for `gpt-oss:120b`.
 - **Setup network:** Docker Hub (images), the npm registry (image build) and
   the Ollama model registry (`model-pull`). After setup the stack runs without
-  them; the ground link in the demo is the simulated switch, not this.
+  them; the ground link in the demo is the simulated switch, not this. Behind
+  a proxy, see [3.6](#36-behind-a-proxy-optional).
 - **Docker at boot:** `systemctl is-enabled docker` must say `enabled`, so the
   stack comes back after a power cycle.
 
@@ -217,6 +221,41 @@ docker compose exec model ollama pull gpt-oss:120b
 
 Within a minute the sync service notices the embedding model and embeds the
 library passages that were waiting (`docker compose logs sync`).
+
+### 3.6 Behind a proxy (optional)
+
+Three places need the proxy, and a TLS-intercepting proxy also needs its CA
+certificate (PEM). Keep the CA file inside the checkout, for example
+`./certs/ca.crt` (git-ignored): recent Compose versions build through Bake,
+which refuses secret files outside the project folder.
+
+1. **Image build** (`npm ci` and `next build`). Without the CA the build
+   stops with `SELF_SIGNED_CERT_IN_CHAIN`. Set in `.env`:
+
+   ```dotenv
+   DEMIFY_BUILD_CA=./certs/ca.crt
+   ```
+
+   Compose passes it as a BuildKit secret, used for those two steps only and
+   never stored in the image. The Docker daemon needs its own proxy settings
+   to pull base images.
+2. **Live data in app and sync** (NOAA, NASA OSDR, while the ground link is
+   up). Set in `.env`:
+
+   ```dotenv
+   DEMIFY_HTTPS_PROXY=http://proxy.example.internal:3128
+   DEMIFY_HTTP_PROXY=http://proxy.example.internal:3128
+   DEMIFY_NODE_EXTRA_CA_CERTS=/etc/demify/ca.crt
+   ```
+
+   and uncomment the line `- ./certs/ca.crt:/etc/demify/ca.crt:ro` under
+   `volumes:` of both `app` and `sync` in
+   [`docker-compose.spark.yml`](../docker-compose.spark.yml). The container
+   names (`db`, `model`, `app`, `sync`) are always in `NO_PROXY`;
+   `DEMIFY_NO_PROXY` adds your own hosts. Then `docker compose up -d`.
+3. **Model downloads** (`model-pull`): `DEMIFY_HTTPS_PROXY` reaches the
+   `model` service too; for an intercepting proxy see the `model-pull` row in
+   [Troubleshooting](#9-troubleshooting).
 
 ---
 
@@ -326,7 +365,12 @@ at once, the vector search as soon as the embedding model has embedded them.
    curl -s -X POST http://127.0.0.1:3000/api/sync -H "x-demify-admin: $TOKEN" | jq .library
    ```
 
-   Otherwise the sync service picks the change up at its next scheduled sync.
+   Sync now runs in the app, not in the sync service: the app pulls the
+   ground library into the database (under the same database lock as the
+   sync service, so the two never collide), embeds the new passages when the
+   model server answers, and returns the result. It works while the sync
+   service is stopped. Otherwise the sync service picks the change up at its
+   next scheduled sync.
 4. The Library page shows the new version (SHA-256 prefix) and the sync run;
    answers cite the new passage.
 
@@ -492,6 +536,8 @@ Every setting is an environment variable in `.env`; see
 | `DEMIFY_BIND`, `DEMIFY_PORT` | `127.0.0.1`, `3000` | Where the app port is published |
 | `DEMIFY_OFFLINE` | `false` | Hard air-gap: the ground link stays down |
 | `DEMIFY_HTTPS_PROXY`, `DEMIFY_HTTP_PROXY`, `DEMIFY_NO_PROXY` | empty | Proxy for live data and model downloads; the container names are always in `NO_PROXY` |
+| `DEMIFY_NODE_EXTRA_CA_CERTS` | empty | CA of a TLS-intercepting proxy inside app and sync (`/etc/demify/ca.crt` with the volume of [3.6](#36-behind-a-proxy-optional)) |
+| `DEMIFY_BUILD_CA` | `./docker/no-extra-ca.pem` (empty placeholder) | CA for the image build, passed as a BuildKit secret ([3.6](#36-behind-a-proxy-optional)) |
 | `DEMIFY_CPUS`, `DEMIFY_MEMORY`, `DEMIFY_DB_MEMORY` | `4.0`, `2G`, `12G` | Container limits |
 
 PostgreSQL settings (`shared_buffers` 2 GB, `effective_cache_size` 8 GB,
@@ -511,6 +557,21 @@ PostgreSQL settings (`shared_buffers` 2 GB, `effective_cache_size` 8 GB,
   others by itself: the sync service retries the database with backoff, the
   app falls back to its JSON store until PostgreSQL answers, the assistant
   falls back to passages while the model loads.
+
+  To test it, make a process crash. `docker kill`, `docker stop` and
+  `docker compose stop` count as a manual stop: Docker does not restart the
+  container after them, whatever the policy says. Kill the main process from
+  the host instead:
+
+  ```bash
+  c=$(docker compose ps -q app)          # or db, sync, model
+  sudo kill -9 "$(docker inspect -f '{{.State.Pid}}' "$c")"
+  docker compose ps                      # app restarts within seconds
+  docker inspect -f '{{.Name}} restarts={{.RestartCount}}' "$c"
+  ```
+
+  For `db` this is also the crash-recovery test below: the log shows
+  `automatic recovery in progress` and `redo done`.
 - **Health checks.** `db` (`pg_isready`), `model` (`ollama list`), `app`
   (`/api/health`) and `sync` (a heartbeat file younger than 5 minutes) report
   their state in `docker compose ps`. Docker restarts a container when it
@@ -542,6 +603,21 @@ PostgreSQL settings (`shared_buffers` 2 GB, `effective_cache_size` 8 GB,
 - **The model is optional.** Without a model answer the assistant shows the
   matching passages ("passages only"); with no good passage it says the
   library has no answer instead of guessing.
+- **Sync history stays small.** Every library sync and every snapshot
+  refresh adds a row to `sync_runs` (the refresh alone adds 48 a day at the
+  default 30 minutes). After each run, rows older than 30 days are deleted,
+  keeping at least the newest 100 and the last successful run of each kind,
+  so "last synced" never loses its row.
+
+### What happens when a part fails
+
+| Part down | What the crew sees | What happens when it is back |
+|---|---|---|
+| Ground link (switched off) | Blackout: data pages show SNAPSHOT with its date, the assistant answers from the onboard library and says how old it is, Sync now answers `409` | The sync service syncs the library and refreshes the snapshots on its schedule; Sync now works again |
+| Model server | The assistant shows the matching passages ("passages only") and says why; everything else is unchanged | Answers use the model again; the sync service embeds the passages that were waiting |
+| PostgreSQL | Pages keep working. `/api/health` answers within about 2 s with `database: "unreachable"`. Crew readings are written to the JSON spool on the `app-data` volume; the ground link switch is kept in a file. The assistant answers from the release copy of the library inside the image and says so ("release copy bundled with the app"), not as the station's synced library. Sync now answers `503` | The app replays the spool into the database with the same reading ids and writes the switch back; the sync service resumes. Queries that hang get a 10 s client-side limit, so a frozen database does not block requests for long |
+| Sync service | Nothing visible; the library stays at its last sync and Sync now still works (it runs in the app) | Scheduled syncs, snapshot refresh and embeddings resume |
+| App | The page does not load | Docker restarts it (`restart: always`); readings in PostgreSQL are kept |
 
 ### What flight hardware would need
 
@@ -569,3 +645,54 @@ Precedent: HPE's Spaceborne Computer (2017) and Spaceborne Computer-2 (2021)
 ran commercial off-the-shelf servers on the ISS, protected by software
 hardening rather than radiation-hardened parts, and Spaceborne Computer-2
 included GPUs for processing on board.
+
+---
+
+## 12. Does a DGX Spark make sense?
+
+For ground tests and analog stations, yes. On a spacecraft, not as a new
+box. The facts below are from the team's research notes,
+[`research/iss-health-equipment.md`](research/iss-health-equipment.md),
+with their source numbers.
+
+**What it is for.** One desktop unit runs the whole onboard stack (database,
+local model, sync) without the ground: a team can rehearse blackouts,
+store-and-forward sync and crew questions under realistic conditions. That
+makes it a ground-test and analog-station server. The pilot candidate we
+would approach is **Asclepios** in Switzerland (Sasso San Gottardo): a
+student-led lunar analog with about 6 crew for about 14 days and a medical
+student in Mission Control responsible for crew health [185][187][188]. MDRS,
+HI-SEAS, HERA and CHAPEA work with simulated signal delays, from up to 5
+minutes (HERA) to about 22 minutes one way (CHAPEA), and are further
+candidates (research notes, "Earth analog stations").
+
+**Why offline-first is the right shape.** The ISS crew has no direct access
+to the public network: since 2010 crew members browse through a remote
+desktop session on a ground computer, only while the Ku-band link is up, and
+crew email moves as files several times a day [20][217]. The Ku-band link via
+the TDRS relay satellites carries about 517 Mbps down and 21 Mbps up of user
+data, shared by the whole station, with about 85 % coverage of each orbit and
+about 600 ms round trip [21]. Further out, one-way delays are about 1.3 s to
+the Moon and 3 to 22 minutes to Mars [23][24]. Store-and-forward networking
+(DTN, HDTN) is the direction for the Moon and Mars; HDTN was tested on the
+ISS in June 2024 [23][182].
+
+**Why not a new box in flight.** Flight-critical computers are closed to
+third-party software [18]. Crew laptops (HP ZBooks) sit on the Joint Station
+LAN [19][208][215], and HPE's Spaceborne Computer-2 runs commercial server
+hardware on the ISS as a hosted payload [22][233]. On a real spacecraft the
+same software would therefore target an existing approved crew laptop or a
+hosted payload of the Spaceborne Computer-2 class: power, cooling and
+approval are the limits, not memory [18][208][211][233]. Commercial hardware
+sees radiation bit flips, which is why Demify checksums its data and restarts
+cleanly [236].
+
+**What the Spark adds over a laptop.** Room for a bigger model
+(`gpt-oss:120b`, about 65 GB) next to PostgreSQL with vector search, the sync
+service and several users. The pitch laptop runs the same assistant with a
+small model and no database ([`LOCAL-MODEL.md`](LOCAL-MODEL.md)).
+
+**What we do not claim.** Demify does not connect to any ISS device, laptop,
+network or data link; no agency uses, tests or endorses it; and nothing here
+says Docker is approved on ISS laptops. The full list is in
+[`ARCHITECTURE.md`](ARCHITECTURE.md#what-we-must-not-claim).

@@ -74,7 +74,9 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Team and station operators | Architecture diagrams (today and target), quick start for Windows and Linux, start/stop/update, backup and restore, connecting sensors, drills, offline mode, troubleshooting |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Whoever deploys the container | Image layout, full configuration reference, proxies and custom CAs, air-gapped operation, ARM builds, TLS, scaling |
 | [`docs/SPARK.md`](docs/SPARK.md) | Optional: the onboard server team | The NVIDIA DGX Spark setup (PostgreSQL, local model, sync service), blackout demo, backups, reliability |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Pitch, reviewers | The onboard server on one page: containers, data flow, what is real and what is simulated, safety |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Pitch, reviewers | The onboard server on one page: containers, data flow, what is real and what is simulated, safety, what we must not claim |
+| [`docs/LOCAL-MODEL.md`](docs/LOCAL-MODEL.md) | Optional: whoever runs the demo | A local language model on the pitch laptop: which model on which device, setup scripts, what was tested, licences |
+| [`docs/research/iss-health-equipment.md`](docs/research/iss-health-equipment.md) | Pitch, reviewers | How medical care, medical packs, devices and links work on the ISS, with sources |
 | [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md) | Reviewers, flight-surgeon liaison | Thresholds, actions and sources behind every indicator |
 | [`docs/research/data-sources.md`](docs/research/data-sources.md) | Developers | Every external data source, what is real and what is simulated |
 | [`.env.example`](.env.example) | Operators | Every setting, with comments |
@@ -139,6 +141,21 @@ Anyone who can reach Demify over the network can start a drill or post readings 
 
 The daily check-in form saves through the app itself and is not covered by the token, so keep the loopback default on a stage. Details: [`docs/OPERATIONS.md` §3.7](docs/OPERATIONS.md#37-stage-and-shared-networks).
 
+## Local model for the demo (optional)
+
+The **Onboard assistant** page works without a model: it shows the library passages that match a question. With a small local model (default `gemma3:4b` with [Ollama](https://ollama.com/download), about 3.3 GB) it also writes a short answer from those passages and cites each one. Everything stays on the laptop; the download needs a network connection once.
+
+```bash
+bash scripts/setup-local-model.sh                     # macOS / Linux (or: npm run model:setup)
+bash scripts/setup-local-model.sh --model gemma3:1b   # machines with about 8 GB of memory
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1   # Windows
+```
+
+The script checks Ollama and Docker, pulls the model, adds `DEMIFY_MODEL_URL` and `DEMIFY_LLM_MODEL` to `.env`, starts Demify with `docker compose` and asks one test question. Remove the `DEMIFY_MODEL_URL` line from `.env` to go back to passages only. Details, the model for each device and the licences: [`docs/LOCAL-MODEL.md`](docs/LOCAL-MODEL.md).
+
 ## Onboard server (NVIDIA DGX Spark)
 
 Optional, and not needed for the pitch: the pitch setup stays `docker-compose.yml`, without a database or a model, and behaves exactly as described above.
@@ -147,6 +164,7 @@ For a station-like setup, [`docker-compose.spark.yml`](docker-compose.spark.yml)
 
 - Setup, model choice, blackout demo, backups, reliability: [`docs/SPARK.md`](docs/SPARK.md)
 - One-page architecture for the pitch: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Why the Spark is a ground-test and analog-station server, and what flight would need: [`docs/SPARK.md` section 12](docs/SPARK.md#12-does-a-dgx-spark-make-sense), based on [`docs/research/iss-health-equipment.md`](docs/research/iss-health-equipment.md)
 - Settings: [`.env.spark.example`](.env.spark.example)
 
 ## Connecting real sensors
@@ -227,7 +245,7 @@ src/
     store/             JSON-file readings store (swap for a DB in production)
 data/snapshots/        bundled offline data
 docs/                  operations handbook, deployment guide, research notes
-scripts/               snapshot promotion, sensor demo
+scripts/               snapshot promotion, sensor demo, local model setup, onboard server tools
 docker/, Dockerfile, docker-compose.yml
 tests/                 vitest suite
 ```

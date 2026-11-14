@@ -412,12 +412,17 @@ try {
     } catch {
       $state = ''
     }
+    if ($state -eq 'ready') {
+      $ok = 1
+    } elseif ($state -eq 'missing-models' -and ($available -contains $wanted)) {
+      # The language model is there; only the embedding model is missing.
+      $ok = 2
+    }
+    if ($ok -ne 0) { break }
     if ($state -ne $last) {
       if ($state -eq '') { Write-Info 'model state: no answer yet' } else { Write-Info ('model state: ' + $state) }
       $last = $state
     }
-    if ($state -eq 'ready') { $ok = 1; break }
-    if ($state -eq 'missing-models' -and ($available -contains $wanted)) { $ok = 2; break }
     Start-Sleep -Seconds 3
   }
   if ($ok -eq 0) {

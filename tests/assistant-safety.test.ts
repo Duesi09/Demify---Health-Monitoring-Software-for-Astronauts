@@ -346,6 +346,24 @@ describe("answer check", () => {
     expect(checkAnswer("Start CPR. [1] Attach the AED. [2]", 2)).toMatchObject({ ok: true, cited: [1, 2] });
   });
 
+  it("drops marker runs that open a statement which closes with its own markers (as small models write them)", () => {
+    const raw =
+      "[1][2] The hypertensive crisis checklist escalates above 180 mmHg [2]. [1] Contact the flight surgeon above 120 mmHg [3]. [2] Repeat the measurement after rest [2].";
+    expect(checkAnswer(raw, 3)).toEqual({
+      ok: true,
+      text: "The hypertensive crisis checklist escalates above 180 mmHg [2]. Contact the flight surgeon above 120 mmHg [3]. Repeat the measurement after rest [2].",
+      cited: [2, 3],
+    });
+    expect(checkAnswer("1. [1] Confirm the rhythm [1].\n2. [2] Attach the AED [2].", 2)).toMatchObject({
+      ok: true,
+      text: "1. Confirm the rhythm [1].\n2. Attach the AED [2].",
+    });
+    // A run after a full stop that the sentence before needs stays with it.
+    expect(checkAnswer("Start CPR. [1] Attach the AED [2].", 2)).toMatchObject({ ok: true, text: "Start CPR. [1] Attach the AED [2].", cited: [1, 2] });
+    // A leading run before a statement without markers of its own stays too.
+    expect(checkAnswer("[1] Start CPR.", 2)).toMatchObject({ ok: true, text: "[1] Start CPR.", cited: [1] });
+  });
+
   it("never shows an answer with a dose or an amount", () => {
     expect(checkAnswer("Take 2 tablets now [1].", 2)).toMatchObject({ ok: false, kind: "dose", reason: PASSAGES_ONLY_REASON.dose });
     expect(checkAnswer("Give 10 ml [1].", 2)).toMatchObject({ kind: "dose" });
@@ -524,6 +542,7 @@ describe("prompt", () => {
     expect(SYSTEM_PROMPT).toMatch(/strictly from the numbered library passages/);
     expect(SYSTEM_PROMPT).toMatch(/crew data \[C\]/);
     expect(SYSTEM_PROMPT).toMatch(/End every sentence and every list item with the number of the passage/);
+    expect(SYSTEM_PROMPT).toMatch(/put the number at the end, never at the start/);
     expect(SYSTEM_PROMPT).toMatch(/reply exactly NO_ANSWER/);
     expect(SYSTEM_PROMPT).toMatch(/Never name a medicine, a dose, an amount or a schedule/);
     expect(SYSTEM_PROMPT).toMatch(/Never diagnose/);

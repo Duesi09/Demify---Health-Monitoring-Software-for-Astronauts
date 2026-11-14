@@ -31,7 +31,8 @@ flowchart LR
   sync --> db
   sync -- "embeddings" --> model
   noaa -. "ground link (switchable)" .-> app
-  lib -. "ground link (switchable)" .-> sync
+  lib -. "scheduled sync, ground link (switchable)" .-> sync
+  lib -. "Sync now, ground link (switchable)" .-> app
   app -- "alarms, trends, advice with citations and freshness" --> crew
   fs -. "ground link" .-> crew
 ```
@@ -45,9 +46,11 @@ flowchart LR
    model and no ground link.
 2. **Library sync.** While the ground link is up, the sync service pulls the
    curated library (protocols, references, crew baselines, medical-kit
-   inventory) into PostgreSQL every 6 hours or on "Sync now", splits it into
-   passages, stores a SHA-256 per passage and has the embedding model embed
-   them.
+   inventory) into PostgreSQL every 6 hours, splits it into passages, stores
+   a SHA-256 per passage and has the embedding model embed them. "Sync now"
+   on the Library page does the same at once; the app runs it itself (under
+   the same database lock), so it works even while the sync service is
+   stopped.
 3. **A crew question** goes to the onboard assistant. It finds the best
    passages (vector search, with full-text search as fallback), checks their
    SHA-256, and asks the local language model to answer from those passages
@@ -93,3 +96,36 @@ flowchart LR
 Every part degrades on its own: without the model the assistant shows
 passages, without PostgreSQL the app keeps readings in a JSON spool and
 replays it later, and every container restarts by itself.
+
+## Where it would run
+
+- **Pitch laptop:** `docker-compose.yml`, no database. The assistant searches
+  the library bundled with the release by keywords; an optional small local
+  model (`gemma3:4b` with Ollama) writes the answer from the cited passages
+  ([`LOCAL-MODEL.md`](LOCAL-MODEL.md)).
+- **DGX Spark:** the ground-test and analog-station server, with Asclepios
+  (Switzerland) as the pilot candidate we would approach.
+- **A real spacecraft:** the same software on an existing approved crew
+  laptop or a hosted payload of the Spaceborne Computer-2 class, not a new
+  box: power, cooling and approval are the limits. Reasons and sources in
+  [`SPARK.md` section 12](SPARK.md#12-does-a-dgx-spark-make-sense).
+
+## What we must not claim
+
+From the team's research notes
+([`research/iss-health-equipment.md`](research/iss-health-equipment.md)):
+
+- That Demify connects to any ISS device, laptop, network or data link. It
+  does not.
+- That NASA, ESA or any agency uses, tests or endorses Demify.
+- That Demify is a certified medical device, gives a diagnosis, or replaces
+  flight surgeons, Crew Medical Officers or Private Medical Conferences.
+- That the vital signs in the demo are real crew data. They are simulated.
+- That we know the data formats of ISS medical devices.
+- That Docker is approved on ISS laptops.
+- That the ISS has "600 Mbps for us": its Ku-band link carries about
+  517 Mbps down of user data, shared by the whole station, with gaps.
+- Anything about the Crew-11 medical return beyond what NASA and the
+  astronaut made public.
+- Medicine doses, or that Demify suggests treatment.
+- Any item the research marks as unconfirmed, stated as a fact.

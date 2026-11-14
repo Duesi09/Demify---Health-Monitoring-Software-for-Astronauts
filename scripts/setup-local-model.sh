@@ -352,12 +352,16 @@ main() {
   while [ "$(date +%s)" -lt "$deadline" ]; do
     body="$(curl -fsS --noproxy '*' --max-time 10 "$base/api/onboard/status" 2>/dev/null || true)"
     state="$(json_str state "$body")"
+    if [ "$state" = ready ]; then
+      ok=1
+    elif [ "$state" = missing-models ] && status_lists_model "$body" "$model"; then
+      ok=2 # the language model is there; only the embedding model is missing
+    fi
+    [ "$ok" = 0 ] || break
     if [ "${state:-no answer}" != "$last" ]; then
       say "  model state: ${state:-no answer yet}"
       last="${state:-no answer}"
     fi
-    if [ "$state" = ready ]; then ok=1; break; fi
-    if [ "$state" = missing-models ] && status_lists_model "$body" "$model"; then ok=2; break; fi
     sleep 3
   done
   if [ "$ok" = 0 ]; then

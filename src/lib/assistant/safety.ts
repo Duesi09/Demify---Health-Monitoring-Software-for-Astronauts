@@ -343,6 +343,22 @@ function isStaleNote(statement: string): boolean {
   return /\b(?:out of date|outdated|not (?:be )?up to date|veraltet|nicht (?:mehr )?aktuell)\b/i.test(statement) && !/\d/.test(statement);
 }
 
+const MARKER_RUN = String.raw`(?:\[(?:\d+|C)\][ \t]*)+`;
+/** A run of markers at the start of a line (after an optional list marker), before a statement that has markers of its own. */
+const LEADING_RUN = new RegExp(String.raw`^([ \t]*(?:(?:[-*•–]|\d+[.)])[ \t]+)?)${MARKER_RUN}(?=[^\n]*\[(?:\d+|C)\])`, "gm");
+/** "… [2]. [1] Next sentence [3]." : a run after a cited sentence, before a sentence that is cited too. */
+const MID_RUN = new RegExp(String.raw`(\][ \t]*[.!?…]["'”’)]*[ \t]+)${MARKER_RUN}(?=[\p{Lu}\d][^\n.!?]*\[(?:\d+|C)\])`, "gu");
+
+/**
+ * Small models sometimes open a sentence with markers as well as closing it
+ * with them ("[1][2] The checklist says … [2]."). The opening run is dropped
+ * when the statement carries markers of its own; a run after a full stop that
+ * the previous sentence needs stays with it (see statements()).
+ */
+function dropLeadingMarkers(text: string): string {
+  return text.replace(LEADING_RUN, "$1").replace(MID_RUN, "$1");
+}
+
 /**
  * Checks a model answer against the passages it was given (numbered
  * 1..passageCount; [C] only when crew data was given):
@@ -377,17 +393,13 @@ export function checkAnswer(raw: string, passageCount: number, opts: { crew?: bo
     return { ok: false, kind: "uncited", reason: PASSAGES_ONLY_REASON.uncited, detail: `${unmarked} statements of the model answer had no citation` };
   }
 
-  const cited = new Set<number>();
-  const cleaned = normalised
-    .replace(MARKER, (marker, m: string) => {
-      if (!valid(m)) return "";
-      if (m !== "C") cited.add(Number(m));
-      return marker;
-    })
+  const cleaned = dropLeadingMarkers(normalised.replace(MARKER, (marker, m: string) => (valid(m) ? marker : "")))
     // Tidy the gaps left by removed markers.
     .replace(/[ \t]+([.,;:!?])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")
+    .replace(/^[ \t]+/gm, "")
     .trim();
+  const cited = new Set([...cleaned.matchAll(MARKER)].filter((m) => m[1] !== "C").map((m) => Number(m[1])));
   if (!cited.size) return { ok: false, kind: "uncited", reason: PASSAGES_ONLY_REASON.uncited, detail: "model answer had no valid citation" };
   return { ok: true, text: cleaned, cited: [...cited].sort((a, b) => a - b) };
 }
