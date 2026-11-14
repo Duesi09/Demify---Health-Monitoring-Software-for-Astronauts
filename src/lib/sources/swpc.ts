@@ -75,8 +75,14 @@ export function flareClass(flux: number | null): string | null {
     ["B", 1e-7],
     ["A", 1e-8],
   ];
-  for (const [c, base] of classes) {
-    if (flux >= base) return `${c}${(flux / base).toFixed(1)}`;
+  for (let i = 0; i < classes.length; i++) {
+    const [c, base] = classes[i];
+    if (flux < base) continue;
+    const m = Math.round((flux / base) * 10) / 10;
+    // e.g. 9.96e-6 would round to "C10.0": flux is in [0.995, 1) of the next
+    // class, so it is an M1.0. X has no higher class (X28 is a valid class).
+    if (m >= 10 && i > 0) return `${classes[i - 1][0]}1.0`;
+    return `${c}${m.toFixed(1)}`;
   }
   return "A0.0";
 }

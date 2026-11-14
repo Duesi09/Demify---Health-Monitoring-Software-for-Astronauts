@@ -149,11 +149,11 @@ export default async function OverviewPage(props: PageProps<"/">) {
             <ShieldCheck size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">
-            {sw ? `S${sw.data.sLevel}` : "—"}
+            {sw && sw.data.current.p10 != null ? `S${sw.data.sLevel}` : "—"}
             <span className="ml-2 text-sm font-normal text-muted">{dose.rate.toFixed(2)} mSv/day est.</span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusBadge status={sw ? dose.status : "unknown"} />
+            <StatusBadge status={sw && sw.data.current.p10 != null ? dose.status : "unknown"} />
             <Link href="/radiation" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
               Radiation details <ArrowRight size={12} aria-hidden />
             </Link>
@@ -377,7 +377,7 @@ async function CrewDetail({
 
       <Card
         title="Daily check-in, last 7 days"
-        subtitle="Sleep, mood, stress, hydration and exercise. Bold values with * are crew entries; others are simulated demo data."
+        subtitle="Sleep, mood, stress, hydration and exercise. Bold values are real data: * crew entry, † sensor reading; others are simulated demo data."
       >
         <DailyGrid days={days} rows={rows} />
         <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted" aria-label="Legend">

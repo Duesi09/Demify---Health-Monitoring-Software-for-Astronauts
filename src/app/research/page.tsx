@@ -56,7 +56,7 @@ export default async function ResearchPage() {
         <Card className="xl:col-span-2" title="What this page shows">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
-              <a href="https://osdr.nasa.gov/bio/" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              <a href="https://osdr.nasa.gov/bio/" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
                 NASA OSDR
               </a>{" "}
               is NASA&apos;s open archive of space-biology and human-research data: omics, physiology, imaging and environment

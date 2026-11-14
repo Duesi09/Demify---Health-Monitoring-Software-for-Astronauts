@@ -14,6 +14,12 @@ import type { SourceResult } from "../types";
  * write a refreshed copy to config.snapshotDir (data/runtime/snapshots
  * locally, /data/snapshots in Docker), so the station keeps the latest data
  * it saw. Promote refreshed copies to seeds with `npm run snapshots:promote`.
+ *
+ * A failed live fetch is remembered per key for a short backoff window
+ * (min(ttl, 60 s)); during it requests skip the live fetch and go straight to
+ * stale memory or the snapshot instead of waiting out the fetch timeout again
+ * on every request. Concurrent callers for the same key share one in-flight
+ * load.
  */
 
 interface Entry {
@@ -22,6 +28,13 @@ interface Entry {
 }
 
 const memory = new Map<string, Entry>();
+/** Last failed live fetch per key, for the retry backoff. */
+const failures = new Map<string, { at: number; error: string }>();
+/** Loads in progress per key, shared by concurrent callers. */
+const inflight = new Map<string, Promise<SourceResult<unknown>>>();
+
+/** Longest time a failed source is left alone before the next live attempt. */
+const MAX_FAILURE_BACKOFF_MS = 60_000;
 
 export async function fetchJson<T = unknown>(
   url: string,
@@ -84,9 +97,8 @@ export async function cached<T>(
   loader: () => Promise<T>,
   ttlSeconds: number = config.cacheTtlSeconds,
 ): Promise<SourceResult<T>> {
-  const now = Date.now();
   const hit = memory.get(key);
-  if (hit && now - hit.fetchedAt < ttlSeconds * 1000) {
+  if (hit && Date.now() - hit.fetchedAt < ttlSeconds * 1000) {
     return {
       data: hit.value as T,
       source,
@@ -95,11 +107,38 @@ export async function cached<T>(
     };
   }
 
+  let pending = inflight.get(key) as Promise<SourceResult<T>> | undefined;
+  if (!pending) {
+    pending = load(key, source, loader, ttlSeconds).finally(() => {
+      inflight.delete(key);
+    });
+    inflight.set(key, pending);
+  }
+  // Each caller gets its own result object (the data itself is shared, as
+  // with memory hits).
+  return { ...(await pending) };
+}
+
+async function load<T>(
+  key: string,
+  source: string,
+  loader: () => Promise<T>,
+  ttlSeconds: number,
+): Promise<SourceResult<T>> {
+  const now = Date.now();
   let error: string | undefined;
-  if (!config.offline) {
+  const failed = failures.get(key);
+  const backoffMs = Math.min(ttlSeconds * 1000, MAX_FAILURE_BACKOFF_MS);
+  if (config.offline) {
+    error = "offline mode";
+  } else if (failed && now - failed.at < backoffMs) {
+    // Failed moments ago: don't block this request on another timeout.
+    error = failed.error;
+  } else {
     try {
       const value = await loader();
       memory.set(key, { value, fetchedAt: now });
+      failures.delete(key);
       void writeSnapshot(key, value);
       return {
         data: value,
@@ -109,11 +148,11 @@ export async function cached<T>(
       };
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+      failures.set(key, { at: Date.now(), error });
     }
-  } else {
-    error = "offline mode";
   }
 
+  const hit = memory.get(key);
   if (hit) {
     return {
       data: hit.value as T,

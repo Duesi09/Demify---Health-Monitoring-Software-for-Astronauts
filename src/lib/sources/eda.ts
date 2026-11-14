@@ -109,23 +109,36 @@ function summarise(meta: RawMission | undefined, name: string, raw: RawDose[]): 
 }
 
 async function loadReference(): Promise<IssDoseReference> {
-  const list = await fetchJson<RawMission[]>(`${base()}/`).catch(() => [] as RawMission[]);
-  const meta = new Map(list.map((m) => [m.name, m]));
-  const settled = await Promise.allSettled(
-    REFERENCE_MISSIONS.map((m) => fetchJson<RawDose[]>(`${base()}/${encodeURIComponent(m)}/radiation_data/`)),
-  );
-  const missions = settled
-    .map((r, i) =>
-      r.status === "fulfilled" && Array.isArray(r.value)
-        ? summarise(meta.get(REFERENCE_MISSIONS[i]), REFERENCE_MISSIONS[i], r.value)
-        : null,
-    )
-    .filter((m): m is MissionDose => m != null)
-    .sort((a, b) => a.start.localeCompare(b.start));
-  // Require most missions so a partial outage doesn't overwrite a good snapshot.
-  if (missions.length < Math.ceil(REFERENCE_MISSIONS.length / 2)) {
-    throw new Error(`EDA returned dose data for only ${missions.length} missions`);
+  // All-or-nothing: these are static historical series and a complete copy
+  // always exists (seed snapshot), so a partial or degraded refresh (missing
+  // missions, or titles/links lost because the mission list failed) must not
+  // replace it. Throwing makes cached() keep serving the complete copy.
+  const [list, ...settled] = await Promise.allSettled([
+    fetchJson<RawMission[]>(`${base()}/`),
+    ...REFERENCE_MISSIONS.map((m) => fetchJson<RawDose[]>(`${base()}/${encodeURIComponent(m)}/radiation_data/`)),
+  ]);
+  if (list.status !== "fulfilled" || !Array.isArray(list.value)) {
+    const reason = list.status === "rejected" ? `: ${list.reason instanceof Error ? list.reason.message : String(list.reason)}` : "";
+    throw new Error(`EDA mission list unavailable${reason}`);
   }
+  const meta = new Map((list.value as RawMission[]).map((m) => [m.name, m]));
+  const missions: MissionDose[] = [];
+  const missing: string[] = [];
+  settled.forEach((r, i) => {
+    const name = REFERENCE_MISSIONS[i];
+    const m =
+      r.status === "fulfilled" && Array.isArray(r.value)
+        ? summarise(meta.get(name), name, r.value as RawDose[])
+        : null;
+    if (m) missions.push(m);
+    else missing.push(name);
+  });
+  if (missing.length) {
+    throw new Error(
+      `EDA returned dose data for only ${missions.length} of ${REFERENCE_MISSIONS.length} missions (missing ${missing.join(", ")})`,
+    );
+  }
+  missions.sort((a, b) => a.start.localeCompare(b.start));
   const means = missions.map((m) => m.meanTotal);
   return {
     unit: "mGy/day",

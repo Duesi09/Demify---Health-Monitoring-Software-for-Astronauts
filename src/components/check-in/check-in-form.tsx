@@ -6,7 +6,7 @@ import { Save, Stethoscope } from "lucide-react";
 import { StatusBadge, STATUS_TEXT } from "@/components/ui";
 import { StatusIcon } from "@/components/overview/status-icon";
 import { bySeverity, formatDelay, formatUtc, formatValue } from "@/components/overview/format";
-import { CHECK_IN_INDICATORS, INDICATORS, classify, needsEscalation } from "@/lib/health/knowledge";
+import { CHECK_IN_INDICATORS, INDICATORS, classify, evaluateValue } from "@/lib/health/knowledge";
 import type { IndicatorId, Status } from "@/lib/types";
 import { CHECK_IN_GROUPS, SCALE_LABELS, type CheckInInput, type CheckInResult } from "./types";
 
@@ -14,17 +14,30 @@ type Values = Partial<Record<IndicatorId, string>>;
 
 interface Live {
   state: "empty" | "invalid" | "ok";
+  /** Rounded to the indicator's precision: the value that is sent and stored. */
   value?: number;
+  /** True when rounding changed what was typed. */
+  rounded?: boolean;
   status?: Status;
   escalate?: boolean;
+  baselineShift?: boolean;
 }
 
-function evaluate(id: IndicatorId, raw: string | undefined): Live {
+/** Same evaluation as the server action (evaluateValue), so preview and saved result agree. */
+function evaluate(id: IndicatorId, raw: string | undefined, baseline?: number): Live {
   if (raw == null || raw.trim() === "") return { state: "empty" };
-  const value = Number(raw);
+  const typed = Number(raw);
   const [lo, hi] = INDICATORS[id].inputRange;
-  if (!Number.isFinite(value) || value < lo || value > hi) return { state: "invalid" };
-  return { state: "ok", value, status: classify(id, value), escalate: needsEscalation(id, value) };
+  if (!Number.isFinite(typed) || typed < lo || typed > hi) return { state: "invalid" };
+  const ev = evaluateValue(id, typed, baseline);
+  return {
+    state: "ok",
+    value: ev.value,
+    rounded: ev.value !== typed,
+    status: ev.status,
+    escalate: ev.escalate,
+    baselineShift: ev.baselineShift,
+  };
 }
 
 /** Live status line under each field: status badge + the matching range text. */
@@ -44,14 +57,24 @@ function Feedback({ id, live, serverError }: { id: IndicatorId; live: Live; serv
     );
   }
   const s = live.status!;
-  const rangeText =
-    s === "nominal" ? `Normal: ${def.ranges.nominal}` : s === "caution" ? `Caution range: ${def.ranges.caution}` : `Critical range: ${def.ranges.critical}`;
+  const rangeText = live.baselineShift
+    ? `Large change (≥ 25 %) from your pre-flight baseline; population normal: ${def.ranges.nominal}`
+    : s === "nominal"
+      ? `Normal: ${def.ranges.nominal}`
+      : s === "caution"
+        ? `Caution range: ${def.ranges.caution}`
+        : `Critical range: ${def.ranges.critical}`;
   return (
     <div className="space-y-1 text-xs">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <StatusBadge status={s} />
         <span className={s === "nominal" ? "text-muted" : STATUS_TEXT[s]}>{rangeText}</span>
       </p>
+      {live.rounded && (
+        <p className="text-muted">
+          Saved as {live.value!.toFixed(def.decimals)} {def.unit}.
+        </p>
+      )}
       {live.escalate && (
         <p className="font-medium text-critical">Escalation threshold: contact the flight surgeon after saving.</p>
       )}
@@ -63,19 +86,20 @@ function NumberField({
   id,
   value,
   onChange,
-  placeholder,
+  baseline,
   serverError,
 }: {
   id: IndicatorId;
   value: string;
   onChange: (v: string) => void;
-  placeholder?: string;
+  baseline?: number;
   serverError?: string;
 }) {
   const def = INDICATORS[id];
-  const live = evaluate(id, value);
+  const live = evaluate(id, value, baseline);
   const inputId = `ci-${id}`;
   const fbId = `ci-${id}-fb`;
+  const baseId = `ci-${id}-base`;
   const border =
     live.state === "invalid" || serverError
       ? "border-critical"
@@ -86,9 +110,16 @@ function NumberField({
           : "border-border";
   return (
     <div className="min-w-0">
-      <label htmlFor={inputId} className="block text-sm font-medium">
-        {def.label}
-      </label>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <label htmlFor={inputId} className="text-sm font-medium">
+          {def.label}
+        </label>
+        {baseline != null && (
+          <span id={baseId} className="text-xs text-muted tabular">
+            pre-flight {baseline} {def.unit}
+          </span>
+        )}
+      </div>
       <div className={`mt-1 flex items-center rounded-lg border bg-surface-2 focus-within:ring-2 focus-within:ring-accent/60 ${border}`}>
         <input
           id={inputId}
@@ -99,11 +130,11 @@ function NumberField({
           max={def.inputRange[1]}
           step={def.decimals ? 1 / 10 ** def.decimals : 1}
           value={value}
-          placeholder={placeholder}
+          placeholder={baseline != null ? `pre-flight ${baseline}` : undefined}
           onChange={(e) => onChange(e.target.value)}
-          aria-describedby={fbId}
+          aria-describedby={baseline != null ? `${baseId} ${fbId}` : fbId}
           aria-invalid={live.state === "invalid" || !!serverError || undefined}
-          className="w-full min-w-0 rounded-lg bg-transparent px-3 py-2 text-base tabular outline-none placeholder:text-sm placeholder:text-muted/50"
+          className="w-full min-w-0 rounded-lg bg-transparent px-3 py-2 text-base tabular outline-none placeholder:text-sm placeholder:text-muted"
         />
         <span className="shrink-0 pr-3 text-sm text-muted">{def.unit}</span>
       </div>
@@ -222,7 +253,7 @@ export function CheckInForm({
 
   const set = (id: IndicatorId) => (v: string) => setValues((prev) => ({ ...prev, [id]: v }));
 
-  const lives = CHECK_IN_INDICATORS.map((id) => [id, evaluate(id, values[id])] as const);
+  const lives = CHECK_IN_INDICATORS.map((id) => [id, evaluate(id, values[id], baselines[id])] as const);
   const entered = lives.filter(([, l]) => l.state === "ok");
   const invalid = lives.filter(([, l]) => l.state === "invalid");
   const counts = {
@@ -287,7 +318,7 @@ export function CheckInForm({
                     value={values[id] ?? ""}
                     onChange={set(id)}
                     serverError={fieldErrors[id]}
-                    placeholder={baselines[id] != null ? `pre-flight ${baselines[id]}` : undefined}
+                    baseline={baselines[id]}
                   />
                 ),
               )}

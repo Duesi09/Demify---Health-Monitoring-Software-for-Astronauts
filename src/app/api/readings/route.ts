@@ -1,27 +1,135 @@
 import { z } from "zod";
 import { config } from "@/lib/config";
+import { INDICATORS } from "@/lib/health/knowledge";
 import { addReadings, getCrew, listReadings } from "@/lib/store/readings";
 import { simulateDaily, simulateSeries } from "@/lib/sources/simulator";
 import type { IndicatorId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const INDICATORS = [
-  "heartRate", "systolicBP", "diastolicBP", "spo2", "bodyTemp", "respRate", "glucose",
-  "sleepHours", "mood", "stress", "radiationDoseRate", "radiationCumulative", "bodyMassChange",
-  "boneLoss", "exerciseMinutes", "hydration", "wbc", "cabinCO2", "visionChange",
-] as const satisfies readonly IndicatorId[];
+const INDICATOR_IDS = Object.keys(INDICATORS) as [IndicatorId, ...IndicatorId[]];
 
-const ReadingIn = z.object({
-  crewId: z.string().min(1).max(64),
-  indicator: z.enum(INDICATORS),
-  value: z.number().finite(),
-  unit: z.string().max(16),
-  takenAt: z.iso.datetime().optional(),
-  source: z.enum(["manual", "sensor"]).default("manual"),
-  note: z.string().max(500).optional(),
-});
+/** Allowed clock skew for device timestamps. */
+const MAX_FUTURE_SKEW_MS = 5 * 60_000;
+/** 500 readings x ~700 B fits well under this. */
+const MAX_BODY_BYTES = 1024 * 1024;
+const RATE_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT = 600;
+
+const ReadingIn = z
+  .object({
+    crewId: z.string().min(1).max(64),
+    indicator: z.enum(INDICATOR_IDS),
+    value: z.number().finite(),
+    unit: z.string().max(16),
+    takenAt: z.iso
+      .datetime()
+      .refine((t) => Date.parse(t) <= Date.now() + MAX_FUTURE_SKEW_MS, {
+        message: "takenAt must not be in the future",
+      })
+      .optional(),
+    source: z.enum(["manual", "sensor"]).default("manual"),
+    note: z.string().max(500).optional(),
+  })
+  .superRefine((r, ctx) => {
+    const def = INDICATORS[r.indicator];
+    const [lo, hi] = def.inputRange;
+    if (r.value < lo || r.value > hi) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: `${def.short} must be between ${lo} and ${hi} ${def.unit}`,
+      });
+    }
+    if (r.unit !== def.unit) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["unit"],
+        message: `unit for ${r.indicator} must be "${def.unit}"`,
+      });
+    }
+  });
 const Batch = z.array(ReadingIn).min(1).max(500);
+
+const Hours = z.coerce.number().catch(24);
+
+/**
+ * Per-crew ingestion budget (fixed one-minute window). In memory only, which
+ * is enough for the single-process deployment; it bounds how fast any client
+ * can fill the store and evict genuine history.
+ */
+const rateWindows = new Map<string, { start: number; count: number }>();
+
+function rateLimit(): number {
+  const n = Number(process.env.DEMIFY_RATE_LIMIT_PER_MIN);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_RATE_LIMIT;
+}
+
+/** Returns seconds to wait if the batch would exceed a crew budget, else 0 and records it. */
+function takeRateBudget(counts: Map<string, number>, now = Date.now()): number {
+  const limit = rateLimit();
+  let retryAfter = 0;
+  for (const [crewId, n] of counts) {
+    let w = rateWindows.get(crewId);
+    if (!w || now - w.start >= RATE_WINDOW_MS) w = { start: now, count: 0 };
+    if (w.count + n > limit) {
+      retryAfter = Math.max(retryAfter, Math.ceil((w.start + RATE_WINDOW_MS - now) / 1000));
+    }
+  }
+  if (retryAfter > 0) return retryAfter;
+  for (const [crewId, n] of counts) {
+    let w = rateWindows.get(crewId);
+    if (!w || now - w.start >= RATE_WINDOW_MS) {
+      w = { start: now, count: 0 };
+      rateWindows.set(crewId, w);
+    }
+    w.count += n;
+  }
+  return 0;
+}
+
+/**
+ * Blocks cross-site writes: a browser always sends Origin on a cross-origin
+ * POST, so if one is present its host must be ours. Devices and curl send no
+ * Origin and are unaffected.
+ */
+function isCrossOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) return false;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return true; // "null" (sandboxed iframe, file://) or garbage
+  }
+  const hosts = [req.headers.get("x-forwarded-host"), req.headers.get("host")]
+    .flatMap((h) => (h ? h.split(",") : []))
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  return !hosts.includes(originHost.toLowerCase());
+}
+
+class BodyTooLarge extends Error {}
+
+/** Reads the body with a byte cap, so chunked uploads without Content-Length are bounded too. */
+async function readBodyCapped(req: Request, max: number): Promise<string> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw new BodyTooLarge();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
 
 /**
  * GET /api/readings?crewId=cdr&indicator=heartRate&hours=24
@@ -32,7 +140,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const crewId = url.searchParams.get("crewId") ?? undefined;
   const indicator = (url.searchParams.get("indicator") ?? undefined) as IndicatorId | undefined;
-  const hours = Math.min(24 * 30, Number(url.searchParams.get("hours") ?? 24));
+  const hoursParam = url.searchParams.get("hours")?.trim();
+  // Fallback 24 h for missing/garbage input; clamp to 1 h .. 30 days.
+  const hours = Math.min(24 * 30, Math.max(1, hoursParam ? Hours.parse(hoursParam) : 24));
   const since = new Date(Date.now() - hours * 3_600_000).toISOString();
 
   const stored = await listReadings({ crewId, indicator, since });
@@ -59,10 +169,24 @@ export async function GET(req: Request) {
  *   {"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"}
  */
 export async function POST(req: Request) {
+  if (isCrossOrigin(req)) {
+    return Response.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
+  }
+  const mediaType = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (mediaType !== "application/json") {
+    return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
+  }
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return Response.json({ error: "Request body too large (max 1 MB)" }, { status: 413 });
+  }
   let json: unknown;
   try {
-    json = await req.json();
-  } catch {
+    json = JSON.parse(await readBodyCapped(req, MAX_BODY_BYTES));
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return Response.json({ error: "Request body too large (max 1 MB)" }, { status: 413 });
+    }
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
   // Accept a single reading or a batch; validate as a batch for clear errors.
@@ -75,6 +199,15 @@ export async function POST(req: Request) {
     if (!(await getCrew(r.crewId))) {
       return Response.json({ error: `Unknown crewId ${r.crewId}` }, { status: 400 });
     }
+  }
+  const perCrew = new Map<string, number>();
+  for (const r of items) perCrew.set(r.crewId, (perCrew.get(r.crewId) ?? 0) + 1);
+  const retryAfter = takeRateBudget(perCrew);
+  if (retryAfter > 0) {
+    return Response.json(
+      { error: "Too many readings for this crew member; slow down" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } },
+    );
   }
   const now = new Date().toISOString();
   const created = await addReadings(items.map((r) => ({ ...r, takenAt: r.takenAt ?? now })));

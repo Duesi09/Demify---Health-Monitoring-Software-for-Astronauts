@@ -82,11 +82,18 @@ running app. The only outbound traffic at runtime is the data APIs below.
 
 ### Offline snapshots and the data volume
 
-Every external source (NOAA SWPC, NASA OSDR) has a snapshot file in
-`data/snapshots/<key>.json`. The app reads the snapshot whenever the live
-API cannot be reached. When it is online, every successful fetch rewrites
-the snapshot, so a spacecraft keeps the latest data it saw before losing its
-link.
+Every external source (NOAA SWPC, NASA OSDR) has a snapshot file
+`<key>.json`. The app reads the snapshot whenever the live API cannot be
+reached. Snapshots live in two directories:
+
+| Variable | Local default (`npm run dev` / `npm start`) | Docker image | Role |
+| --- | --- | --- | --- |
+| `DEMIFY_SNAPSHOT_SEED_DIR` | `data/snapshots` (committed) | `/app/data/snapshots-seed` (read-only, baked in from `data/snapshots`) | Bundled snapshots shipped with the release. Never written by the app |
+| `DEMIFY_SNAPSHOT_DIR` | `data/runtime/snapshots` (git-ignored) | `/data/snapshots` (on the data volume) | Writable copies. Every successful live fetch rewrites the snapshot here, so a spacecraft keeps the latest data it saw before losing its link |
+
+The app reads both directories and serves whichever copy of a snapshot is
+newer, so a fresh seed shipped with a new image wins over an older refreshed
+copy. Running the app locally never modifies the committed snapshots.
 
 On each start, `docker/entrypoint.sh` does the following:
 
@@ -103,9 +110,13 @@ On each start, `docker/entrypoint.sh` does the following:
 3. Logs a warning if `DEMIFY_DATA_DIR` is not writable, because crew readings
    cannot be saved then.
 
-To refresh the snapshots bundled in the image, run the app online, or copy
-the files from a running system with
-`docker cp demify:/data/snapshots/. data/snapshots/`. Then rebuild.
+To refresh the snapshots bundled in the image, run the app online locally
+and then run `npm run snapshots:promote`. It copies every valid JSON
+snapshot from `DEMIFY_SNAPSHOT_DIR` (default `data/runtime/snapshots`) into
+`DEMIFY_SNAPSHOT_SEED_DIR` (default `data/snapshots`). Alternatively, copy
+the files from a running container with
+`docker cp demify:/data/snapshots/. data/snapshots/`. Then commit and
+rebuild.
 
 **Bind mounts instead of a named volume:** the host directory must be
 writable by uid 1001:
@@ -121,17 +132,29 @@ docker run -v /srv/demify:/data ...
 
 All settings are environment variables, read when the server starts (nothing
 is fixed at build time). See `.env.example` for the full list with comments.
+An empty value counts as unset, so the default applies. The defaults below
+are those of the Docker image; outside Docker the data and snapshot dirs
+default to paths under `data/` (see section 2).
+
+With Compose, `.env` only fills in the `${...}` placeholders of
+`docker-compose.yml`. A variable reaches the container only if the
+`x-demify-env` block lists it. When you add a setting, add it there too.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DEMIFY_MISSION` | `iss` | `iss` \| `artemis-lunar` \| `mars-transit`. Sets the radiation baseline, comm delay, gravity and duration |
+| `DEMIFY_MISSION` | `iss` | `iss` \| `artemis-lunar` \| `mars-transit`. Sets the radiation baseline, comm delay, gravity and duration. Unknown values fall back to `iss` with a warning in the log |
+| `DEMIFY_MISSION_START` | 92 days before start-up | Mission start as an ISO date (`2026-09-01`). Drives mission day and the dose budget. The default moves on every restart, so set it for a real mission. Invalid values are ignored with a warning |
 | `DEMIFY_OFFLINE` | `false` | `true` means the app never calls external APIs and serves snapshots only |
 | `DEMIFY_CACHE_TTL` | `300` | Seconds a live response is kept in memory |
 | `DEMIFY_FETCH_TIMEOUT_MS` | `8000` | Timeout for each outbound request. Lower it to fall back to snapshots sooner on a degraded link |
 | `DEMIFY_SIMULATE` | `true` | Demo telemetry generator. Set `false` with real sensors |
-| `DEMIFY_DATA_DIR` | `/data` | Persistent JSON store. Must be a volume |
-| `DEMIFY_SNAPSHOT_DIR` | `/data/snapshots` | Writable snapshot dir, seeded from the image |
+| `DEMIFY_DATA_DIR` | `/data` | Persistent JSON store. Must be a volume. Fixed by Compose |
+| `DEMIFY_SNAPSHOT_DIR` | `/data/snapshots` | Writable snapshot dir, seeded from the image. Fixed by Compose |
+| `DEMIFY_SNAPSHOT_SEED_DIR` | `/app/data/snapshots-seed` | Read-only bundled snapshots (see section 2) |
 | `DEMIFY_RESEED_SNAPSHOTS` | `false` | Overwrite snapshots with the image's copies on start |
+| `DEMIFY_RETENTION_DAYS` | `1100` | Crew readings older than this are pruned from the store on write (keep it longer than the mission) |
+| `DEMIFY_MAX_READINGS` | `50000` | Hard cap on stored readings; oldest sensor readings are evicted first, then oldest manual ones |
+| `DEMIFY_RATE_LIMIT_PER_MIN` | `600` | Readings accepted per crew member per minute on `POST /api/readings` (429 above) |
 | `NASA_API_KEY` | `DEMO_KEY` | Get a key at <https://api.nasa.gov/>. `DEMO_KEY` is heavily rate limited |
 | `OSDR_BASE_URL` | `https://osdr.nasa.gov` | Point at a ground relay or mirror if needed |
 | `OSDR_BIODATA_URL` | `https://visualization.osdr.nasa.gov` | |
@@ -195,7 +218,8 @@ docker build --secret id=build_ca,src=./certs/ca.crt -t demify:dev .
 
 With Compose, set `DEMIFY_BUILD_CA=./certs/ca.crt`. The `certs/` dir is
 git- and docker-ignored. Without it, Compose passes `docker/no-extra-ca.pem`,
-an empty placeholder that the build ignores. Recent Compose versions build
+a committed placeholder without certificates that the build ignores
+(`.gitignore` excludes `*.pem` but makes an exception for this file). Recent Compose versions build
 through Bake, which refuses secret files outside the project directory
 (`additional privileges requested: --allow=fs.read=...`). Keep the CA file
 inside the repo checkout, for example in `./certs/`.

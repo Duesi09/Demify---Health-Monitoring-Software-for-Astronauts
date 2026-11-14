@@ -26,7 +26,7 @@ export function IssDoseChart({ bars, mean }: { bars: DoseBar[]; mean: number }) 
         className="h-[220px] w-full text-[11px]"
       >
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
+          <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%" accessibilityLayer={false}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="label" stroke="var(--muted)" tickLine={false} axisLine={{ stroke: "var(--border)" }} interval={0} angle={-35} textAnchor="end" height={44} />
             <YAxis stroke="var(--muted)" tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => v.toFixed(2)} />

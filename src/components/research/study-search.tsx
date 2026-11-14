@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ExternalLink, Loader2, Search } from "lucide-react";
 import type { StudySearch as StudySearchData } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
@@ -18,22 +18,37 @@ export function StudySearch({ initial }: { initial: Result | null }) {
   const [result, setResult] = useState<Result | null>(initial);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Latest-wins: each run aborts the previous request, and a response that is
+  // no longer the latest never touches state (so an older query can't overwrite
+  // a newer one, or clear `loading` while the newer one is still in flight).
+  const inflight = useRef<AbortController | null>(null);
+
+  useEffect(() => () => inflight.current?.abort(), []);
 
   async function run(query: string, from = 0) {
     const term = query.trim();
     if (!term) return;
+    inflight.current?.abort();
+    const ctrl = new AbortController();
+    inflight.current = ctrl;
+    const isLatest = () => inflight.current === ctrl && !ctrl.signal.aborted;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/osdr/search?q=${encodeURIComponent(term)}&size=${PAGE}&from=${from}`);
+      const res = await fetch(`/api/osdr/search?q=${encodeURIComponent(term)}&size=${PAGE}&from=${from}`, { signal: ctrl.signal });
       const body = await res.json();
+      if (!isLatest()) return;
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       const { provenance, ...data } = body;
       setResult({ data: data as StudySearchData, meta: provenance as Meta });
     } catch (e) {
+      if (!isLatest()) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (isLatest()) {
+        inflight.current = null;
+        setLoading(false);
+      }
     }
   }
 

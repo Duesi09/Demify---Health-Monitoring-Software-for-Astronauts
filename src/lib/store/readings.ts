@@ -17,7 +17,17 @@ interface DbShape {
   readings: Reading[];
 }
 
-const MAX_READINGS = 50_000;
+/** Hard cap on stored readings (override with DEMIFY_MAX_READINGS). */
+const DEFAULT_MAX_READINGS = 50_000;
+/** Readings older than this are pruned on write (override with DEMIFY_RETENTION_DAYS). */
+// Longer than the longest mission profile (Mars transit, 900 days) so a
+// dosimeter total or pre-flight history is never pruned mid-mission.
+const DEFAULT_RETENTION_DAYS = 1100;
+
+function positiveIntEnv(name: string, fallback: number): number {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
 
 const DEFAULT_CREW: CrewMember[] = [
   {
@@ -48,25 +58,123 @@ const DEFAULT_CREW: CrewMember[] = [
 
 const dbFile = () => path.join(config.dataDir, "demify-db.json");
 
-let cache: DbShape | null = null;
+// One shared load promise: concurrent first callers must all get the same
+// DbShape object, otherwise a slower read could replace a newer in-memory DB.
+let loading: Promise<DbShape> | null = null;
 // Serialise writes so concurrent requests can't clobber each other.
 let writeChain: Promise<void> = Promise.resolve();
 
-async function load(): Promise<DbShape> {
-  if (cache) return cache;
+function isDbShape(v: unknown): v is DbShape {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    Array.isArray((v as DbShape).crew) &&
+    Array.isArray((v as DbShape).readings)
+  );
+}
+
+async function readAndParse(): Promise<DbShape> {
+  const file = dbFile();
+  let raw: string;
   try {
-    cache = JSON.parse(await fs.readFile(dbFile(), "utf8")) as DbShape;
-  } catch {
-    cache = { crew: DEFAULT_CREW, readings: [] };
+    raw = await fs.readFile(file, "utf8");
+  } catch (err) {
+    // Only a missing file means "fresh install". Anything else (EACCES, EIO…)
+    // must not be papered over with an empty DB that the next write persists.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { crew: DEFAULT_CREW, readings: [] };
+    }
+    throw err;
   }
-  return cache;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    parsed = err;
+  }
+  if (isDbShape(parsed)) return parsed;
+
+  // Corrupt or truncated file: keep it for manual recovery instead of letting
+  // the next persist() overwrite it, then start with an empty DB.
+  const aside = `${file}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  await fs.rename(file, aside);
+  console.error(
+    `[demify] ERROR: ${file} is not a valid Demify database ` +
+      `(${parsed instanceof Error ? parsed.message : "unexpected shape"}). ` +
+      `It was moved to ${aside} and an EMPTY database was started. ` +
+      `Restore crew history from that file manually.`,
+  );
+  return { crew: DEFAULT_CREW, readings: [] };
+}
+
+function load(): Promise<DbShape> {
+  if (!loading) {
+    loading = readAndParse();
+    // Let a later call retry after a transient failure (e.g. EACCES).
+    loading.catch(() => {
+      loading = null;
+    });
+  }
+  return loading;
 }
 
 async function persist(db: DbShape) {
   await fs.mkdir(config.dataDir, { recursive: true });
-  const tmp = dbFile() + ".tmp";
-  await fs.writeFile(tmp, JSON.stringify(db));
-  await fs.rename(tmp, dbFile());
+  const file = dbFile();
+  const tmp = file + ".tmp";
+  const fh = await fs.open(tmp, "w");
+  try {
+    await fh.writeFile(JSON.stringify(db));
+    // Make the data durable before the rename publishes it, so a power loss
+    // can't leave a renamed-but-empty database.
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+  await fs.rename(tmp, file);
+  // Persist the rename itself. Directories can't be opened/fsynced on every
+  // platform (e.g. Windows), so this step is best effort.
+  try {
+    const dir = await fs.open(config.dataDir, "r");
+    try {
+      await dir.sync();
+    } finally {
+      await dir.close();
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+/**
+ * Drops readings past the retention window, then, if the store is still over
+ * the cap, the oldest sensor readings before the oldest manual check-ins.
+ * Eviction is by takenAt, never by insertion order, so a burst of writes can't
+ * push out recent crew history.
+ */
+function evict(readings: Reading[], now = Date.now()): Reading[] {
+  const cutoff = now - positiveIntEnv("DEMIFY_RETENTION_DAYS", DEFAULT_RETENTION_DAYS) * 86_400_000;
+  let out = readings.filter((r) => !(Date.parse(r.takenAt) < cutoff));
+  const max = positiveIntEnv("DEMIFY_MAX_READINGS", DEFAULT_MAX_READINGS);
+  let excess = out.length - max;
+  if (excess <= 0) return out;
+
+  const byAge = (a: Reading, b: Reading) =>
+    (Date.parse(a.takenAt) || 0) - (Date.parse(b.takenAt) || 0);
+  const drop = new Set<Reading>();
+  for (const source of ["sensor", "manual"] as const) {
+    if (excess <= 0) break;
+    const oldest = out.filter((r) => r.source === source).sort(byAge).slice(0, excess);
+    for (const r of oldest) drop.add(r);
+    excess -= oldest.length;
+  }
+  // Any other source value (legacy data) goes last.
+  if (excess > 0) {
+    const rest = out.filter((r) => !drop.has(r)).sort(byAge).slice(0, excess);
+    for (const r of rest) drop.add(r);
+  }
+  out = out.filter((r) => !drop.has(r));
+  return out;
 }
 
 export async function listCrew(): Promise<CrewMember[]> {
@@ -100,9 +208,7 @@ export async function addReadings(
   const run = async () => {
     const db = await load();
     db.readings.push(...created);
-    if (db.readings.length > MAX_READINGS) {
-      db.readings.splice(0, db.readings.length - MAX_READINGS);
-    }
+    db.readings = evict(db.readings);
     await persist(db);
   };
   writeChain = writeChain.then(run, run);

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { AlertTriangle, ShieldCheck, Sun, Zap } from "lucide-react";
 import { TimeSeriesChart } from "@/components/charts/time-series";
+import { CrewSwitcher } from "@/components/crew-switcher";
 import { Card, PageHeader, Provenance, StatusBadge } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
 import { getIssDoseReference } from "@/lib/sources/eda";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
-import { listReadings } from "@/lib/store/readings";
+import { listCrew, listReadings } from "@/lib/store/readings";
 import type { Status } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Radiation" };
@@ -23,11 +24,24 @@ const S_LEVEL_TEXT: Record<number, { name: string; action: string }> = {
   5: { name: "Extreme (S5)", action: "Shelter immediately. Unshielded exposure may cause acute radiation effects. Emergency protocol." },
 };
 
-function sStatus(level: number): Status {
+/** Shown instead of an S-level action when current conditions are unknown. Never fall back to "Normal operations". */
+const UNKNOWN_ACTION =
+  "Space weather unknown: follow onboard dosimeter alarms and the last NOAA bulletin. Treat conditions as unconfirmed until live data returns.";
+
+function sStatus(level: number | null): Status {
+  if (level == null) return "unknown";
   return level >= 3 ? "critical" : level >= 1 ? "caution" : "nominal";
 }
 
-export default async function RadiationPage() {
+function first(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function RadiationPage(props: PageProps<"/radiation">) {
+  const sp = await props.searchParams;
+  const crew = await listCrew();
+  const crewParam = first(sp.crew);
+  const activeCrew = crew.find((c) => c.id === crewParam) ?? crew[0];
   const mission = currentMission();
   const day = missionDay();
   let sw: Awaited<ReturnType<typeof getSpaceWeather>> | null = null;
@@ -41,20 +55,27 @@ export default async function RadiationPage() {
   const dose = estimateDoseRate(sw?.data.current.p10 ?? null, mission);
   // Real ISS area dosimetry from NASA OSDR, used to sanity-check the estimate.
   const issRef = await getIssDoseReference().catch(() => null);
-  // Prefer the crew's logged dosimeter reading over the estimate.
-  const dosimeter = (await listReadings({ indicator: "radiationCumulative" })).at(-1);
+  // Prefer this crew member's own logged dosimeter reading over the estimate.
+  // Dosimeter totals are personal, so never mix readings across crew members.
+  const dosimeter = activeCrew
+    ? (await listReadings({ crewId: activeCrew.id, indicator: "radiationCumulative" })).at(-1)
+    : undefined;
   const estimatedCumulative = day * mission.baselineDoseRate;
   const cumulative = dosimeter?.value ?? estimatedCumulative;
   const pct = Math.min(100, (cumulative / CAREER_LIMIT_MSV) * 100);
   const daysToLimit = Math.max(0, (CAREER_LIMIT_MSV - cumulative) / dose.rate);
-  const level = sw?.data.sLevel ?? 0;
+  // Without a live/cached proton flux the storm level is unknown, not S0.
+  const level = sw && sw.data.current.p10 != null ? sw.data.sLevel : null;
+  const levelText = level != null ? S_LEVEL_TEXT[level] : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Radiation Environment"
         description={`Live solar particle conditions from NOAA's GOES satellites and an estimate of crew exposure for the ${mission.name} profile. Space radiation is the first of NASA's five hazards of human spaceflight: it raises long-term cancer risk and can damage the central nervous system, heart and eyes.`}
-      />
+      >
+        {crew.length > 0 && activeCrew && <CrewSwitcher crew={crew} active={activeCrew.id} basePath="/radiation" />}
+      </PageHeader>
 
       {error && (
         <Card className="border-critical/50">
@@ -68,10 +89,10 @@ export default async function RadiationPage() {
             <span className="text-xs uppercase tracking-wider text-muted">Solar radiation storm</span>
             <AlertTriangle size={16} className="text-muted" aria-hidden />
           </div>
-          <p className="mt-2 text-3xl font-semibold tabular">S{level}</p>
+          <p className="mt-2 text-3xl font-semibold tabular">{level != null ? `S${level}` : "—"}</p>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge status={sStatus(level)} />
-            <span className="text-xs text-muted">{S_LEVEL_TEXT[level].name}</span>
+            <span className="text-xs text-muted">{levelText ? levelText.name : "Unknown: no proton flux data"}</span>
           </div>
         </Card>
         <Card>
@@ -103,17 +124,22 @@ export default async function RadiationPage() {
             <span className="ml-1 text-sm font-normal text-muted">mSv/day</span>
           </p>
           <p className="mt-1 text-xs text-muted">
-            GCR baseline {mission.baselineDoseRate} + solar {dose.sepContribution.toFixed(2)} · indicative estimate
+            GCR baseline {mission.baselineDoseRate} +{" "}
+            {level != null ? `solar ${dose.sepContribution.toFixed(2)}` : "solar unknown (not included)"} · indicative estimate
           </p>
         </Card>
       </div>
 
       <Card
-        className={`border-l-4 ${level >= 3 ? "border-l-critical" : level >= 1 ? "border-l-caution" : "border-l-nominal"}`}
+        className={`border-l-4 ${
+          level == null ? "border-l-unknown" : level >= 3 ? "border-l-critical" : level >= 1 ? "border-l-caution" : "border-l-nominal"
+        }`}
         title="Recommended crew action"
       >
-        <p className={`text-sm ${level >= 3 ? "text-critical" : level >= 1 ? "text-caution" : "text-fg"}`}>
-          {S_LEVEL_TEXT[level].action}
+        <p
+          className={`text-sm ${level == null ? "text-fg" : level >= 3 ? "text-critical" : level >= 1 ? "text-caution" : "text-fg"}`}
+        >
+          {levelText ? levelText.action : UNKNOWN_ACTION}
         </p>
       </Card>
 
@@ -145,7 +171,10 @@ export default async function RadiationPage() {
           />
         </Card>
 
-        <Card title="Mission dose budget" subtitle={`Mission day ${day} · NASA career limit ${CAREER_LIMIT_MSV} mSv`}>
+        <Card
+          title={activeCrew ? `Mission dose budget · ${activeCrew.name}` : "Mission dose budget"}
+          subtitle={`Mission day ${day} · NASA career limit ${CAREER_LIMIT_MSV} mSv`}
+        >
           <p className="text-3xl font-semibold tabular">
             {cumulative.toFixed(0)}
             <span className="ml-1 text-sm font-normal text-muted">/ {CAREER_LIMIT_MSV} mSv</span>
@@ -156,10 +185,10 @@ export default async function RadiationPage() {
             aria-valuenow={Math.round(pct)}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Share of career dose limit used"
+            aria-label={`Share of career dose limit used${activeCrew ? ` by ${activeCrew.name}` : ""}`}
           >
             <div
-              className={`h-full rounded-full ${pct >= 80 ? "bg-critical" : pct >= 50 ? "bg-caution" : "bg-accent"}`}
+              className={`h-full rounded-full ${pct > 80 ? "bg-critical" : pct >= 50 ? "bg-caution" : "bg-accent"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -167,7 +196,9 @@ export default async function RadiationPage() {
             <div className="flex justify-between gap-4">
               <dt className="text-muted">Basis</dt>
               <dd className="text-right">
-                {dosimeter ? `Dosimeter log (${dosimeter.takenAt.slice(0, 10)})` : "Estimate: days × GCR rate"}
+                {dosimeter
+                  ? `${activeCrew?.name ?? "Crew"} dosimeter log (${dosimeter.takenAt.slice(0, 10)})`
+                  : "Estimate: days × GCR rate"}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -180,7 +211,9 @@ export default async function RadiationPage() {
             </div>
           </dl>
           <p className="mt-4 text-xs text-muted">
-            Log your personal dosimeter reading on the Check-in page to replace the estimate.
+            {dosimeter
+              ? "Each crew member's budget uses their own dosimeter log. Switch crew above to check the others."
+              : `Log ${activeCrew ? `${activeCrew.name}'s` : "your"} personal dosimeter reading on the Check-in page to replace the estimate.`}
           </p>
         </Card>
       </div>

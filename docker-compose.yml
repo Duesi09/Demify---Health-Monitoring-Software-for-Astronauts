@@ -16,6 +16,8 @@ name: demify # fixed project name -> volume is demify_demify-data
 x-demify-env: &demify-env
   # Mission profile: iss | artemis-lunar | mars-transit
   DEMIFY_MISSION: ${DEMIFY_MISSION:-iss}
+  # Mission start date (ISO, e.g. 2026-09-01); empty = 92 days before start-up.
+  DEMIFY_MISSION_START: ${DEMIFY_MISSION_START:-}
   DEMIFY_OFFLINE: ${DEMIFY_OFFLINE:-false}
   DEMIFY_CACHE_TTL: ${DEMIFY_CACHE_TTL:-300}
   DEMIFY_FETCH_TIMEOUT_MS: ${DEMIFY_FETCH_TIMEOUT_MS:-8000}
@@ -24,6 +26,10 @@ x-demify-env: &demify-env
   DEMIFY_DATA_DIR: /data
   DEMIFY_SNAPSHOT_DIR: /data/snapshots
   DEMIFY_RESEED_SNAPSHOTS: ${DEMIFY_RESEED_SNAPSHOTS:-false}
+  # Crew readings older than this many days are pruned (empty = 1100).
+  DEMIFY_RETENTION_DAYS: ${DEMIFY_RETENTION_DAYS:-}
+  DEMIFY_MAX_READINGS: ${DEMIFY_MAX_READINGS:-}
+  DEMIFY_RATE_LIMIT_PER_MIN: ${DEMIFY_RATE_LIMIT_PER_MIN:-}
   # External data sources (override to point at a mirror / ground relay)
   NASA_API_KEY: ${NASA_API_KEY:-DEMO_KEY}
   OSDR_BASE_URL: ${OSDR_BASE_URL:-https://osdr.nasa.gov}

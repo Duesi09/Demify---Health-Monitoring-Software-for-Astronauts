@@ -3,49 +3,6 @@ import path from "node:path";
 import type { MissionProfile, MissionProfileId } from "./types";
 
 /**
- * Runtime configuration. Everything is read from environment variables so a
- * single Docker image can be adapted to the target environment (ground lab,
- * ISS-like station network, air-gapped spacecraft computer).
- */
-export const config = {
-  /** Directory for persistent data (crew readings). Mount a volume here. */
-  dataDir: process.env.DEMIFY_DATA_DIR ?? path.join(process.cwd(), "data"),
-  /**
-   * Writable directory where refreshed snapshots of external sources are
-   * stored after each successful live fetch (Docker: /data/snapshots).
-   */
-  snapshotDir:
-    process.env.DEMIFY_SNAPSHOT_DIR ??
-    path.join(process.cwd(), "data", "runtime", "snapshots"),
-  /**
-   * Read-only snapshots bundled with the release (committed in
-   * data/snapshots). Used when neither live data nor a refreshed snapshot
-   * exists, e.g. on first start of an air-gapped system.
-   */
-  snapshotSeedDir:
-    process.env.DEMIFY_SNAPSHOT_SEED_DIR ??
-    path.join(process.cwd(), "data", "snapshots"),
-  /** When true, never call external APIs; serve bundled snapshots only. */
-  offline: process.env.DEMIFY_OFFLINE === "true",
-  /** Seconds to keep live responses in memory. */
-  cacheTtlSeconds: Number(process.env.DEMIFY_CACHE_TTL ?? 300),
-  /** Timeout for outbound requests in ms. */
-  fetchTimeoutMs: Number(process.env.DEMIFY_FETCH_TIMEOUT_MS ?? 8000),
-  /** Enables the demo telemetry generator for heart rate, BP etc. */
-  simulateTelemetry: process.env.DEMIFY_SIMULATE !== "false",
-  mission: (process.env.DEMIFY_MISSION ?? "iss") as MissionProfileId,
-  /** Mission start (ISO date). Defaults to 92 days ago so the demo has history. */
-  missionStart:
-    process.env.DEMIFY_MISSION_START ??
-    new Date(Date.now() - 92 * 86_400_000).toISOString().slice(0, 10),
-  nasaApiKey: process.env.NASA_API_KEY ?? "DEMO_KEY",
-  osdrBaseUrl: process.env.OSDR_BASE_URL ?? "https://osdr.nasa.gov",
-  osdrBiodataUrl:
-    process.env.OSDR_BIODATA_URL ?? "https://visualization.osdr.nasa.gov",
-  swpcBaseUrl: process.env.SWPC_BASE_URL ?? "https://services.swpc.noaa.gov",
-} as const;
-
-/**
  * Mission profiles. Dose rates are representative quiet-sun GCR values
  * (see src/lib/health/knowledge.ts for sources).
  */
@@ -75,6 +32,92 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     durationDays: 900,
   },
 };
+
+/**
+ * Reads an environment variable, treating unset, empty and whitespace-only
+ * values the same. Docker Compose passes `${VAR:-}` through as "", which must
+ * mean "use the default", not "use an empty value".
+ */
+function env(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+function warn(name: string, value: string, fallback: unknown): void {
+  console.warn(`[demify] Ignoring invalid ${name}=${JSON.stringify(value)}; using ${String(fallback)}.`);
+}
+
+/** Finite number >= min, else the fallback (with a warning for bad values). */
+function numberEnv(name: string, fallback: number, min: number): number {
+  const raw = env(name);
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= min) return n;
+  warn(name, raw, fallback);
+  return fallback;
+}
+
+function missionEnv(): MissionProfileId {
+  const raw = env("DEMIFY_MISSION");
+  if (raw === undefined) return "iss";
+  if (Object.hasOwn(MISSION_PROFILES, raw)) return raw as MissionProfileId;
+  warn("DEMIFY_MISSION", raw, `iss (valid: ${Object.keys(MISSION_PROFILES).join(", ")})`);
+  return "iss";
+}
+
+/** ISO date (YYYY-MM-DD, optionally with a time). Defaults to 92 days ago so the demo has history. */
+function missionStartEnv(): string {
+  const fallback = new Date(Date.now() - 92 * 86_400_000).toISOString().slice(0, 10);
+  const raw = env("DEMIFY_MISSION_START");
+  if (raw === undefined) return fallback;
+  const date = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(raw);
+  // Round-trip the calendar date: V8 silently rolls 2026-02-30 over to March 2.
+  const valid =
+    date !== null &&
+    Number.isFinite(Date.parse(raw)) &&
+    new Date(Date.UTC(+date[1], +date[2] - 1, +date[3])).toISOString().startsWith(date.slice(1).join("-"));
+  if (valid) return raw;
+  warn("DEMIFY_MISSION_START", raw, `${fallback} (expected an ISO date such as 2026-09-01)`);
+  return fallback;
+}
+
+/**
+ * Runtime configuration. Everything is read from environment variables so a
+ * single Docker image can be adapted to the target environment (ground lab,
+ * ISS-like station network, air-gapped spacecraft computer).
+ */
+export const config = {
+  /** Directory for persistent data (crew readings). Mount a volume here. */
+  dataDir: env("DEMIFY_DATA_DIR") ?? path.join(process.cwd(), "data"),
+  /**
+   * Writable directory where refreshed snapshots of external sources are
+   * stored after each successful live fetch (Docker: /data/snapshots).
+   */
+  snapshotDir:
+    env("DEMIFY_SNAPSHOT_DIR") ?? path.join(process.cwd(), "data", "runtime", "snapshots"),
+  /**
+   * Read-only snapshots bundled with the release (committed in
+   * data/snapshots). Used when neither live data nor a refreshed snapshot
+   * exists, e.g. on first start of an air-gapped system.
+   */
+  snapshotSeedDir:
+    env("DEMIFY_SNAPSHOT_SEED_DIR") ?? path.join(process.cwd(), "data", "snapshots"),
+  /** When true, never call external APIs; serve bundled snapshots only. */
+  offline: env("DEMIFY_OFFLINE")?.toLowerCase() === "true",
+  /** Seconds to keep live responses in memory. */
+  cacheTtlSeconds: numberEnv("DEMIFY_CACHE_TTL", 300, 0),
+  /** Timeout for outbound requests in ms. */
+  fetchTimeoutMs: numberEnv("DEMIFY_FETCH_TIMEOUT_MS", 8000, 1),
+  /** Enables the demo telemetry generator for heart rate, BP etc. */
+  simulateTelemetry: env("DEMIFY_SIMULATE")?.toLowerCase() !== "false",
+  mission: missionEnv(),
+  /** Mission start (ISO date). Defaults to 92 days ago so the demo has history. */
+  missionStart: missionStartEnv(),
+  nasaApiKey: env("NASA_API_KEY") ?? "DEMO_KEY",
+  osdrBaseUrl: env("OSDR_BASE_URL") ?? "https://osdr.nasa.gov",
+  osdrBiodataUrl: env("OSDR_BIODATA_URL") ?? "https://visualization.osdr.nasa.gov",
+  swpcBaseUrl: env("SWPC_BASE_URL") ?? "https://services.swpc.noaa.gov",
+} as const;
 
 /** Whole days elapsed since mission start (min 0). */
 export function missionDay(now = Date.now()): number {

@@ -78,7 +78,7 @@ Deployment, configuration, multi-arch builds (ARM flight computers), proxies and
 | Variable | Default | Purpose |
 |---|---|---|
 | `DEMIFY_MISSION` | `iss` | `iss`, `artemis-lunar` or `mars-transit`. Sets radiation baseline, comm delay, gravity and mission length |
-| `DEMIFY_MISSION_START` | 92 days ago | Mission start date (ISO) |
+| `DEMIFY_MISSION_START` | 92 days ago | Mission start date (ISO, e.g. `2026-09-01`). Set it for a real mission: the default moves with every restart |
 | `DEMIFY_OFFLINE` | `false` | Never call external APIs; use snapshots only |
 | `DEMIFY_SIMULATE` | `true` | Demo telemetry for vital signs |
 | `NASA_API_KEY` | `DEMO_KEY` | api.nasa.gov key |
@@ -93,6 +93,34 @@ curl -X POST http://localhost:3000/api/readings \
   -d '[{"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"},
        {"crewId":"cdr","indicator":"systolicBP","value":118,"unit":"mmHg","source":"sensor"}]'
 ```
+
+`unit` must match the indicator's unit exactly, and `value` must lie in the indicator's plausible range (otherwise 400). Requests must be `application/json`, at most 1 MB, and readings dated more than 5 minutes in the future are rejected.
+
+<details><summary>Indicator ids and units</summary>
+
+| `indicator` | Meaning | `unit` |
+|---|---|---|
+| `heartRate` | Resting heart rate | `bpm` |
+| `systolicBP` | Blood pressure, systolic | `mmHg` |
+| `diastolicBP` | Blood pressure, diastolic | `mmHg` |
+| `spo2` | Blood oxygen saturation | `%` |
+| `bodyTemp` | Body temperature | `°C` |
+| `respRate` | Respiratory rate | `/min` |
+| `glucose` | Blood glucose (fasting) | `mg/dL` |
+| `sleepHours` | Sleep last night | `h` |
+| `mood` | Mood (1 = very low, 10 = great) | `/10` |
+| `stress` | Stress (1 = calm, 10 = overwhelmed) | `/10` |
+| `radiationDoseRate` | Radiation dose rate | `mSv/day` |
+| `radiationCumulative` | Cumulative effective dose | `mSv` |
+| `bodyMassChange` | Body mass change vs pre-flight | `%` |
+| `boneLoss` | Estimated bone loss rate | `%/month` |
+| `exerciseMinutes` | Exercise today | `min` |
+| `hydration` | Water intake today | `L` |
+| `wbc` | White blood cell count | `×10⁹/L` |
+| `cabinCO2` | Cabin CO₂ partial pressure | `mmHg` |
+| `visionChange` | Vision symptoms (0 none – 3 severe) | `/3` |
+
+</details>
 
 | Endpoint | Purpose |
 |---|---|

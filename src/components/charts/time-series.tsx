@@ -115,7 +115,8 @@ export function TimeSeriesChart({
     <div role="img" aria-label={ariaLabel} style={{ height }} className="flex w-full flex-col text-[11px]">
       <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+        {/* accessibilityLayer off: the role=img wrapper is the text alternative; recharts' layer adds an unnamed role=application tab stop. */}
+        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} accessibilityLayer={false}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="t"

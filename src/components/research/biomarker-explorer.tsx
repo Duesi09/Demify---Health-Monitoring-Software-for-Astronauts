@@ -371,7 +371,7 @@ function AnalyteChart({
       className="h-[300px] w-full text-[11px] sm:h-[320px]"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 22, right: 44, bottom: 4, left: 0 }}>
+        <LineChart data={data} margin={{ top: 22, right: 44, bottom: 4, left: 0 }} accessibilityLayer={false}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
           {xMode === "draws" ? (
             <XAxis dataKey="tp" type="category" stroke="var(--muted)" tickLine={false} axisLine={{ stroke: "var(--border)" }} interval={0} padding={{ left: 12, right: 12 }} />

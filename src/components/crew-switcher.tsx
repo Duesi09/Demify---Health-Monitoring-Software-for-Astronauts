@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CrewMember, Status } from "@/lib/types";
-import { STATUS_BG } from "./ui";
+import { StatusIcon } from "./overview/status-icon";
 
 /**
  * Crew selector rendered as links (?crew=<id>) so it works without JS and
@@ -31,7 +31,8 @@ export function CrewSwitcher({
               on ? "bg-accent/15 text-accent" : "text-muted hover:bg-surface-2 hover:text-fg"
             }`}
           >
-            {st && <span className={`h-2 w-2 rounded-full ${STATUS_BG[st]}`} aria-label={`status ${st}`} />}
+            {/* Shape-coded icon (not a colour-only dot) so status is never conveyed by colour alone. */}
+            {st && <StatusIcon status={st} size={13} />}
             {c.name}
           </Link>
         );

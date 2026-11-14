@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+# ...except the empty build-CA placeholder docker-compose.yml needs (see docs/DEPLOYMENT.md)
+!/docker/no-extra-ca.pem
 
 # debug
 npm-debug.log*

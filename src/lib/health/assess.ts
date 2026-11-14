@@ -11,7 +11,7 @@ import type {
   Reading,
   Status,
 } from "../types";
-import { BODY_REGIONS, INDICATORS, classify, needsEscalation } from "./knowledge";
+import { BODY_REGIONS, INDICATORS, evaluateValue, type ValueEvaluation } from "./knowledge";
 
 /**
  * Assessment engine: turns raw readings into per-indicator status, findings,
@@ -25,6 +25,17 @@ export function worst(statuses: Status[]): Status {
 }
 
 const REAL_CONTINUOUS_MAX_AGE_MS = 6 * 3_600_000;
+/** Readings stamped further ahead than this (device clock skew) are ignored. */
+export const FUTURE_SKEW_MS = 5 * 60_000;
+/** Space-weather data older than this is labelled stale in the finding. */
+const SPACE_WEATHER_STALE_MS = 3 * 3_600_000;
+const DAY_MS = 86_400_000;
+
+/** False for unparseable timestamps and for readings dated in the future. */
+function notInFuture(r: Reading, now: number): boolean {
+  const t = Date.parse(r.takenAt);
+  return Number.isFinite(t) && t <= now + FUTURE_SKEW_MS;
+}
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
@@ -50,15 +61,20 @@ export async function readingsFor(crew: CrewMember, hours = 24): Promise<Reading
  *  - manual / discrete indicators: latest reading
  * Real (manual/sensor) readings always win over simulated ones.
  */
-function currentValue(id: IndicatorId, rs: Reading[]): { value: number; takenAt: string; source: Reading["source"] } | null {
-  const all = rs.filter((r) => r.indicator === id);
+export function currentValue(
+  id: IndicatorId,
+  rs: Reading[],
+  now: number = Date.now(),
+): { value: number; takenAt: string; source: Reading["source"] } | null {
+  // A future-dated reading (bad device clock, bad input) would otherwise sort
+  // last and override every later real reading until that date.
+  const all = rs.filter((r) => r.indicator === id && notInFuture(r, now));
   if (!all.length) return null;
   const def = INDICATORS[id];
   // A real (manual/sensor) reading wins over simulated telemetry, but for
   // continuous vitals only while it is recent: an old spot check must not
   // mask a week of newer telemetry.
   const realMaxAgeMs = def.continuous ? REAL_CONTINUOUS_MAX_AGE_MS : Infinity;
-  const now = Date.now();
   const real = all.filter((r) => r.source !== "simulated" && now - Date.parse(r.takenAt) <= realMaxAgeMs);
   const pool = real.length ? real : all.filter((r) => r.source === "simulated");
   if (!pool.length) {
@@ -82,8 +98,63 @@ function currentValue(id: IndicatorId, rs: Reading[]): { value: number; takenAt:
   };
 }
 
-function finding(id: IndicatorId, value: number, status: Status, crew: CrewMember): string {
+/** One value per UTC day: the day's latest reading, real entries winning over simulated ones. */
+function dailyValues(id: IndicatorId, rs: Reading[], now: number): Map<number, number> {
+  const byDay = new Map<number, Reading>();
+  for (const r of rs) {
+    if (r.indicator !== id || !notInFuture(r, now)) continue;
+    const day = Math.floor(Date.parse(r.takenAt) / DAY_MS);
+    const prev = byDay.get(day);
+    if (prev && prev.source !== "simulated" && r.source === "simulated") continue;
+    if (!prev || r.takenAt >= prev.takenAt || prev.source === "simulated") byDay.set(day, r);
+  }
+  return new Map([...byDay].map(([d, r]) => [d, r.value]));
+}
+
+export interface TrendFlag {
+  status: Status;
+  detail: string;
+}
+
+/**
+ * Multi-day rules stated in the indicator ranges (knowledge.ts), evaluated on
+ * one value per day relative to the day of the current value:
+ *  - mood:   a drop of >= 2 within the previous 3 days -> caution
+ *  - stress: a rise of >= 2 within the previous 3 days -> caution
+ *  - sleep:  < 6 h on each of the last 7 days          -> critical
+ */
+export function trendFlag(
+  id: IndicatorId,
+  cur: { value: number; takenAt: string },
+  rs: Reading[],
+  now: number = Date.now(),
+): TrendFlag | null {
+  if (id !== "mood" && id !== "stress" && id !== "sleepHours") return null;
+  const days = dailyValues(id, rs, now);
+  const today = Math.floor(Date.parse(cur.takenAt) / DAY_MS);
+  if (!Number.isFinite(today)) return null;
+  days.set(today, cur.value);
+  const before = [1, 2, 3].map((k) => days.get(today - k)).filter((v): v is number => v != null);
+  if (id === "mood" && before.length) {
+    const drop = Math.max(...before) - cur.value;
+    if (drop >= 2) return { status: "caution", detail: `mood down ${drop} points over 3 days` };
+  }
+  if (id === "stress" && before.length) {
+    const rise = cur.value - Math.min(...before);
+    if (rise >= 2) return { status: "caution", detail: `stress up ${rise} points over 3 days` };
+  }
+  if (id === "sleepHours") {
+    const week = Array.from({ length: 7 }, (_, k) => days.get(today - k));
+    if (week.every((v) => v != null && v < 6)) {
+      return { status: "critical", detail: "under 6 h on each of the last 7 days (sleep debt)" };
+    }
+  }
+  return null;
+}
+
+function finding(id: IndicatorId, ev: ValueEvaluation, crew: CrewMember, detail?: string): string {
   const def = INDICATORS[id];
+  const { value, status } = ev;
   const v = `${value.toFixed(def.decimals)} ${def.unit}`;
   const base = crew.baseline[id];
   let delta = "";
@@ -91,15 +162,58 @@ function finding(id: IndicatorId, value: number, status: Status, crew: CrewMembe
     const pct = ((value - base) / base) * 100;
     if (Math.abs(pct) >= 5) delta = ` (${pct > 0 ? "+" : ""}${pct.toFixed(0)} % vs pre-flight baseline)`;
   }
-  const word =
-    status === "nominal"
+  const urgency = status === "critical" ? "critical, act now" : "monitor closely";
+  const word = detail
+    ? `${detail}, ${urgency}`
+    : status === "nominal"
       ? "within normal range"
       : status === "caution"
-        ? delta && classify(id, value) === "nominal"
+        ? ev.baselineShift
           ? "large change from your baseline, monitor closely"
           : "outside normal range, monitor closely"
         : "critical, act now";
   return `${def.short} ${v}${delta}: ${word}.`;
+}
+
+function formatAge(ms: number): string {
+  const h = ms / 3_600_000;
+  if (h < 1) return `${Math.max(1, Math.round(ms / 60_000))} min`;
+  if (h < 48) return `${Math.round(h)} h`;
+  return `${Math.round(h / 24)} days`;
+}
+
+/** NOAA radiation environment as it applies to the dose-rate indicator. */
+interface RadiationEnv {
+  /** Estimated dose rate (mSv/day) from the >= 10 MeV proton flux. */
+  rate: number;
+  /** NOAA S-scale level (0..5) of the current flux. */
+  sLevel: number;
+  /** Status implied by the S-level alone (S1-S2 caution, S3+ critical). */
+  sStatus: Status;
+  /** Time of the proton measurement, not the time of this request. */
+  takenAt: string;
+  /** Set when the data is an offline snapshot or older than a few hours. */
+  staleNote: string | null;
+}
+
+async function radiationEnvironment(now: number): Promise<RadiationEnv | null> {
+  try {
+    const sw = await getSpaceWeather();
+    const est = estimateDoseRate(sw.data.current.p10, currentMission());
+    const measured = Date.parse(sw.data.current.t ?? "");
+    const fetched = Date.parse(sw.fetchedAt);
+    const t = Number.isFinite(measured) ? measured : Number.isFinite(fetched) ? fetched : now;
+    const age = Math.max(0, now - t);
+    const staleNote =
+      sw.freshness === "snapshot"
+        ? `Based on an offline NOAA snapshot from ${formatAge(age)} ago; may not reflect current conditions.`
+        : age > SPACE_WEATHER_STALE_MS
+          ? `NOAA proton data is ${formatAge(age)} old.`
+          : null;
+    return { rate: est.rate, sLevel: sw.data.sLevel, sStatus: est.status, takenAt: new Date(t).toISOString(), staleNote };
+  } catch {
+    return null;
+  }
 }
 
 export interface CrewAssessment {
@@ -118,22 +232,18 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
   // Readings for discrete check-ins can be older; look back 7 days.
   const rs = await readingsFor(crew, 24 * 7);
 
-  // Live radiation environment feeds the dose-rate indicator when no dosimeter value exists.
-  let doseRate: number | null = null;
-  try {
-    const sw = await getSpaceWeather();
-    doseRate = estimateDoseRate(sw.data.current.p10, currentMission()).rate;
-  } catch {
-    doseRate = null;
-  }
+  const now = Date.now();
+  // Live radiation environment feeds the dose-rate indicator when no dosimeter
+  // value exists, and its solar particle event (SPE) alert level always applies.
+  const rad = await radiationEnvironment(now);
 
   const assessments: Assessment[] = [];
   const sources: CrewAssessment["sources"] = {};
   for (const id of Object.keys(INDICATORS) as IndicatorId[]) {
     const def = INDICATORS[id];
-    let cur = currentValue(id, rs);
-    if (!cur && id === "radiationDoseRate" && doseRate != null) {
-      cur = { value: Number(doseRate.toFixed(2)), takenAt: new Date().toISOString(), source: "noaa-swpc" };
+    let cur = currentValue(id, rs, now);
+    if (!cur && id === "radiationDoseRate" && rad) {
+      cur = { value: rad.rate, takenAt: rad.takenAt, source: "noaa-swpc" };
     }
     if (!cur) {
       assessments.push({
@@ -148,23 +258,46 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
       });
       continue;
     }
-    let status = classify(id, cur.value);
-    // Personal-baseline rule: a large shift from your own pre-flight value is
-    // worth attention even inside the population range.
-    const base = crew.baseline[id];
-    if (status === "nominal" && def.continuous && base && Math.abs((cur.value - base) / base) >= 0.25) {
-      status = "caution";
+    // Bands + personal-baseline rule, shared with the check-in form and action.
+    const ev = evaluateValue(id, cur.value, crew.baseline[id]);
+    let detail: string | undefined;
+    let note = "";
+
+    const trend = trendFlag(id, cur, rs, now);
+    if (trend && RANK[trend.status] > RANK[ev.status]) {
+      ev.status = trend.status;
+      ev.escalate = ev.escalate || trend.status === "critical";
+      detail = trend.detail;
     }
+
+    if (id === "radiationDoseRate" && rad) {
+      const fromNoaa = cur.source === "noaa-swpc";
+      // "Any SPE alert" (knowledge.ts): S1-S2 at least caution, S3+ critical,
+      // and every S >= 1 escalates. A stale snapshot does not override a dosimeter.
+      if (rad.sLevel >= 1 && (fromNoaa || !rad.staleNote)) {
+        if (RANK[rad.sStatus] > RANK[ev.status]) ev.status = rad.sStatus;
+        // Escalate only on current data: an old offline snapshot captured
+        // during a storm must not page the flight surgeon for weeks.
+        if (!rad.staleNote) {
+          ev.escalate = true;
+          detail = `S${rad.sLevel} solar radiation storm in progress: follow the storm shelter protocol`;
+        } else {
+          detail = `last known NOAA data showed an S${rad.sLevel} solar radiation storm; verify with onboard dosimeters`;
+        }
+      }
+      if (fromNoaa) note = ` Estimated from NOAA GOES proton flux.${rad.staleNote ? ` ${rad.staleNote}` : ""}`;
+    }
+
     sources[id] = cur.source;
     assessments.push({
       indicator: id,
-      status,
-      value: cur.value,
+      status: ev.status,
+      value: ev.value,
       unit: def.unit,
       takenAt: cur.takenAt,
-      finding: finding(id, cur.value, status, crew),
-      actions: status === "nominal" ? [] : def.actions,
-      escalate: status === "critical" || needsEscalation(id, cur.value),
+      finding: finding(id, ev, crew, detail) + note,
+      actions: ev.status === "nominal" ? [] : def.actions,
+      escalate: ev.escalate,
     });
   }
 

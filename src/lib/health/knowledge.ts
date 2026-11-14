@@ -324,13 +324,14 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     unit: "mSv/day",
     decimals: 2,
     inputRange: [0, 1000],
-    steps: [[2, "nominal"], [10, "caution"]],
+    // 10.01: exactly 10.00 is still caution ("2–10"); critical is "> 10".
+    steps: [[2, "nominal"], [10.01, "caution"]],
     top: "critical",
     basis: "APP",
     ranges: {
       nominal: "Mission GCR background (ISS ≈ 0.3–0.8, lunar ≈ 1.4, Mars transit ≈ 1.8 mSv/day)",
-      caution: "2–10 mSv/day: solar particle event in progress",
-      critical: "> 10 mSv/day or any SPE alert: go to storm shelter",
+      caution: "2–10 mSv/day, or an S1–S2 solar radiation storm: prepare shelter, defer EVAs",
+      critical: "> 10 mSv/day or an S3+ solar radiation storm: go to storm shelter",
     },
     escalateAbove: 10,
     regions: ["blood", "eyes", "skin", "brain"],
@@ -349,7 +350,8 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     unit: "mSv",
     decimals: 0,
     inputRange: [0, 2000],
-    steps: [[300, "nominal"], [480, "caution"]],
+    // 480.01: exactly 480 (80 %) is still caution; critical is "> 80 %".
+    steps: [[300, "nominal"], [480.01, "caution"]],
     top: "critical",
     basis: "NASA",
     ranges: { nominal: "< 50 % of the 600 mSv career limit", caution: "50–80 % of the limit", critical: "> 80 % of the limit or projected breach" },
@@ -449,7 +451,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     unit: "×10⁹/L",
     decimals: 1,
     inputRange: [0, 60],
-    steps: [[2, "critical"], [4.5, "caution"], [11.01, "nominal"], [30, "caution"]],
+    steps: [[2, "critical"], [4.5, "caution"], [11.01, "nominal"], [30.01, "caution"]],
     top: "critical",
     basis: "CLIN",
     ranges: { nominal: "4.5–11.0", caution: "2.0–4.4 or 11.1–30", critical: "< 2.0 or > 30" },
@@ -495,7 +497,8 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
     top: "critical",
     basis: "APP",
     ranges: { nominal: "0 – no change", caution: "1–2 – new near-vision blur, needing stronger glasses, headache", critical: "3 – vision not correctable with glasses" },
-    escalateAbove: 1,
+    // Any score >= 1 ("any new visual change") escalates.
+    escalateAbove: 0,
     regions: ["eyes"],
     hazards: ["gravity", "environment"],
     spaceflightEffect:
@@ -521,6 +524,51 @@ export function needsEscalation(id: IndicatorId, value: number): boolean {
   if (def.escalateAbove != null && value > def.escalateAbove) return true;
   if (def.escalateBelow != null && value < def.escalateBelow) return true;
   return false;
+}
+
+/** Rounds a value to the precision the indicator is stored and displayed with. */
+export function roundToIndicator(id: IndicatorId, value: number): number {
+  return Number(value.toFixed(INDICATORS[id].decimals));
+}
+
+/** A large shift from the personal pre-flight value (continuous signals only). */
+export const BASELINE_SHIFT_RATIO = 0.25;
+
+export interface ValueEvaluation {
+  /** The value rounded to `decimals`: what is stored and what was classified. */
+  value: number;
+  status: Status;
+  escalate: boolean;
+  /** True when the status was raised to caution only by the personal-baseline rule. */
+  baselineShift: boolean;
+}
+
+/**
+ * Single source of truth for judging one value. Used by the check-in live
+ * preview, the check-in server action and the assessment engine so that the
+ * preview and the saved result can never disagree:
+ *  1. round to the indicator's precision (the stored value),
+ *  2. classify against the population bands,
+ *  3. personal-baseline rule: for continuous signals, a shift of >= 25 % from
+ *     the pre-flight baseline raises nominal to caution,
+ *  4. escalate on any critical status or an explicit escalation threshold.
+ */
+export function evaluateValue(id: IndicatorId, raw: number, baseline?: number | null): ValueEvaluation {
+  const def = INDICATORS[id];
+  const value = roundToIndicator(id, raw);
+  let status = classify(id, value);
+  let baselineShift = false;
+  if (
+    status === "nominal" &&
+    def.continuous &&
+    baseline != null &&
+    baseline !== 0 &&
+    Math.abs((value - baseline) / baseline) >= BASELINE_SHIFT_RATIO
+  ) {
+    status = "caution";
+    baselineShift = true;
+  }
+  return { value, status, escalate: status === "critical" || needsEscalation(id, value), baselineShift };
 }
 
 /* ------------------------------------------------------------------------- */

@@ -19,7 +19,8 @@ export default async function BodyPage(props: PageProps<"/body">) {
   const crewParam = first(sp.crew);
   const regionParam = first(sp.region);
   const active = all.find((a) => a.crew.id === crewParam) ?? all[0];
-  const initialRegion = regionParam && regionParam in BODY_REGIONS ? (regionParam as BodyRegionId) : undefined;
+  // Own keys only: `in` would also accept inherited names like "constructor" or "__proto__".
+  const initialRegion = regionParam && Object.hasOwn(BODY_REGIONS, regionParam) ? (regionParam as BodyRegionId) : undefined;
 
   return (
     <div className="space-y-6">

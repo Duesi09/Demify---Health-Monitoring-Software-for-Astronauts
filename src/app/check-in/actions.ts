@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import type { CheckInItem, CheckInResult } from "@/components/check-in/types";
 import { assessCrewMember } from "@/lib/health/assess";
-import { CHECK_IN_INDICATORS, INDICATORS, classify, needsEscalation } from "@/lib/health/knowledge";
+import { CHECK_IN_INDICATORS, INDICATORS, evaluateValue, roundToIndicator } from "@/lib/health/knowledge";
 import { addReadings, getCrew } from "@/lib/store/readings";
 import type { IndicatorId } from "@/lib/types";
 
@@ -43,9 +43,11 @@ export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
   const crew = await getCrew(crewId);
   if (!crew) return { ok: false, error: `Unknown crew member "${crewId}".` };
 
-  const entries = (Object.entries(values) as [IndicatorId, number | undefined][]).filter(
-    (e): e is [IndicatorId, number] => e[1] != null,
-  );
+  // Round once, exactly as the form preview does (evaluateValue), so the
+  // stored, classified and previewed values are the same number.
+  const entries = (Object.entries(values) as [IndicatorId, number | undefined][])
+    .filter((e): e is [IndicatorId, number] => e[1] != null)
+    .map(([id, v]): [IndicatorId, number] => [id, roundToIndicator(id, v)]);
   if (!entries.length) return { ok: false, error: "Enter at least one value before saving." };
 
   const takenAt = new Date().toISOString();
@@ -53,7 +55,7 @@ export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
     entries.map(([id, value]) => ({
       crewId,
       indicator: id,
-      value: Number(value.toFixed(INDICATORS[id].decimals)),
+      value,
       unit: INDICATORS[id].unit,
       takenAt,
       source: "manual" as const,
@@ -64,14 +66,14 @@ export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
   // Re-assess with the new data: crew entries override simulated values.
   const assessment = await assessCrewMember(crewId);
   const byId = new Map(assessment?.assessments.map((a) => [a.indicator, a]));
-  const items: CheckInItem[] = entries.map(([id, raw]) => {
+  const items: CheckInItem[] = entries.map(([id, value]) => {
     const def = INDICATORS[id];
-    const value = Number(raw.toFixed(def.decimals));
     const a = byId.get(id);
-    if (a && a.value === value) {
+    if (a && a.value === value && a.takenAt === takenAt) {
       return { indicator: id, value, unit: def.unit, status: a.status, finding: a.finding, actions: a.actions, escalate: a.escalate };
     }
-    const status = classify(id, value);
+    // Same evaluation as the live preview (bands + personal baseline + escalation).
+    const { status, escalate } = evaluateValue(id, value, crew.baseline[id]);
     return {
       indicator: id,
       value,
@@ -79,7 +81,7 @@ export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
       status,
       finding: `${def.short} ${value.toFixed(def.decimals)} ${def.unit}.`,
       actions: status === "nominal" ? [] : def.actions,
-      escalate: status === "critical" || needsEscalation(id, value),
+      escalate,
     };
   });
 
