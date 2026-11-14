@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Demify: a local language model for the onboard assistant on this machine
-# (the pitch laptop), macOS and Linux. Windows: scripts/setup-local-model.ps1.
+# (the pitch laptop): macOS, Linux and Windows with Git Bash. Windows
+# PowerShell: scripts/setup-local-model.ps1. The installer (install.sh in the
+# repository folder) installs Docker and Ollama first and then runs this.
 #
 #   bash scripts/setup-local-model.sh                    # gemma3:4b (default)
 #   bash scripts/setup-local-model.sh --model gemma3:1b  # another model
@@ -29,6 +31,9 @@ OLLAMA_URL="http://127.0.0.1:11434"
 CONTAINER_MODEL_URL="http://host.docker.internal:11434/v1"
 TEST_QUESTION="Where is the pulse oximeter in the medical kit?"
 ENV_COMMENT="# Local language model (scripts/setup-local-model.sh or .ps1, docs/LOCAL-MODEL.md)"
+# The Ollama command (--ollama sets a full path when it is not on PATH yet).
+OLLAMA_BIN=""
+SETUP_DRY_RUN=0
 
 usage() {
   cat <<'EOF'
@@ -47,9 +52,13 @@ Options:
                     setup (no database) searches the library by keywords.
   --no-test         Do not ask the test question at the end.
   --timeout <sec>   How long to wait for Demify to report the model (240).
+  --ollama <path>   The Ollama program to use, when it is not on PATH yet.
+  --dry-run         Print the commands instead of running them.
+  --from-installer  Used by install.sh: no model hint, no closing summary.
   -h, --help        Show this help.
 
-Guide: docs/LOCAL-MODEL.md
+The installer (bash install.sh) also installs Docker and Ollama and picks the
+model for this computer. Guides: docs/INSTALL.md, docs/LOCAL-MODEL.md
 EOF
 }
 
@@ -76,26 +85,35 @@ env_file_value() {
 }
 
 # Sets NAME=VALUE in .env: replaces every active NAME= line, or appends one.
-# Comments and all other lines stay exactly as they are.
+# Comments and all other lines stay exactly as they are, and so do Windows
+# line endings (CRLF) when the file uses them.
 set_env_var() {
-  local name="$1" value="$2" tmp
+  local name="$1" value="$2" tmp cr="" now
+  if [ "$SETUP_DRY_RUN" = 1 ]; then
+    now="$(env_file_value "$name")"
+    say "  [dry run] set $name=$value in .env (now: ${now:-not set})"
+    return 0
+  fi
+  if grep -q $'\r$' .env 2>/dev/null; then cr=$'\r'; fi
   if grep -q "^$name=" .env; then
     if [ "$(env_file_value "$name")" = "$value" ] && [ "$(grep -c "^$name=" .env)" -eq 1 ]; then
       say "  $name=$value (unchanged)"
       return 0
     fi
     tmp="$(mktemp ".env.tmp.XXXXXX")"
-    awk -v k="$name" -v v="$value" 'index($0, k "=") == 1 { print k "=" v; next } { print }' .env >"$tmp"
+    awk -v k="$name" -v v="$value" '
+      index($0, k "=") == 1 { cr = (substr($0, length($0)) == "\r") ? "\r" : ""; print k "=" v cr; next }
+      { print }' .env >"$tmp"
     cat "$tmp" >.env # keeps the file's permissions
     rm -f "$tmp"
     say "  $name=$value (updated)"
   else
     if ! grep -qF "$ENV_COMMENT" .env; then
       # Start on a new line even if the file does not end with one.
-      if [ -s .env ] && [ "$(tail -c 1 .env | od -An -c | tr -d ' ')" != '\n' ]; then printf '\n' >>.env; fi
-      printf '\n%s\n' "$ENV_COMMENT" >>.env
+      if [ -s .env ] && [ "$(tail -c 1 .env | od -An -c | tr -d ' ')" != '\n' ]; then printf '%s\n' "$cr" >>.env; fi
+      printf '%s\n%s%s\n' "$cr" "$ENV_COMMENT" "$cr" >>.env
     fi
-    printf '%s=%s\n' "$name" "$value" >>.env
+    printf '%s=%s%s\n' "$name" "$value" "$cr" >>.env
     say "  $name=$value (added)"
   fi
 }
@@ -105,6 +123,15 @@ set_env_var() {
 # --------------------------------------------------------------------------
 
 ollama_up() { curl -fsS --noproxy '*' --max-time 3 "$OLLAMA_URL/api/version" >/dev/null 2>&1; }
+
+# The Ollama command: --ollama, else the one on PATH, else empty.
+ollama_cli() {
+  if [ -n "$OLLAMA_BIN" ]; then
+    printf '%s' "$OLLAMA_BIN"
+  else
+    command -v ollama 2>/dev/null || true
+  fi
+}
 
 # "gemma3" and "gemma3:latest" are the same model.
 full_name() { case "$1" in *:*) printf '%s' "$1" ;; *) printf '%s:latest' "$1" ;; esac; }
@@ -117,10 +144,15 @@ has_local_model() {
 }
 
 pull_model() {
-  local model="$1"
+  local model="$1" cli
+  cli="$(ollama_cli)"
+  if [ "$SETUP_DRY_RUN" = 1 ]; then
+    say "  [dry run] ${cli:-ollama} pull $model"
+    return 0
+  fi
   say "  ollama pull $model"
-  if command -v ollama >/dev/null 2>&1; then
-    if ollama pull "$model"; then return 0; fi
+  if [ -n "$cli" ]; then
+    if "$cli" pull "$model"; then return 0; fi
   else
     say "  (Ollama CLI not on PATH: pulling through the Ollama API, no progress shown)"
     if curl -fsS --noproxy '*' --max-time 7200 -X POST "$OLLAMA_URL/api/pull" \
@@ -162,7 +194,8 @@ status_lists_model() {
 memory_mib() {
   case "$(uname -s)" in
     Darwin) echo $(($(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576)) ;;
-    Linux) awk '/^MemTotal:/ { printf "%d\n", $2 / 1024 }' /proc/meminfo 2>/dev/null || echo 0 ;;
+    # Git Bash and Cygwin on Windows have /proc/meminfo too.
+    Linux | MINGW* | MSYS* | CYGWIN*) awk '/^MemTotal:/ { printf "%d\n", $2 / 1024 }' /proc/meminfo 2>/dev/null || echo 0 ;;
     *) echo 0 ;;
   esac
 }
@@ -170,7 +203,7 @@ memory_mib() {
 # "name, memory MiB" of the first NVIDIA GPU, empty when there is none.
 nvidia_gpu() {
   command -v nvidia-smi >/dev/null 2>&1 || return 0
-  nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n 1 || true
+  nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | tr -d '\r' | head -n 1 || true
 }
 
 apple_silicon() { [ "$(uname -s)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; }
@@ -178,7 +211,7 @@ apple_silicon() { [ "$(uname -s)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64
 model_hint() {
   local mem_mib="$1" gpu="$2" gpu_mib=0
   if [ -n "$gpu" ]; then gpu_mib="$(printf '%s' "${gpu##*,}" | tr -dc '0-9')"; gpu_mib="${gpu_mib:-0}"; fi
-  if [ "$mem_mib" -gt 0 ] && [ "$mem_mib" -lt 8704 ]; then
+  if [ "$mem_mib" -gt 0 ] && [ "$mem_mib" -le 8704 ]; then
     say "  Hint: about 8 GB of memory or less. gemma3:1b (about 0.8 GB) leaves room for Docker and the browser:"
     say "        bash scripts/setup-local-model.sh --model gemma3:1b"
   elif [ "$gpu_mib" -ge 15000 ]; then
@@ -197,7 +230,7 @@ model_hint() {
 # --------------------------------------------------------------------------
 
 main() {
-  local model="" pull_embed=0 ask_test=1 timeout=240
+  local model="" pull_embed=0 ask_test=1 timeout=240 from_installer=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --model)
@@ -220,6 +253,17 @@ main() {
         timeout="${1#--timeout=}"
         shift
         ;;
+      --ollama)
+        [ $# -ge 2 ] || { usage >&2; exit 2; }
+        OLLAMA_BIN="$2"
+        shift 2
+        ;;
+      --ollama=*)
+        OLLAMA_BIN="${1#--ollama=}"
+        shift
+        ;;
+      --dry-run) SETUP_DRY_RUN=1; shift ;;
+      --from-installer) from_installer=1; shift ;;
       -h | --help) usage; exit 0 ;;
       *)
         printf 'Unknown option: %s\n\n' "$1" >&2
@@ -237,34 +281,45 @@ main() {
     printf 'Not a number of seconds: %s\n' "$timeout" >&2
     exit 2
   fi
+  if [ -n "$OLLAMA_BIN" ] && [ ! -x "$OLLAMA_BIN" ] && [ "$SETUP_DRY_RUN" = 0 ]; then
+    warn "--ollama $OLLAMA_BIN is not a program; using the Ollama on PATH or its API."
+    OLLAMA_BIN=""
+  fi
 
   local root
   root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   cd "$root"
-  [ -f docker-compose.yml ] && [ -f .env.example ] ||
+  if [ ! -f docker-compose.yml ] || [ ! -f .env.example ]; then
     die "run this script from the Demify repository (docker-compose.yml not found in $root)."
+  fi
 
   local os
   os="$(uname -s)"
 
   # 1. Prerequisites ---------------------------------------------------------
   step "Checking Ollama and Docker"
-  command -v curl >/dev/null 2>&1 || die "curl is needed."
-  if ! ollama_up; then
-    if command -v ollama >/dev/null 2>&1; then
-      case "$os" in
-        Darwin) die "Ollama is installed but not running." "Open the Ollama app (or run: ollama serve), then run this script again." ;;
-        *) die "Ollama is installed but not running." "Start it with: sudo systemctl start ollama   (or run: ollama serve)" "Then run this script again." ;;
-      esac
+  if [ "$SETUP_DRY_RUN" = 1 ]; then
+    say "  [dry run] check that Ollama answers on $OLLAMA_URL, docker info, docker compose version"
+  else
+    command -v curl >/dev/null 2>&1 || die "curl is needed."
+    if ! ollama_up; then
+      if [ -n "$(ollama_cli)" ]; then
+        case "$os" in
+          Darwin) die "Ollama is installed but not running." "Open the Ollama app (or run: ollama serve), then run this script again." ;;
+          MINGW* | MSYS* | CYGWIN*) die "Ollama is installed but not running." "Start Ollama from the Start menu (or run: ollama serve), then run this script again." ;;
+          *) die "Ollama is installed but not running." "Start it with: sudo systemctl start ollama   (or run: ollama serve)" "Then run this script again." ;;
+        esac
+      fi
+      die "Ollama is not installed (nothing answers on $OLLAMA_URL)." \
+        "Install it from https://ollama.com/download, start it, then run this script again." \
+        "Or let the installer do it: bash install.sh"
     fi
-    die "Ollama is not installed (nothing answers on $OLLAMA_URL)." \
-      "Install it from https://ollama.com/download, start it, then run this script again."
+    say "  Ollama answers on $OLLAMA_URL"
+    command -v docker >/dev/null 2>&1 || die "Docker is not installed." "Install Docker Desktop (macOS, Windows) or Docker Engine (Linux), see docs/INSTALL.md."
+    docker info >/dev/null 2>&1 || die "Docker is not running." "Start Docker Desktop (or the docker service), then run this script again."
+    docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is needed (docker compose version)."
+    say "  Docker runs"
   fi
-  say "  Ollama answers on $OLLAMA_URL"
-  command -v docker >/dev/null 2>&1 || die "Docker is not installed." "Install Docker Desktop (macOS) or Docker Engine (Linux), see README.md."
-  docker info >/dev/null 2>&1 || die "Docker is not running." "Start Docker Desktop (or the docker service), then run this script again."
-  docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is needed (docker compose version)."
-  say "  Docker runs"
 
   if [ -f .env ] && grep -Eq '^[[:space:]]*COMPOSE_FILE=.*spark' .env; then
     die "this .env belongs to the DGX Spark setup (COMPOSE_FILE=docker-compose.spark.yml)." \
@@ -274,9 +329,11 @@ main() {
   # On Docker Engine for Linux the container reaches this machine through the
   # Docker bridge, and Ollama listens on 127.0.0.1 unless told otherwise.
   # Docker Desktop forwards host.docker.internal to 127.0.0.1 by itself.
-  local docker_os
-  docker_os="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
-  if [ "$os" = Linux ] && case "$docker_os" in *"Docker Desktop"*) false ;; *) true ;; esac; then
+  local docker_os=""
+  if [ "$SETUP_DRY_RUN" = 0 ]; then
+    docker_os="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+  fi
+  if [ "$SETUP_DRY_RUN" = 0 ] && [ "$os" = Linux ] && case "$docker_os" in *"Docker Desktop"*) false ;; *) true ;; esac; then
     local gw
     gw="$(docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null || true)"
     gw="${gw:-172.17.0.1}"
@@ -299,14 +356,17 @@ main() {
   fi
 
   # 2. Model hint --------------------------------------------------------------
-  step "Choosing the model"
-  local mem gpu
-  mem="$(memory_mib)"
-  gpu="$(nvidia_gpu)"
-  if [ "$mem" -gt 0 ]; then say "  Memory: $(((mem + 512) / 1024)) GB$(apple_silicon && printf ' (unified, Apple silicon)')"; else say "  Memory: unknown"; fi
-  if [ -n "$gpu" ]; then say "  NVIDIA GPU: $gpu MiB"; fi
-  model_hint "$mem" "$gpu"
-  say "  Using: $model"
+  # (The installer has already chosen the model for this computer.)
+  if [ "$from_installer" = 0 ]; then
+    step "Choosing the model"
+    local mem gpu
+    mem="$(memory_mib)"
+    gpu="$(nvidia_gpu)"
+    if [ "$mem" -gt 0 ]; then say "  Memory: $(((mem + 512) / 1024)) GB$(apple_silicon && printf ' (unified, Apple silicon)')"; else say "  Memory: unknown"; fi
+    if [ -n "$gpu" ]; then say "  NVIDIA GPU: $gpu MiB"; fi
+    model_hint "$mem" "$gpu"
+    say "  Using: $model"
+  fi
 
   # 3. Pull ----------------------------------------------------------------------
   step "Pulling the model into Ollama"
@@ -321,9 +381,13 @@ main() {
   # 4. .env --------------------------------------------------------------------
   step "Writing the model settings to .env"
   if [ ! -f .env ]; then
-    cp .env.example .env
-    chmod 600 .env
-    say "  Created .env from .env.example"
+    if [ "$SETUP_DRY_RUN" = 1 ]; then
+      say "  [dry run] cp .env.example .env"
+    else
+      cp .env.example .env
+      chmod 600 .env
+      say "  Created .env from .env.example"
+    fi
   fi
   set_env_var DEMIFY_MODEL_URL "$CONTAINER_MODEL_URL"
   set_env_var DEMIFY_LLM_MODEL "$model"
@@ -335,20 +399,28 @@ main() {
   done
 
   # 5. Start Demify ----------------------------------------------------------------
-  step "Starting Demify (docker compose -f docker-compose.yml up -d --build)"
-  if ! env -u DEMIFY_MODEL_URL -u DEMIFY_LLM_MODEL docker compose -f docker-compose.yml up -d --build; then
-    die "docker compose could not build or start Demify." \
-      "Behind a TLS-intercepting proxy the image build needs DEMIFY_BUILD_CA (docs/DEPLOYMENT.md, section 4)." \
-      "Logs: docker compose -f docker-compose.yml logs demify"
-  fi
-
-  # 6. Wait for the model ------------------------------------------------------------
   local port host base
   port="${DEMIFY_PORT:-$(env_file_value DEMIFY_PORT)}"
   port="${port:-3000}"
   host="${DEMIFY_BIND:-$(env_file_value DEMIFY_BIND)}"
   case "$host" in "" | 0.0.0.0 | "::" | "[::]") host="127.0.0.1" ;; esac
   base="http://$host:$port"
+  step "Starting Demify (docker compose -f docker-compose.yml up -d --build)"
+  if [ "$SETUP_DRY_RUN" = 1 ]; then
+    say "  [dry run] docker compose -f docker-compose.yml up -d --build"
+    say "  [dry run] wait up to $timeout s until $base/api/onboard/status reports $model"
+    if [ "$ask_test" = 1 ]; then say "  [dry run] ask the test question: POST $base/api/assistant"; fi
+    return 0
+  fi
+  say "  (the first build takes a few minutes; later runs reuse it)"
+  if ! env -u DEMIFY_MODEL_URL -u DEMIFY_LLM_MODEL docker compose -f docker-compose.yml up -d --build; then
+    die "docker compose could not build or start Demify." \
+      "Port $port in use by another program? Set DEMIFY_PORT=3001 (or another free port) in .env and run this again." \
+      "Behind a TLS-intercepting proxy the image build needs DEMIFY_BUILD_CA (docs/DEPLOYMENT.md, section 4)." \
+      "Logs: docker compose -f docker-compose.yml logs demify"
+  fi
+
+  # 6. Wait for the model ------------------------------------------------------------
   step "Waiting for Demify to report the model ($base/api/onboard/status, up to $timeout s)"
   local deadline body="" state="" last="" ok=0
   deadline=$(($(date +%s) + timeout))
@@ -412,13 +484,15 @@ main() {
     esac
   fi
 
+  [ "$from_installer" = 0 ] || return 0
   step "Done"
   say "  Open $base/assistant and ask a question. The answer names the model and cites its passages."
   say "  Switch the model: bash scripts/setup-local-model.sh --model <name>"
   say "  Back to no model: delete the DEMIFY_MODEL_URL line in .env, then docker compose -f docker-compose.yml up -d"
 }
 
-# Run main only when executed, not when sourced (tests source the helpers).
+# Run main only when executed, not when sourced (tests and install.sh source
+# the helpers).
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   main "$@"
 fi

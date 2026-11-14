@@ -29,11 +29,29 @@ connection once; the demo itself does not.
 
 ## 1. Which model on which device
 
+The installer ([`INSTALL.md`](INSTALL.md)) picks the model with these rules,
+checked in this order, and prints the rule it used. `install.sh` and
+`install.ps1` use the same rules; `--model` (`-Model`) overrides them, and
+`bash install.sh --show-model` (`-ShowModel`) shows the choice without
+installing anything.
+
+1. NVIDIA DGX Spark (GPU name GB10), or an NVIDIA GPU with 16 GB or more of
+   video memory (`nvidia-smi` reports 15,000 MiB or more), or Apple silicon
+   with 32 GB or more of unified memory: **`gpt-oss:20b`**.
+2. 8.5 GB of memory (RAM) or less: **`gemma3:1b`**.
+3. Anything else: **`gemma3:4b`**.
+
+How it finds out: Windows reads the memory with CIM (`Win32_ComputerSystem`;
+in Git Bash from `/proc/meminfo`), macOS with `sysctl hw.memsize` and
+`uname -m` / `hw.optional.arm64`, Linux from `/proc/meminfo`; the NVIDIA GPU
+everywhere with `nvidia-smi --query-gpu=name,memory.total`.
+
 | Device | Model | Download (approx.) | Why |
 |---|---|---|---|
 | Laptop without a GPU, 16 GB of memory (the pitch laptop) | `gemma3:4b` | 3.3 GB | **Default.** Runs on the CPU; answered the example questions in 9 to 49 seconds on 4 CPU cores (section 4) |
 | Machine with about 8 GB of memory | `gemma3:1b` | 0.8 GB | Leaves memory for Docker Desktop, the browser and the slides. Weaker wording; not tested yet |
 | NVIDIA GPU with 16 GB or more, or Apple silicon with 32 GB or more of unified memory | `gpt-oss:20b` | 14 GB | Stronger answers. A mixture-of-experts model: fast where the memory is fast |
+| NVIDIA DGX Spark, with the installer | `gpt-oss:20b` | 14 GB | The installer recognises the GB10 and starts the single-container Demify with this model |
 | NVIDIA DGX Spark (onboard server) | `gpt-oss:20b`, option `gpt-oss:120b` (65 GB) | | Runs inside [`docker-compose.spark.yml`](../docker-compose.spark.yml), not with this guide; see [`SPARK.md`](SPARK.md) |
 
 Why a small model is enough for the demo: the model does not search and does
@@ -50,7 +68,13 @@ it too.
 
 ## 2. Set it up
 
-You need:
+**Easiest: the installer.** `bash install.sh` (Windows PowerShell:
+`powershell -ExecutionPolicy Bypass -File install.ps1`) also installs Docker
+and Ollama when they are missing, picks the model (section 1) and then runs
+the setup script below for you. Step by step: [`INSTALL.md`](INSTALL.md).
+
+The setup scripts alone are for a machine that already has Docker and
+Ollama. You need:
 
 - Docker: Docker Desktop on macOS and Windows (on Windows with the WSL 2
   backend), Docker Engine on Linux; the same as for the pitch setup in the
@@ -58,7 +82,7 @@ You need:
 - Ollama from <https://ollama.com/download>, installed and running.
 - About 4 GB of free disk for `gemma3:4b`.
 
-### macOS and Linux
+### macOS, Linux and Windows with Git Bash
 
 ```bash
 bash scripts/setup-local-model.sh                     # gemma3:4b
@@ -73,8 +97,8 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1
 powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model gemma3:1b
 ```
 
-Use the PowerShell script on Windows, not the shell script inside WSL: Ollama
-for Windows runs on Windows itself.
+On Windows use the PowerShell script or Git Bash, not the shell script
+inside WSL: Ollama for Windows runs on Windows itself.
 
 ### What the script does
 
@@ -109,6 +133,9 @@ stores no secret.
 | `--with-embed` | `-WithEmbed` | Also pull `nomic-embed-text` (onboard database only) |
 | `--no-test` | `-NoTest` | Skip the test question |
 | `--timeout <s>` | `-TimeoutSeconds <s>` | How long to wait for the status (240) |
+| `--ollama <path>` | `-OllamaExe <path>` | The Ollama program, when it is not on PATH yet (the installer passes it after a fresh install) |
+| `--dry-run` | `-DryRun` | Print the commands instead of running them |
+| `--from-installer` | `-FromInstaller` | Used by the installer: no model hint, no closing summary |
 
 The script refuses a `.env` made for the DGX Spark
 (`COMPOSE_FILE=docker-compose.spark.yml`): the Spark runs its own model
@@ -209,10 +236,31 @@ memory and no GPU, shared with other work. Ollama 0.40.16 ran in Docker with
 - **Without the two lines in `.env`:** status `not-configured`, the
   assistant shows passages only, all pages load: the same as before.
 
-Not tested: macOS, Windows (the PowerShell script has not been run yet; it
-was reviewed, and CI parses it on every push), a GPU, `gemma3:1b`, `gpt-oss`
-on a laptop. Repeat the
-example questions on the pitch laptop after any change:
+The installer (`install.sh`), later on 14 November 2026, on the same Linux
+machine (16 GB, no GPU; Docker Engine and Ollama already installed, the
+Ollama registry not reachable):
+
+- **First run** in a fresh copy of the repository, started from another
+  folder: found Docker and Ollama, chose `gemma3:4b` ("15.7 GB of memory and
+  no NVIDIA GPU with 16 GB or more"), wrote `.env`, built and started Demify,
+  status `ready`, the test question answered in 60 s (including loading the
+  model), 2 minutes 5 seconds in all.
+- **Second run:** 3 seconds, `.env` unchanged byte for byte, the container
+  kept.
+- **Port taken by another program:** without a terminal it stopped with the
+  instructions; with `--yes` it moved Demify to the next free port and wrote
+  `DEMIFY_PORT` to `.env`.
+- **`--no-model`:** Demify started, status `not-configured`.
+- **Model choice and the install steps for other systems** with the test
+  hooks of `--show-model` and `--dry-run` (Windows with Git Bash, macOS,
+  Linux, DGX Spark; bash 3.2 as on macOS). CI repeats the model choice for
+  both installers on every push.
+
+Not tested: macOS, Windows (neither installer nor setup script has run there
+yet; the PowerShell scripts were reviewed, and CI parses them and runs the
+model choice of `install.ps1` on every push), installing Docker or Ollama for
+real, a GPU, `gemma3:1b`, `gpt-oss` on a laptop. Repeat the example questions
+on the pitch laptop after any change:
 
 ```bash
 for q in "The monitor shows ventricular fibrillation. What does the drill checklist say?" \

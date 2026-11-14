@@ -71,6 +71,7 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 | Document | For whom | What is in it |
 |---|---|---|
 | **Help page** `/help` in the app | Crew and anyone using the app | Daily routine, colours and badges, alarms, drills, data sources, with diagrams; the user guide (PDF) on the Help page |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Everyone who installs Demify | The installer: one command for Windows, macOS and Linux, what it does, open/stop/update, offline use, troubleshooting |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Team and station operators | Architecture diagrams (today and target), quick start for Windows and Linux, start/stop/update, backup and restore, connecting sensors, drills, offline mode, troubleshooting |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Whoever deploys the container | Image layout, full configuration reference, proxies and custom CAs, air-gapped operation, ARM builds, TLS, scaling |
 | [`docs/SPARK.md`](docs/SPARK.md) | Optional: the onboard server team | The NVIDIA DGX Spark setup (PostgreSQL, local model, sync service), blackout demo, backups, reliability |
@@ -86,9 +87,18 @@ To try the device API without hardware, run `npm run sensor:demo` while Demify i
 
 ## Quick start
 
-Step-by-step instructions for Windows (Git Bash) and Linux, with a first-run checklist, are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md#2-quick-start-in-3-steps).
+**The installer** (easiest). Download this repository (`git clone`, or **Code > Download ZIP** on GitHub), open a terminal in its folder and run one command:
 
-**Docker** (recommended). You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows/macOS (on Windows with the WSL 2 backend) or Docker Engine on Linux. Check that it works with `docker --version`, then:
+| System | Command |
+|---|---|
+| Windows with Git Bash, macOS, Linux | `bash install.sh` |
+| Windows with PowerShell | `powershell -ExecutionPolicy Bypass -File install.ps1` |
+
+It checks Docker (and offers to install it), installs [Ollama](https://ollama.com/download) if it is missing, picks the language model that suits this computer and says why, downloads it, starts Demify and opens it in the browser. It asks before it installs anything and is safe to run again; `--yes` (`-Yes`) answers every question, `--no-model` (`-NoModel`) installs Demify without a model. Step by step, also for non-developers, with troubleshooting: [`docs/INSTALL.md`](docs/INSTALL.md).
+
+Step-by-step instructions for Windows (Git Bash) and Linux without the installer, with a first-run checklist, are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md#2-quick-start-in-3-steps).
+
+**Docker by hand**. You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows/macOS (on Windows with the WSL 2 backend) or Docker Engine on Linux. Check that it works with `docker --version`, then:
 
 ```bash
 docker compose up -d --build
@@ -143,7 +153,7 @@ The daily check-in form saves through the app itself and is not covered by the t
 
 ## Local model for the demo (optional)
 
-The **Onboard assistant** page works without a model: it shows the library passages that match a question. With a small local model (default `gemma3:4b` with [Ollama](https://ollama.com/download), about 3.3 GB) it also writes a short answer from those passages and cites each one. Everything stays on the laptop; the download needs a network connection once.
+The **Onboard assistant** page works without a model: it shows the library passages that match a question. With a small local model (default `gemma3:4b` with [Ollama](https://ollama.com/download), about 3.3 GB) it also writes a short answer from those passages and cites each one. Everything stays on the laptop; the download needs a network connection once. The installer ([Quick start](#quick-start)) sets this up for you; the script below is for a machine that already has Ollama.
 
 ```bash
 bash scripts/setup-local-model.sh                     # macOS / Linux (or: npm run model:setup)

@@ -1,7 +1,9 @@
 <#
 .SYNOPSIS
   Demify: a local language model for the onboard assistant on this Windows
-  machine (the pitch laptop). macOS and Linux: scripts/setup-local-model.sh.
+  machine (the pitch laptop). macOS, Linux and Git Bash:
+  scripts/setup-local-model.sh. The installer (install.ps1 in the repository
+  folder) installs Docker and Ollama first and then runs this.
 
 .DESCRIPTION
   Safe to run again. It never asks for administrator rights and stores no
@@ -32,6 +34,15 @@
 .PARAMETER TimeoutSeconds
   How long to wait for Demify to report the model (default 240).
 
+.PARAMETER OllamaExe
+  Full path of ollama.exe, when it is not on PATH yet (a fresh install).
+
+.PARAMETER DryRun
+  Print the commands instead of running them.
+
+.PARAMETER FromInstaller
+  Used by install.ps1: no model hint and no closing summary.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1
 
@@ -43,7 +54,10 @@ param(
   [string]$Model = 'gemma3:4b',
   [switch]$WithEmbed,
   [switch]$NoTest,
-  [int]$TimeoutSeconds = 240
+  [int]$TimeoutSeconds = 240,
+  [string]$OllamaExe = '',
+  [switch]$DryRun,
+  [switch]$FromInstaller
 )
 
 Set-StrictMode -Version 2.0
@@ -155,13 +169,28 @@ function Test-LocalModel([string]$Name) {
   return $false
 }
 
+# The Ollama program: -OllamaExe, else the one on PATH, else empty.
+function Get-OllamaCli {
+  if ($OllamaExe -ne '' -and (Test-Path -LiteralPath $OllamaExe)) { return $OllamaExe }
+  $cmd = Get-Command ollama -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($cmd) { return [string]$cmd.Path }
+  return ''
+}
+
 function Invoke-Pull([string]$Name) {
+  $cli = Get-OllamaCli
+  if ($DryRun) {
+    $shown = 'ollama'
+    if ($cli -ne '') { $shown = $cli }
+    Write-Info ('[dry run] ' + $shown + ' pull ' + $Name)
+    return
+  }
   Write-Info ('ollama pull ' + $Name)
   $ok = $false
-  if (Get-Command ollama -ErrorAction SilentlyContinue) {
+  if ($cli -ne '') {
     $saved = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { & ollama pull $Name; $ok = ($LASTEXITCODE -eq 0) } catch { $ok = $false } finally { $ErrorActionPreference = $saved }
+    try { & $cli pull $Name; $ok = ($LASTEXITCODE -eq 0) } catch { $ok = $false } finally { $ErrorActionPreference = $saved }
   } else {
     Write-Info '(Ollama CLI not on PATH: pulling through the Ollama API, no progress shown)'
     try {
@@ -207,6 +236,12 @@ function Get-EnvFileValue([string]$Name) {
 # Comments, all other lines and the line endings stay as they are. Written as
 # UTF-8 without a byte order mark.
 function Set-EnvVar([string]$Name, [string]$Value) {
+  if ($DryRun) {
+    $now = Get-EnvFileValue $Name
+    if ($now -eq '') { $now = 'not set' }
+    Write-Info ('[dry run] set ' + $Name + '=' + $Value + ' in .env (now: ' + $now + ')')
+    return
+  }
   $text = [System.IO.File]::ReadAllText($EnvPath)
   $cr = ''
   if ($text.Contains("`r`n")) { $cr = "`r" }
@@ -277,63 +312,73 @@ Push-Location -LiteralPath $Root
 try {
   # 1. Prerequisites ---------------------------------------------------------
   Write-Step 'Checking Ollama and Docker'
-  if (-not (Test-OllamaUp)) {
-    if (Get-Command ollama -ErrorAction SilentlyContinue) {
-      Stop-Setup 'Ollama is installed but not running.' @('Start Ollama from the Start menu (or run: ollama serve), then run this script again.')
+  if ($DryRun) {
+    Write-Info ('[dry run] check that Ollama answers on ' + $OllamaUrl + ', docker info, docker compose version')
+  } else {
+    if (-not (Test-OllamaUp)) {
+      if ((Get-OllamaCli) -ne '') {
+        Stop-Setup 'Ollama is installed but not running.' @('Start Ollama from the Start menu (or run: ollama serve), then run this script again.')
+      }
+      Stop-Setup ('Ollama is not installed (nothing answers on ' + $OllamaUrl + ').') @(
+        'Install it from https://ollama.com/download, start it, then run this script again.',
+        'Or let the installer do it: powershell -ExecutionPolicy Bypass -File install.ps1'
+      )
     }
-    Stop-Setup ('Ollama is not installed (nothing answers on ' + $OllamaUrl + ').') @('Install it from https://ollama.com/download, start it, then run this script again.')
+    Write-Info ('Ollama answers on ' + $OllamaUrl)
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+      Stop-Setup 'Docker is not installed.' @('Install Docker Desktop (WSL 2 backend), see docs/INSTALL.md.')
+    }
+    if ((Invoke-Quiet 'docker' @('info')) -ne 0) {
+      Stop-Setup 'Docker is not running.' @('Start Docker Desktop, wait until it says it is running, then run this script again.')
+    }
+    if ((Invoke-Quiet 'docker' @('compose', 'version')) -ne 0) {
+      Stop-Setup 'Docker Compose v2 is needed (docker compose version).'
+    }
+    Write-Info 'Docker runs'
   }
-  Write-Info ('Ollama answers on ' + $OllamaUrl)
-  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Stop-Setup 'Docker is not installed.' @('Install Docker Desktop (WSL 2 backend), see README.md.')
-  }
-  if ((Invoke-Quiet 'docker' @('info')) -ne 0) {
-    Stop-Setup 'Docker is not running.' @('Start Docker Desktop, wait until it says it is running, then run this script again.')
-  }
-  if ((Invoke-Quiet 'docker' @('compose', 'version')) -ne 0) {
-    Stop-Setup 'Docker Compose v2 is needed (docker compose version).'
-  }
-  Write-Info 'Docker runs'
 
   if ((Test-Path -LiteralPath $EnvPath) -and ((Get-EnvFileValue 'COMPOSE_FILE') -match 'spark')) {
     Stop-Setup 'this .env belongs to the DGX Spark setup (COMPOSE_FILE=docker-compose.spark.yml).' @('This script sets up the pitch laptop with docker-compose.yml; the Spark runs its own model server (docs/SPARK.md).')
   }
 
-  # 2. Model hint --------------------------------------------------------------
-  Write-Step 'Choosing the model'
-  $memMiB = 0
-  try {
-    $computer = Get-CimInstance -ClassName Win32_ComputerSystem
-    $memMiB = [int][math]::Floor(([double]$computer.TotalPhysicalMemory) / 1MB)
-  } catch {
+  # 2. Model hint (the installer has already chosen the model) ---------------
+  if (-not $FromInstaller) {
+    Write-Step 'Choosing the model'
     $memMiB = 0
-  }
-  $gpu = ''
-  $gpuMiB = 0
-  if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-    $saved = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
     try {
-      $gpu = [string](& nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits | Select-Object -First 1)
-      $gpuMiB = [int](($gpu -split ',')[-1].Trim())
+      $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+      $memMiB = [int][math]::Floor(([double]$computer.TotalPhysicalMemory) / 1MB)
     } catch {
-      $gpuMiB = 0
-    } finally {
-      $ErrorActionPreference = $saved
+      $memMiB = 0
     }
+    $gpu = ''
+    $gpuMiB = 0
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+      $saved = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      try {
+        # Quoted: an unquoted comma would split the argument into two.
+        $gpu = [string](& nvidia-smi '--query-gpu=name,memory.total' '--format=csv,noheader,nounits' | Select-Object -First 1)
+        $gpuMiB = [int](($gpu -split ',')[-1].Trim())
+      } catch {
+        $gpuMiB = 0
+      } finally {
+        $ErrorActionPreference = $saved
+      }
+    }
+    if ($memMiB -gt 0) { Write-Info ('Memory: ' + [math]::Round($memMiB / 1024) + ' GB') } else { Write-Info 'Memory: unknown' }
+    if ($gpu) { Write-Info ('NVIDIA GPU: ' + $gpu + ' MiB') }
+    if ($memMiB -gt 0 -and $memMiB -le 8704) {
+      Write-Info 'Hint: about 8 GB of memory or less. gemma3:1b (about 0.8 GB) leaves room for Docker and the browser:'
+      Write-Info '      powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model gemma3:1b'
+    } elseif ($gpuMiB -ge 15000) {
+      Write-Info ('Hint: NVIDIA GPU with ' + [math]::Round($gpuMiB / 1024) + ' GB. gemma3:4b runs well; gpt-oss:20b (about 14 GB) is an option:')
+      Write-Info '      powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model gpt-oss:20b'
+    } else {
+      Write-Info 'Hint: gemma3:4b (about 3.3 GB) suits this machine.'
+    }
+    Write-Info ('Using: ' + $Model)
   }
-  if ($memMiB -gt 0) { Write-Info ('Memory: ' + [math]::Round($memMiB / 1024) + ' GB') } else { Write-Info 'Memory: unknown' }
-  if ($gpu) { Write-Info ('NVIDIA GPU: ' + $gpu + ' MiB') }
-  if ($memMiB -gt 0 -and $memMiB -lt 8704) {
-    Write-Info 'Hint: about 8 GB of memory or less. gemma3:1b (about 0.8 GB) leaves room for Docker and the browser:'
-    Write-Info '      powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model gemma3:1b'
-  } elseif ($gpuMiB -ge 15000) {
-    Write-Info ('Hint: NVIDIA GPU with ' + [math]::Round($gpuMiB / 1024) + ' GB. gemma3:4b runs well; gpt-oss:20b (about 14 GB) is an option:')
-    Write-Info '      powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model gpt-oss:20b'
-  } else {
-    Write-Info 'Hint: gemma3:4b (about 3.3 GB) suits this machine.'
-  }
-  Write-Info ('Using: ' + $Model)
 
   # 3. Pull ----------------------------------------------------------------------
   Write-Step 'Pulling the model into Ollama'
@@ -348,14 +393,32 @@ try {
   # 4. .env --------------------------------------------------------------------
   Write-Step 'Writing the model settings to .env'
   if (-not (Test-Path -LiteralPath $EnvPath)) {
-    Copy-Item -LiteralPath $EnvExamplePath -Destination $EnvPath
-    Write-Info 'Created .env from .env.example'
+    if ($DryRun) {
+      Write-Info '[dry run] copy .env.example .env'
+    } else {
+      Copy-Item -LiteralPath $EnvExamplePath -Destination $EnvPath
+      Write-Info 'Created .env from .env.example'
+    }
   }
   Set-EnvVar 'DEMIFY_MODEL_URL' $ContainerModelUrl
   Set-EnvVar 'DEMIFY_LLM_MODEL' $Model
 
   # 5. Start Demify ----------------------------------------------------------------
+  $port = [string][Environment]::GetEnvironmentVariable('DEMIFY_PORT')
+  if ($port -eq '') { $port = Get-EnvFileValue 'DEMIFY_PORT' }
+  if ($port -eq '') { $port = '3000' }
+  $bindHost = [string][Environment]::GetEnvironmentVariable('DEMIFY_BIND')
+  if ($bindHost -eq '') { $bindHost = Get-EnvFileValue 'DEMIFY_BIND' }
+  if ($bindHost -eq '' -or $bindHost -eq '0.0.0.0' -or $bindHost -eq '::' -or $bindHost -eq '[::]') { $bindHost = '127.0.0.1' }
+  $base = 'http://' + $bindHost + ':' + $port
   Write-Step 'Starting Demify (docker compose -f docker-compose.yml up -d --build)'
+  if ($DryRun) {
+    Write-Info '[dry run] docker compose -f docker-compose.yml up -d --build'
+    Write-Info ('[dry run] wait up to ' + $TimeoutSeconds + ' s until ' + $base + '/api/onboard/status reports ' + $Model)
+    if (-not $NoTest) { Write-Info ('[dry run] ask the test question: POST ' + $base + '/api/assistant') }
+    exit 0
+  }
+  Write-Info '(the first build takes a few minutes; later runs reuse it)'
   # docker compose prefers variables of this shell over .env: hide them for
   # this call and put them back afterwards.
   $shellValues = @{}
@@ -381,19 +444,13 @@ try {
   }
   if ($composeExit -ne 0) {
     Stop-Setup 'docker compose could not build or start Demify.' @(
+      ('Port ' + $port + ' in use by another program? Set DEMIFY_PORT=3001 (or another free port) in .env and run this again.'),
       'Behind a TLS-intercepting proxy the image build needs DEMIFY_BUILD_CA (docs/DEPLOYMENT.md, section 4).',
       'Logs: docker compose -f docker-compose.yml logs demify'
     )
   }
 
   # 6. Wait for the model ------------------------------------------------------------
-  $port = [string][Environment]::GetEnvironmentVariable('DEMIFY_PORT')
-  if ($port -eq '') { $port = Get-EnvFileValue 'DEMIFY_PORT' }
-  if ($port -eq '') { $port = '3000' }
-  $bindHost = [string][Environment]::GetEnvironmentVariable('DEMIFY_BIND')
-  if ($bindHost -eq '') { $bindHost = Get-EnvFileValue 'DEMIFY_BIND' }
-  if ($bindHost -eq '' -or $bindHost -eq '0.0.0.0' -or $bindHost -eq '::' -or $bindHost -eq '[::]') { $bindHost = '127.0.0.1' }
-  $base = 'http://' + $bindHost + ':' + $port
   Write-Step ('Waiting for Demify to report the model (' + $base + '/api/onboard/status, up to ' + $TimeoutSeconds + ' s)')
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   $state = ''
@@ -477,10 +534,12 @@ try {
     }
   }
 
-  Write-Step 'Done'
-  Write-Info ('Open ' + $base + '/assistant and ask a question. The answer names the model and cites its passages.')
-  Write-Info 'Switch the model: powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model <name>'
-  Write-Info 'Back to no model: delete the DEMIFY_MODEL_URL line in .env, then docker compose -f docker-compose.yml up -d'
+  if (-not $FromInstaller) {
+    Write-Step 'Done'
+    Write-Info ('Open ' + $base + '/assistant and ask a question. The answer names the model and cites its passages.')
+    Write-Info 'Switch the model: powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1 -Model <name>'
+    Write-Info 'Back to no model: delete the DEMIFY_MODEL_URL line in .env, then docker compose -f docker-compose.yml up -d'
+  }
 } finally {
   Pop-Location
 }

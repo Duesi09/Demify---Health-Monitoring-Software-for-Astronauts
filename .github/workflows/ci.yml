@@ -45,14 +45,35 @@ jobs:
           docker compose -f docker-compose.yml --profile offline config -q
           POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml config -q
           POSTGRES_PASSWORD=ci-dummy docker compose -f docker-compose.spark.yml --profile models config -q
-      # The local model setup scripts (docs/LOCAL-MODEL.md) run on the team's
-      # laptops: the shell script must pass bash -n and shellcheck, the
-      # PowerShell script must parse (shellcheck and pwsh are on the runner).
-      - name: Check local model setup scripts
+      # The installer (docs/INSTALL.md) and the local model setup scripts
+      # (docs/LOCAL-MODEL.md) run on the team's laptops: the shell scripts
+      # must pass bash -n and shellcheck, the PowerShell scripts must parse
+      # (shellcheck and pwsh are on the runner), and both installers must pick
+      # the documented model for each kind of computer (test hooks only:
+      # nothing is installed).
+      - name: Check installer and local model setup scripts
         run: |
+          bash -n install.sh
           bash -n scripts/setup-local-model.sh
-          shellcheck scripts/setup-local-model.sh
-          pwsh -NoProfile -Command '$t = $null; $e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/setup-local-model.ps1").Path, [ref]$t, [ref]$e); if ($e.Count -gt 0) { $e | ForEach-Object { Write-Host $_.Message }; exit 1 }'
+          shellcheck -x install.sh scripts/setup-local-model.sh
+          for f in install.ps1 scripts/setup-local-model.ps1; do
+            PS1_FILE="$f" pwsh -NoProfile -Command '$t = $null; $e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $env:PS1_FILE).Path, [ref]$t, [ref]$e); if ($e.Count -gt 0) { $e | ForEach-Object { Write-Host ($env:PS1_FILE + ": " + $_.Message) }; exit 1 }'
+          done
+          check() {
+            want="$1"; shift
+            got="$(env "$@" bash install.sh --show-model | sed -n 's/^  Model: //p')"
+            [ "$got" = "$want" ] || { echo "install.sh with $*: $got, expected $want"; exit 1; }
+            got="$(env "$@" pwsh -NoProfile -File install.ps1 -ShowModel | sed -n 's/^  Model: //p')"
+            [ "$got" = "$want" ] || { echo "install.ps1 with $*: $got, expected $want"; exit 1; }
+          }
+          check gemma3:1b DEMIFY_INSTALL_FAKE_OS=mingw DEMIFY_INSTALL_FAKE_RAM_GB=7.8 DEMIFY_INSTALL_FAKE_GPU_GB=0
+          check gemma3:4b DEMIFY_INSTALL_FAKE_OS=mingw DEMIFY_INSTALL_FAKE_RAM_GB=15.8 DEMIFY_INSTALL_FAKE_GPU_GB=0
+          check gemma3:4b DEMIFY_INSTALL_FAKE_OS=mingw DEMIFY_INSTALL_FAKE_RAM_GB=16 DEMIFY_INSTALL_FAKE_GPU_GB=8
+          check gpt-oss:20b DEMIFY_INSTALL_FAKE_OS=linux DEMIFY_INSTALL_FAKE_RAM_GB=32 DEMIFY_INSTALL_FAKE_GPU_GB=16
+          check gpt-oss:20b DEMIFY_INSTALL_FAKE_OS=macos DEMIFY_INSTALL_FAKE_ARCH=arm64 DEMIFY_INSTALL_FAKE_RAM_GB=32
+          check gpt-oss:20b DEMIFY_INSTALL_FAKE_OS=linux DEMIFY_INSTALL_FAKE_ARCH=aarch64 DEMIFY_INSTALL_FAKE_RAM_GB=128 "DEMIFY_INSTALL_FAKE_GPU_NAME=NVIDIA GB10"
+          out="$(DEMIFY_INSTALL_FAKE_OS=mingw DEMIFY_INSTALL_FAKE_DOCKER=missing DEMIFY_INSTALL_FAKE_OLLAMA=missing bash install.sh --no-browser)"
+          printf '%s\n' "$out" | grep -q 'winget install -e --id Docker.DockerDesktop'
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6
