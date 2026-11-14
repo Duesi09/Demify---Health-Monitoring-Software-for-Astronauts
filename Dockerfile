@@ -17,6 +17,8 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 DEMIFY_DATA_DIR=/data
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# The backup tool (docs/data.md); it needs nothing but Node.
+COPY --from=build /app/scripts/backup.mjs ./scripts/backup.mjs
 # Readings entered by the crew are kept here; mount a volume to keep them.
 RUN mkdir /data && chown node:node /data
 VOLUME /data

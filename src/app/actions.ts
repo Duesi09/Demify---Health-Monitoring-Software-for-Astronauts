@@ -1,10 +1,16 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { DEFAULT_CREW_ID } from '@/domain/crew'
 import { METRICS } from '@/domain/metrics'
 import { isMetricId, isMissionDay, validateReading } from '@/domain/validate'
 import type { Reading } from '@/domain/types'
-import { clearManualReadings, saveManualReadings } from '@/server/readingStore'
+import { crewActor } from '@/server/repository'
+import { getRepository } from '@/server/store'
+
+// There are no accounts yet: every change is made by, and for, the one crew member the pages show.
+const CREW_ID = DEFAULT_CREW_ID
+const ACTOR = crewActor(CREW_ID)
 
 export type LogResult = { ok: true; readings: Reading[] } | { ok: false; error: string }
 
@@ -39,13 +45,15 @@ export async function logReadings(day: unknown, entries: unknown): Promise<LogRe
     return { ok: false, error: 'Systolic pressure must be higher than diastolic pressure.' }
   }
 
-  await saveManualReadings(readings)
+  const repository = await getRepository()
+  await repository.saveManualReadings(CREW_ID, readings, ACTOR)
   // Every section shows these readings; none may serve an older copy, even after the Back button.
   revalidatePath('/', 'layout')
   return { ok: true, readings }
 }
 
 export async function resetManualReadings(): Promise<void> {
-  await clearManualReadings()
+  const repository = await getRepository()
+  await repository.clearManualReadings(CREW_ID, ACTOR)
   revalidatePath('/', 'layout')
 }
