@@ -191,7 +191,7 @@ memory and no GPU, shared with other work. Ollama 0.40.16 ran in Docker with
 `docker-compose.yml`.
 
 - **Setup script (`.sh`), end to end:** stopped with the instructions of
-  section 2 while Ollama listened on `127.0.0.1` only; then pulled both
+  section 2 while Ollama listened on `127.0.0.1` only; then pulled the
   models, created `.env`, built and started Demify, saw the status `ready`
   and the test question answered in 13 s. A second run changed nothing in
   `.env`. Also checked: pulling through the Ollama API when the `ollama`
@@ -210,7 +210,8 @@ memory and no GPU, shared with other work. Ollama 0.40.16 ran in Docker with
   assistant shows passages only, all pages load: the same as before.
 
 Not tested: macOS, Windows (the PowerShell script has not been run yet; it
-was only reviewed), a GPU, `gemma3:1b`, `gpt-oss` on a laptop. Repeat the
+was reviewed, and CI parses it on every push), a GPU, `gemma3:1b`, `gpt-oss`
+on a laptop. Repeat the
 example questions on the pitch laptop after any change:
 
 ```bash

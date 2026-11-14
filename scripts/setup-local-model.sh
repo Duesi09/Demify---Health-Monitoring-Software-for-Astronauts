@@ -141,13 +141,16 @@ pull_model() {
 # --------------------------------------------------------------------------
 
 # First "key":"value" string in a JSON text (empty when there is none).
-json_str() { printf '%s' "$2" | tr -d '\n' | grep -o "\"$1\":\"[^\"]*\"" | head -n 1 | sed "s/^\"$1\":\"//; s/\"\$//" || true; }
+json_str() {
+  printf '%s' "$2" | tr -d '\n' | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -n 1 |
+    sed 's/^.*:[[:space:]]*"//; s/"$//' || true
+}
 
 # Does the "available" list in a status JSON contain the model?
 status_lists_model() {
   local json="$1" wanted list
   wanted="$(full_name "$2")"
-  list="$(printf '%s' "$json" | tr -d '\n' | grep -o '"available":\[[^]]*\]' | head -n 1 || true)"
+  list="$(printf '%s' "$json" | tr -d '\n' | grep -o '"available"[[:space:]]*:[[:space:]]*\[[^]]*\]' | head -n 1 || true)"
   printf '%s' "$list" | grep -o '"[^"]*"' | sed 's/^"//; s/"$//' | sed '/^available$/d' |
     while IFS= read -r id; do full_name "$id"; printf '\n'; done | grep -Fx "$wanted" >/dev/null
 }
