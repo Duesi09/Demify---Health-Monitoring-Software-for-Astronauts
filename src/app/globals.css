@@ -19,6 +19,10 @@
   --caution: #fbbf24;
   --critical: #f87171;
   --unknown: #64748b;
+  /* Chart series (validated categorical order, dark surface). */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #9085e9;
 }
 
 :root[data-theme="light"] {
@@ -34,6 +38,9 @@
   --caution: #b7791f;
   --critical: #d03b3b;
   --unknown: #64748b;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #6250d6;
 }
 
 @theme inline {
@@ -49,6 +56,9 @@
   --color-caution: var(--caution);
   --color-critical: var(--critical);
   --color-unknown: var(--unknown);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",

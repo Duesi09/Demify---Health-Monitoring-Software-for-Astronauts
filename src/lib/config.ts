@@ -23,6 +23,10 @@ export const config = {
   /** Enables the demo telemetry generator for heart rate, BP etc. */
   simulateTelemetry: process.env.DEMIFY_SIMULATE !== "false",
   mission: (process.env.DEMIFY_MISSION ?? "iss") as MissionProfileId,
+  /** Mission start (ISO date). Defaults to 92 days ago so the demo has history. */
+  missionStart:
+    process.env.DEMIFY_MISSION_START ??
+    new Date(Date.now() - 92 * 86_400_000).toISOString().slice(0, 10),
   nasaApiKey: process.env.NASA_API_KEY ?? "DEMO_KEY",
   osdrBaseUrl: process.env.OSDR_BASE_URL ?? "https://osdr.nasa.gov",
   osdrBiodataUrl:
@@ -60,6 +64,11 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     durationDays: 900,
   },
 };
+
+/** Whole days elapsed since mission start (min 0). */
+export function missionDay(now = Date.now()): number {
+  return Math.max(0, Math.floor((now - Date.parse(config.missionStart)) / 86_400_000));
+}
 
 export function currentMission(): MissionProfile {
   return MISSION_PROFILES[config.mission] ?? MISSION_PROFILES.iss;
