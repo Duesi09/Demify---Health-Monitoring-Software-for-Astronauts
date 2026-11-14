@@ -1,4 +1,13 @@
 import type { Metadata } from "next";
+// IBM Plex, bundled with the app (no font CDN at runtime: works offline on board).
+import "@fontsource/ibm-plex-sans/latin-200.css";
+import "@fontsource/ibm-plex-sans/latin-300.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans/latin-700.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./globals.css";
 import { AlarmCenter } from "@/components/alarms/alarm-center";
 import { AppNav } from "@/components/app-nav";

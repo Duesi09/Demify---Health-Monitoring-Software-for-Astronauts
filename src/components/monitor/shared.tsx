@@ -14,9 +14,9 @@ export const MONITOR_COLOR = {
   temp: "#e5e5ea",
 } as const;
 
-/** System font stack (SF Pro on Apple devices; nothing is bundled). */
+/** IBM Plex Sans (bundled with the app), thin weights for the large numerics. */
 export const KEYNOTE_FONT =
-  '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif';
+  '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", system-ui, sans-serif';
 
 const SOURCE_LABEL: Record<LiveVitals["source"], string> = {
   simulated: "Simulated telemetry",

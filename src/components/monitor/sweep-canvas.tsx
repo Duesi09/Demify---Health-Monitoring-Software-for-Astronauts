@@ -264,7 +264,7 @@ export function SweepCanvas({
           ctx.stroke();
         }
         ctx.setLineDash([]);
-        ctx.font = "500 9px -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif";
+        ctx.font = "500 9px 'IBM Plex Sans', -apple-system, system-ui, sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "rgba(255,255,255,0.36)";
@@ -291,7 +291,7 @@ export function SweepCanvas({
         ctx.lineTo(x0 + 7, y0);
         ctx.lineTo(x0 + 10, y0);
         ctx.stroke();
-        ctx.font = "500 8px -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif";
+        ctx.font = "500 8px 'IBM Plex Sans', -apple-system, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillStyle = "rgba(255,255,255,0.36)";

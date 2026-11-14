@@ -17,7 +17,7 @@
 .ac-bar {
   position: relative;
   isolation: isolate;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, system-ui,
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", system-ui,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "tnum" 1;
