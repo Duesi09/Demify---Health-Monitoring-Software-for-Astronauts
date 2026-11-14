@@ -67,7 +67,7 @@ Three principles carry the whole app:
 | Health status banner | The overall triage level, its guidance and the first thing to do |
 | Vital signs monitor | A heartbeat trace at the measured heart rate and a pressure wave, drawn from the latest readings. It is an illustration, not a live sensor signal |
 | Mission timeline | One cell per mission day in the colour of that day's status. It is also the day control |
-| Body map | A clickable anatomical figure with nine body systems. Each system is filled in the colour of its status |
+| Body map | A clickable figure with a full skeleton and nine body systems. Organs are filled in the colour of their status; the weight-bearing bones turn from white to the status colour when bones and muscles are flagged |
 | Findings list | Each finding with detail, action and links to its indicators |
 | Five hazards row | One ring per NASA hazard showing how many of its indicators are nominal |
 | Indicator tiles | Value, trend line, range bar and change against the pre-flight baseline |
