@@ -401,7 +401,8 @@ const LIVE_SIGNALS: Array<[IndicatorId, keyof PhysioState, string, number]> = [
  */
 export function simulateLive(crew: CrewMember, t: number, scenario: Scenario | null): Reading[] {
   const st = physioAt(crew, t, scenario);
-  const note = scenario ? `scenario:${scenario.type}` : "live";
+  // Exercise samples must never be judged as resting vitals (see assess.ts).
+  const note = scenario ? `scenario:${scenario.type}` : st.activity === "exercise" ? "exercise" : "live";
   const out: Reading[] = [];
   for (const [indicator, key, unit, decimals] of LIVE_SIGNALS) {
     let v = st[key] as number | null;

@@ -46,3 +46,16 @@ describe("exercise tagging", () => {
     expect(avg(ex)).toBeGreaterThan(avg(rest) + 30);
   });
 });
+
+describe("live sample tagging", () => {
+  it("tags live samples taken during exercise so they are not judged as resting values", async () => {
+    const { simulateLive, baseState } = await import("@/lib/sources/simulator");
+    // Find a minute inside this crew member's exercise block.
+    const day = Date.UTC(2026, 0, 1);
+    let t = day;
+    while (baseState(crew, t).activity !== "exercise" && t < day + 86_400_000) t += 60_000;
+    expect(baseState(crew, t).activity).toBe("exercise");
+    const rs = simulateLive(crew, t, null);
+    expect(rs.every((r) => r.note === "exercise")).toBe(true);
+  });
+});
