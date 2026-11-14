@@ -9,6 +9,8 @@ import { TILES, tileTone } from './tiles'
 
 const ECG_COLOR = '#3987e5'
 const PRESSURE_COLOR = '#f5f5f7'
+/** The heartbeat trace takes the Critical status colour during a possible heart attack. */
+const ALARM_COLOR = '#d03b3b'
 /** Sweep speed of the traces, in pixels per second. */
 const SWEEP_SPEED = 110
 /** Width of the cleared gap that runs ahead of the traces. */
@@ -42,6 +44,8 @@ interface Live {
   hr: number | null
   sys: number | null
   dia: number | null
+  /** True while the engine reports a possible heart attack. */
+  alarm: boolean
 }
 
 interface Props {
@@ -67,10 +71,16 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const heartRef = useRef<SVGSVGElement>(null)
   // The drawing loop reads the latest values from here without restarting.
-  const live = useRef<Live>({ hr, sys, dia })
+  // The engine's heart-attack pattern puts the monitor into its alarm state.
+  const cardiac = evaluation.findings.some((f) => f.id === 'pattern:cardiac')
+
+  const live = useRef<Live>({ hr, sys, dia, alarm: cardiac })
+  // Set by the drawing effect when motion is reduced, to redraw the still trace.
+  const redrawStill = useRef<(() => void) | null>(null)
   useEffect(() => {
-    live.current = { hr, sys, dia }
-  }, [hr, sys, dia])
+    live.current = { hr, sys, dia, alarm: cardiac }
+    redrawStill.current?.()
+  }, [hr, sys, dia, cardiac])
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -89,6 +99,8 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
       const known = hr !== null && sys !== null && dia !== null
       return height * 0.93 - (known ? pressurePulse(phase) : 0.5) * height * 0.27
     }
+
+    const ecgColor = () => (live.current.alarm ? ALARM_COLOR : ECG_COLOR)
 
     function segment(color: string, x0: number, y0: number, x1: number, y1: number) {
       ctx.strokeStyle = color
@@ -120,16 +132,20 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
       for (let px = 1; px < width; px++) {
         const a = ((px - 1) * beatsPerPixel) % 1
         const b = (px * beatsPerPixel) % 1
-        segment(ECG_COLOR, px - 1, ecgY(a), px, ecgY(b))
+        segment(ecgColor(), px - 1, ecgY(a), px, ecgY(b))
         segment(PRESSURE_COLOR, px - 1, pressureY(a), px, pressureY(b))
       }
     }
 
     if (still) {
       drawStill()
+      redrawStill.current = drawStill
       const observer = new ResizeObserver(drawStill)
       observer.observe(canvas)
-      return () => observer.disconnect()
+      return () => {
+        redrawStill.current = null
+        observer.disconnect()
+      }
     }
 
     let x = 0
@@ -162,7 +178,7 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
         const x1 = x + dx
         ctx.clearRect(x1, 0, SWEEP_GAP, height)
         if (x1 + SWEEP_GAP > width) ctx.clearRect(0, 0, x1 + SWEEP_GAP - width, height)
-        segment(ECG_COLOR, x, ecgY(before % 1), x1, ecgY(phase % 1))
+        segment(ecgColor(), x, ecgY(before % 1), x1, ecgY(phase % 1))
         segment(PRESSURE_COLOR, x, pressureY(before % 1), x1, pressureY(phase % 1))
         x = x1 >= width ? 0 : x1
       }
@@ -176,11 +192,8 @@ export function VitalsMonitor({ evaluation, onSelectMetric }: Props) {
     }
   }, [])
 
-  // The engine's heart-attack pattern puts the monitor into its alarm state.
-  const cardiac = evaluation.findings.some((f) => f.id === 'pattern:cardiac')
-
   const vitals: { label: string; unit: string; tile: string; swatch?: string; beat?: boolean }[] = [
-    { label: 'Heart rate', unit: 'bpm', tile: 'restingHr', swatch: ECG_COLOR, beat: true },
+    { label: 'Heart rate', unit: 'bpm', tile: 'restingHr', swatch: cardiac ? ALARM_COLOR : ECG_COLOR, beat: true },
     { label: 'Blood pressure', unit: 'mmHg', tile: 'bloodPressure', swatch: PRESSURE_COLOR },
     { label: 'Blood oxygen', unit: '%', tile: 'spo2' },
     { label: 'Temperature', unit: '°C', tile: 'bodyTemp' },
