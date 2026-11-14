@@ -71,11 +71,12 @@ export function utcTime(iso: string | null | undefined, ref?: string | null): st
   return r && r.slice(0, 10) !== v.slice(0, 10) ? utcDateTime(v) : `${v.slice(11, 16)} UTC`;
 }
 
-/** "0.4 s" / "12 s" / "3 min 04 s" / "running" (no end yet) / "—" (unreadable). */
+/** "< 0.1 s" / "0.4 s" / "12 s" / "3 min 04 s" / "running" (no end yet) / "—" (unreadable). */
 export function durationText(startedAt: string, finishedAt: string | null | undefined): string {
   if (!finishedAt) return "running";
   const ms = Date.parse(finishedAt) - Date.parse(startedAt);
   if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 100) return "< 0.1 s";
   if (ms < 10_000) return `${(ms / 1000).toFixed(1)} s`;
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s} s`;
@@ -415,6 +416,31 @@ export function modeLine(a: Pick<AssistantAnswer, "status" | "citations" | "mode
 
 export const MED_KIT_NOTE = "Representative training inventory, not the actual ISS medical kit.";
 
+/** Where the library on the page comes from and why, for each database state. */
+export function librarySourceNote(
+  source: "database" | "bundled",
+  database: OnboardStatus["database"],
+  syncIntervalHours: number,
+): string {
+  if (source === "database") {
+    return `The sync service pulls the ground library daily and every ${syncIntervalHours} h while the ground link is up; during a blackout the crew works from this copy. A library older than a day is marked as possibly out of date.`;
+  }
+  if (database === "connected") {
+    return "The onboard database is connected but holds no library yet (not synced): the assistant uses the copy bundled with this release, with keyword search, until the library syncs from the ground.";
+  }
+  if (database === "unreachable") {
+    return "The onboard database is unreachable: the assistant uses the copy bundled with this release, with keyword search, until the database is back.";
+  }
+  return "No onboard database on this machine: the assistant reads the library files bundled with this release, with keyword search. On the onboard server the library lives in PostgreSQL and syncs from the ground.";
+}
+
+/** Empty sync history, per database state. */
+export function noSyncRunsText(database: OnboardStatus["database"]): string {
+  if (database === "connected") return "No sync has run yet.";
+  if (database === "unreachable") return "The sync history is in the onboard database, which is unreachable right now.";
+  return "No sync runs on this machine: without a database the library is the copy bundled with this release.";
+}
+
 /** A kit item's notes without the per-item training-inventory sentence (the table states it once). */
 export function kitItemNote(notes: string | undefined): string | null {
   const rest = (notes ?? "").replace(/Representative training inventory, not the (?:real|actual) ISS (?:medical )?kit\.\s*/i, "").trim();
@@ -473,7 +499,7 @@ export function syncDetailText(run: Pick<SyncRunSummary, "kind" | "status" | "de
   if (added) changes.push(`${added} added`);
   if (updated) changes.push(`${updated} updated`);
   if (removed) changes.push(`${removed} removed`);
-  if (unchanged != null) changes.push(`${unchanged} unchanged`);
+  if (unchanged) changes.push(`${unchanged} unchanged`);
   const parts = [changes.length ? `Documents: ${changes.join(", ")}` : null];
   const embedded = num(d.chunksEmbedded);
   const pending = num(d.chunksPendingEmbedding);

@@ -5,7 +5,7 @@ import { CrewSwitcher } from "@/components/crew-switcher";
 import { Card, PageHeader, StatusBadge } from "@/components/ui";
 import { currentLink, currentMission, missionDay } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
-import { linkPolicy, withLink } from "@/lib/link";
+import { CRITICAL_BAND_ESCALATION, linkPolicy, withLink } from "@/lib/link";
 import { listCrew, listReadings } from "@/lib/store/readings";
 import { submitCheckIn } from "./actions";
 
@@ -81,10 +81,8 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
                 <li className="flex items-start gap-2">
                   <StatusBadge status="critical" size="xs" className="mt-px w-[74px]" />
                   <span>
-                    {/* Same link rule as the field preview in CheckInForm (no one to contact in a blackout). */}
-                    {policy.mode === "blackout"
-                      ? "In the critical band: re-check and log. Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns."
-                      : "In the critical band: re-check and log. Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon."}
+                    {/* Same link rule as the field preview in CheckInForm and the /help status table (no one to contact in a blackout). */}
+                    {`In the critical band: re-check and log. ${CRITICAL_BAND_ESCALATION[policy.mode]}`}
                   </span>
                 </li>
                 <li>

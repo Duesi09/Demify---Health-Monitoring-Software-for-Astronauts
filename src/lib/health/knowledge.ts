@@ -97,8 +97,9 @@ export interface IndicatorDef {
   actions: string[];
   /**
    * When to escalate, as criteria only. Link-neutral: no "now", "immediately"
-   * or "contact the flight surgeon", because pages show it under every
-   * signal-delay link, a blackout included (tests/body-blackout.test.ts).
+   * or "contact the flight surgeon", and a step that needs the ground says
+   * "when contact allows", because pages show it under every signal-delay
+   * link, a blackout included (tests/body-blackout.test.ts).
    */
   escalation: string;
   sources: SourceRef[];
@@ -392,7 +393,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "Journal, tend the plant experiment, talk with a crewmate.",
       "Discuss workload adjustments with the commander.",
     ],
-    escalation: "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference.",
+    escalation: "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference (when contact allows).",
     sources: [S.behaviorTB, S.bhRisk],
   },
   stress: {
@@ -613,7 +614,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDef> = {
       "~70 % of long-duration crews show signs of Spaceflight Associated Neuro-ocular Syndrome (optic disc swelling, choroidal folds); 18 % clinically significant.",
     measurement: "Eye charts, OCT, fundoscope, ocular ultrasound in 'eye weeks' (flight day 30, 90, return-30).",
     actions: ["Switch to the next pair of backup glasses (crews fly 3+ strengths).", "Keep cabin CO₂ low."],
-    escalation: "Any new visual change: OCT and fundoscope exam with ground support.",
+    escalation: "Any new visual change: OCT and fundoscope exam (with ground support when contact allows).",
     sources: [S.sansTB, S.sansRisk],
   },
   stDeviation: {
@@ -715,13 +716,15 @@ export function persistenceLabel(def: IndicatorDef): string | null {
 
 /**
  * The values an escalateFromBand rule covers, as a phrase that follows
- * "any value": the critical range text without its notes
- * ("≤ 35.0 °C or ≥ 39.1 °C"), or for a caution band the open ends derived
- * from the steps ("≥ 1 /3", "< 50 bpm or ≥ 101 bpm"). A band with a closed
- * interval in the middle falls back to "in the caution or critical band".
+ * "any value": the critical range text without its notes except a plain
+ * "(project rule)" label ("≤ 35.0 °C or ≥ 39.1 °C", "≥ 1 mm elevation or
+ * > 2 mm depression (project rule)"), or for a caution band the open ends
+ * derived from the steps ("≥ 1 /3", "< 50 bpm or ≥ 101 bpm"). A band with a
+ * closed interval in the middle falls back to "in the caution or critical
+ * band".
  */
 export function bandEscalationLabel(def: IndicatorDef): string | null {
-  if (def.escalateFromBand === "critical") return def.ranges.critical.replace(/\s*\([^)]*\)/g, "").trim();
+  if (def.escalateFromBand === "critical") return def.ranges.critical.replace(/\s*\((?!project rule\))[^)]*\)/g, "").trim();
   if (def.escalateFromBand === "caution") {
     const flagged = (s: Status) => RANK[s] >= RANK.caution;
     // Intervals [lower, upper) of the classification, ascending; null = open end.

@@ -125,7 +125,7 @@ describe("escalationFlags", () => {
     expect(escalationFlags(INDICATORS.glucose)).toEqual(["< 54 mg/dL", "> 400 mg/dL", "> 250 mg/dL on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.stress)).toEqual(["≥ 8 /10 on 2 days in a row"]);
     expect(escalationFlags(INDICATORS.spo2)).toEqual(["Any value ≤ 90 %"]);
-    expect(escalationFlags(INDICATORS.stDeviation)).toEqual(["Any value ≥ 1 mm elevation or > 2 mm depression"]);
+    expect(escalationFlags(INDICATORS.stDeviation)).toEqual(["Any value ≥ 1 mm elevation or > 2 mm depression (project rule)"]);
     expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any value ≥ 1 /3"]);
     expect(escalationFlags(INDICATORS.radiationDoseRate)).toEqual(["> 10 mSv/day", "Any current S1+ solar radiation storm"]);
     expect(escalationFlags(INDICATORS.hydration)).toEqual([]);
@@ -185,8 +185,15 @@ describe("rule labels (ours vs published)", () => {
       expect(def.escalation, def.id).not.toMatch(/\bnow\b|immediately|contact the flight surgeon|flight surgeon direction/i);
     }
     expect(INDICATORS.mood.escalation).toBe(
-      "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference.",
+      "Score ≤ 2 on two days in a row, or any thought of self-harm: request a private psychological conference (when contact allows).",
     );
+    expect(INDICATORS.visionChange.escalation).toBe(
+      "Any new visual change: OCT and fundoscope exam (with ground support when contact allows).",
+    );
+    // A step that needs the ground waits for contact: no bare "with ground" or conference request.
+    for (const def of Object.values(INDICATORS)) {
+      if (/with ground|conference/i.test(def.escalation)) expect(def.escalation, def.id).toMatch(/when contact allows/);
+    }
   });
 
   it("states the Mars delay as the shared range", () => {

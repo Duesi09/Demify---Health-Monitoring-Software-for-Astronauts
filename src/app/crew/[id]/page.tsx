@@ -172,6 +172,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
             crewName={crew.name}
             commDelaySeconds={link.oneWayS}
             drill={drill != null}
+            link={selected}
           />
         </section>
 

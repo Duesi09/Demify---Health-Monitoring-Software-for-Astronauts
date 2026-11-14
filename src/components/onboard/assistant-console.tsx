@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, BookOpenText, Cpu, Database, LoaderCircle, Search, SatelliteDish, Send } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { ArrowRight, BookOpenText, ChevronDown, Cpu, Database, LoaderCircle, Search, SatelliteDish, Send } from "lucide-react";
 import { Card, StatusBadge, TAG_SELECTED, tagClass } from "@/components/ui";
 import type { AssistantAnswer, GroundLinkState, OnboardStatus } from "@/lib/onboard/types";
 import type { Status } from "@/lib/types";
@@ -33,6 +33,39 @@ export interface CrewOption {
 
 /** Answers kept in this browser session (newest first). */
 const HISTORY_MAX = 5;
+
+/*
+ * The answers live in this module (not in component state), so they survive
+ * moving to another page and back within this browser tab; a reload starts
+ * empty. Nothing is stored on the server or in browser storage.
+ */
+const NO_ANSWERS: AnswerEntry[] = [];
+let sessionAnswers: AnswerEntry[] = NO_ANSWERS;
+let answerSeq = 0;
+const answerListeners = new Set<() => void>();
+
+function addAnswer(question: string, answer: AssistantAnswer): AnswerEntry {
+  answerSeq += 1;
+  const entry: AnswerEntry = { key: `a${answerSeq}`, question, answer };
+  sessionAnswers = [entry, ...sessionAnswers].slice(0, HISTORY_MAX);
+  answerListeners.forEach((l) => l());
+  return entry;
+}
+
+function subscribeAnswers(listener: () => void): () => void {
+  answerListeners.add(listener);
+  return () => {
+    answerListeners.delete(listener);
+  };
+}
+
+function useSessionAnswers(): AnswerEntry[] {
+  return useSyncExternalStore(
+    subscribeAnswers,
+    () => sessionAnswers,
+    () => NO_ANSWERS,
+  );
+}
 const STATUS_POLL_MS = 60_000;
 
 const MODEL_BADGE: Record<OnboardStatus["model"]["state"], string> = {
@@ -83,9 +116,11 @@ function StatusStrip({
           {lib.freshness.stale && <StatusBadge status="caution" label="May be out of date" size="xs" />}
           <p className="text-xs leading-snug text-muted">
             {lib.documents} documents, {lib.chunks} passages ·{" "}
-            {lib.source === "database"
-              ? `syncs every ${status.syncIntervalHours} h while the ground link is up`
-              : "the copy bundled with this release"}
+            {lib.source === "bundled"
+              ? "the copy bundled with this release"
+              : link.up
+                ? `syncs every ${status.syncIntervalHours} h while the ground link is up`
+                : "syncs paused while the ground link is down"}
           </p>
           <Link href="/library" className="inline-flex items-center gap-1 text-xs font-medium text-accent underline underline-offset-2">
             Open the library
@@ -102,6 +137,9 @@ function StatusStrip({
         <Cell label="Database" icon={<Database size={14} aria-hidden />}>
           <StatusBadge status={DATABASE_BADGE[status.database].status} label={DATABASE_BADGE[status.database].label} size="xs" />
           <p className="text-sm font-medium">{databaseText(status.database)}</p>
+          {status.database === "connected" && lib.source === "bundled" && (
+            <p className="text-xs leading-snug text-muted">Its library is empty (not synced yet): the bundled copy answers.</p>
+          )}
         </Cell>
         <Cell label="Retrieval" icon={<Search size={14} aria-hidden />}>
           <p className="text-sm font-medium">{retrievalText(status)}</p>
@@ -133,8 +171,9 @@ export function AssistantConsole({ initialStatus, crew }: { initialStatus: Onboa
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState<{ question: string; crewName: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<AnswerEntry[]>([]);
-  const counter = useRef(0);
+  const history = useSessionAnswers();
+  /** The answer that just arrived gets focus (not the ones shown again after navigating back). */
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const askCtrl = useRef<AbortController | null>(null);
   const statusCtrl = useRef<AbortController | null>(null);
 
@@ -193,9 +232,7 @@ export function AssistantConsole({ initialStatus, crew }: { initialStatus: Onboa
         return;
       }
       const answer = (await res.json()) as AssistantAnswer;
-      counter.current += 1;
-      const entry: AnswerEntry = { key: `a${counter.current}`, question: q, answer };
-      setHistory((h) => [entry, ...h].slice(0, HISTORY_MAX));
+      setFocusKey(addAnswer(q, answer).key);
       setQuestion("");
       void refreshStatus();
     } catch (e) {
@@ -366,12 +403,12 @@ export function AssistantConsole({ initialStatus, crew }: { initialStatus: Onboa
             </div>
           )}
           {latest ? (
-            <AnswerCard key={latest.key} entry={latest} focusOnMount />
+            <AnswerCard key={latest.key} entry={latest} focusOnMount={latest.key === focusKey} />
           ) : (
             !pending && (
               <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted">
-                No questions asked yet. Answers of this browser session appear here, newest first, each with the library passages
-                it cites and how fresh the library is. Nothing is stored on the server.
+                No questions asked yet. The last {HISTORY_MAX} answers of this browser tab appear here, newest first, each with the
+                library passages it cites and how fresh the library is. Nothing is stored on the server.
               </div>
             )
           )}
@@ -381,13 +418,16 @@ export function AssistantConsole({ initialStatus, crew }: { initialStatus: Onboa
               <ul className="mt-2 space-y-2">
                 {earlier.map((e) => (
                   <li key={e.key}>
-                    <details className="group rounded-xl border border-border bg-surface open:bg-transparent open:p-0 [&[open]>summary]:mb-2">
-                      <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-xl px-4 py-2.5 text-sm hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent group-open:border group-open:border-border group-open:bg-surface">
+                    <details className="group">
+                      <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent group-open:mb-2 [&::-webkit-details-marker]:hidden">
                         <span className="min-w-0">
                           <span className="font-medium">{STATUS_HEADING[e.answer.status]}</span>
                           <span className="text-muted"> · “{e.question}”</span>
                         </span>
-                        <span className="text-xs tabular text-muted">{utcTime(e.answer.askedAt)}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs tabular text-muted">
+                          {utcTime(e.answer.askedAt)}
+                          <ChevronDown size={14} aria-hidden className="transition-transform group-open:rotate-180" />
+                        </span>
                       </summary>
                       <AnswerCard entry={e} />
                     </details>

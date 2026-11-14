@@ -12,7 +12,9 @@ import { Arrow, ArrowDefs, DiagramFrame, EdgeLabel, Node, SvgStatusChip, chipWid
 /* Daily routine                                                              */
 /* ------------------------------------------------------------------------- */
 
-export function DailyRoutineDiagram() {
+/** mode: linkPolicy mode; in a blackout (no contact) step 5 prompts the onboard procedures, not a call. */
+export function DailyRoutineDiagram({ mode = "live" }: { mode?: LinkMode }) {
+  const blackout = mode === "blackout";
   const id = "dg-routine";
   const y = 64;
   const h = 120;
@@ -20,13 +22,13 @@ export function DailyRoutineDiagram() {
   return (
     <DiagramFrame
       minWidth={1000}
-      caption="The daily loop. Steps 1 to 4 happen every morning; step 5 is practised only when Demify shows an escalation. Training: in a real mission the escalation prompts a call to the flight surgeon."
+      caption={`The daily loop. Steps 1 to 4 happen every morning; step 5 is practised only when Demify shows an escalation. Training: in a real mission the escalation prompts ${blackout ? "the onboard procedures (no contact)" : "a call to the flight surgeon"}.`}
     >
       <svg
         viewBox="0 0 1180 350"
         width="100%"
         role="img"
-        aria-label="Daily routine. 1, morning check-in: enter vitals, sleep, mood and symptoms. 2, Demify rates each value as nominal, caution or critical against NASA, clinical and project-defined (App) ranges and your pre-flight baseline. 3, Overview and Body map show who and which body system needs attention. 4, follow the listed actions. 5, only if Demify escalates, practise the call: in a real mission the escalation banner prompts a call to the flight surgeon. With no escalation the loop repeats with the next morning's check-in."
+        aria-label={`Daily routine. 1, morning check-in: enter vitals, sleep, mood and symptoms. 2, Demify rates each value as nominal, caution or critical against NASA, clinical and project-defined (App) ranges and your pre-flight baseline. 3, Overview and Body map show who and which body system needs attention. 4, follow the listed actions. 5, only if Demify escalates, ${blackout ? "practise the response: in a real mission the escalation banner prompts the onboard procedures (no contact)" : "practise the call: in a real mission the escalation banner prompts a call to the flight surgeon"}. With no escalation the loop repeats with the next morning's check-in.`}
       >
         <ArrowDefs id={id} />
 
@@ -45,8 +47,12 @@ export function DailyRoutineDiagram() {
           h={80}
           step={5}
           emphasis
-          title="Practise the call"
-          lines={["in a real mission the banner", "prompts a flight surgeon call"]}
+          title={blackout ? "Practise the response" : "Practise the call"}
+          lines={
+            blackout
+              ? ["in a real mission: onboard", "procedures (no contact)"]
+              : ["in a real mission the banner", "prompts a flight surgeon call"]
+          }
         />
 
         <Arrow id={id} strong d={`M240,${cy} H316`} />

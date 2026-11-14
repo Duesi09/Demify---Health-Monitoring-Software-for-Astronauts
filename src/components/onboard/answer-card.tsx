@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Ban, BookOpenText, Clock, ExternalLink, MessageSquareText, SearchX, ShieldCheck, Siren, TriangleAlert } from "lucide-react";
+import { Ban, BookOpenText, ChevronDown, Clock, ExternalLink, MessageSquareText, SearchX, ShieldCheck, Siren, TriangleAlert } from "lucide-react";
 import { StatusBadge, Tag } from "@/components/ui";
 import type { AssistantAnswer, Citation } from "@/lib/onboard/types";
 import {
@@ -153,6 +153,8 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
   const Icon = STATUS_ICON[answer.status];
   const body = splitActNow(answer.status === "answered" ? answer.answer : answer.reason);
   const hasCrew = !!answer.crewContext;
+  /** The answer cites the crew data ([C]): show it open. */
+  const citesCrew = hasCrew && /\[\s*[Cc]\s*\]/.test(body.rest);
   const showPassagesNote = answer.status === "passages-only" && answer.citations.length > 0;
 
   return (
@@ -196,10 +198,10 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
       </div>
 
       <div className="mt-3 space-y-1 border-t border-border pt-2.5 text-[12px] leading-snug text-muted">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Clock size={12} aria-hidden className="shrink-0" />
-          <span>{freshnessLine(answer)}</span>
-          {answer.freshness.stale && <StatusBadge status="caution" label="Library may be out of date" size="xs" />}
+        <p>
+          <Clock size={12} aria-hidden className="mr-1.5 inline align-[-1px]" />
+          {freshnessLine(answer)}
+          {answer.freshness.stale && <StatusBadge status="caution" label="Library may be out of date" size="xs" className="ml-2 align-middle" />}
         </p>
         <p>{modeLine(answer)}</p>
         {answer.mode.fallbackReason && <p className="text-[11px]">Fallback: {answer.mode.fallbackReason}</p>}
@@ -207,15 +209,24 @@ export function AnswerCard({ entry, focusOnMount = false }: { entry: AnswerEntry
       </div>
 
       {answer.crewContext && (
-        <div id={`${key}-crew`} className="mt-3 scroll-mt-24 rounded-lg border border-border bg-surface-2/40 p-3 target:border-accent">
-          <p className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="font-mono font-semibold text-accent">[C]</span>
-            Crew data used as context: {answer.crewContext.crewName}
-            <Tag size="xs">{answer.crewContext.source}</Tag>
-            {answer.crewContext.takenAt && <span className="font-normal text-muted">{utcTime(answer.crewContext.takenAt, answer.askedAt)}</span>}
-          </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-fg/90">{answer.crewContext.summary}</p>
-        </div>
+        <details
+          id={`${key}-crew`}
+          open={citesCrew}
+          className="group/crew mt-3 scroll-mt-24 rounded-lg border border-border bg-surface-2/40 target:border-accent"
+        >
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded-lg p-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-mono font-semibold text-accent">[C]</span>
+              Crew data used as context: {answer.crewContext.crewName}
+              <Tag size="xs">{answer.crewContext.source}</Tag>
+              {answer.crewContext.takenAt && (
+                <span className="font-normal text-muted">{utcTime(answer.crewContext.takenAt, answer.askedAt)}</span>
+              )}
+            </span>
+            <ChevronDown size={14} aria-hidden className="mt-0.5 shrink-0 text-muted transition-transform group-open/crew:rotate-180" />
+          </summary>
+          <p className="-mt-1 px-3 pb-3 text-[13px] leading-relaxed text-fg/90">{answer.crewContext.summary}</p>
+        </details>
       )}
 
       {answer.integrityFailures > 0 && (

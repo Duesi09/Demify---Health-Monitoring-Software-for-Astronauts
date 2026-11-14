@@ -5,7 +5,7 @@ import { actionUnderLink, buildProtocol, type ProtocolId } from "@/components/cr
 import { Findings } from "@/components/crew/findings";
 import { EscalationBanner } from "@/components/overview/escalation-banner";
 import { INDICATORS } from "@/lib/health/knowledge";
-import { BLACKOUT_ESCALATION, LINK_PROFILES, findingUnderLink, linkPolicy } from "@/lib/link";
+import { BLACKOUT_ESCALATION, CRITICAL_BAND_ESCALATION, LINK_PROFILES, findingUnderLink, linkPolicy } from "@/lib/link";
 import type { Assessment, IndicatorId, MonitorAlarm } from "@/lib/types";
 
 // The check-in page reads crew and readings from the store; keep it in memory here.
@@ -106,6 +106,34 @@ describe("blackout checklists", () => {
       }
     }
   });
+
+  it("crew actions that need the ground wait until contact returns in a blackout", () => {
+    const [family] = INDICATORS.mood.actions;
+    const [, planning] = INDICATORS.stress.actions;
+    const [, review] = INDICATORS.radiationCumulative.actions;
+    expect(family).toBe("Schedule personal time and a call with family.");
+    expect(planning).toBe("Raise workload concerns at the daily planning conference.");
+    expect(review).toBe("Review planned high-exposure activities with ground.");
+    expect(actionUnderLink(family, "blackout")).toBe("Schedule personal time and a call with family when contact returns.");
+    expect(actionUnderLink(planning, "blackout")).toBe("Raise workload concerns at the daily planning conference when contact returns.");
+    expect(actionUnderLink(review, "blackout")).toBe("Review planned high-exposure activities with ground when contact returns.");
+    for (const a of [family, planning, review]) {
+      expect(actionUnderLink(a, "live")).toBe(a);
+      expect(actionUnderLink(a, "delayed")).toBe(a);
+      // Applying it twice changes nothing more.
+      expect(actionUnderLink(actionUnderLink(a, "blackout"), "blackout")).toBe(actionUnderLink(a, "blackout"));
+    }
+  });
+
+  it("in a blackout no crew action asks for the ground without waiting for contact", () => {
+    const GROUND = /\bwith ground\b|call with family|planning conference|flight surgeon/i;
+    for (const def of Object.values(INDICATORS)) {
+      for (const a of def.actions) {
+        const b = actionUnderLink(a, "blackout");
+        if (GROUND.test(b)) expect(b, `${def.id}: ${a}`).toMatch(/when contact returns/);
+      }
+    }
+  });
 });
 
 describe("blackout findings", () => {
@@ -163,7 +191,9 @@ describe("blackout findings", () => {
 
   it("crew page in a blackout: criteria met, no contact, act onboard and transmit later", () => {
     const t = findings(null);
-    expect(t).toContain("Training: in a real mission this prompts a call to the flight surgeon.");
+    // Training framing like the overview banner in a blackout.
+    expect(t).toContain("Training: in a real mission this prompts the onboard procedures (no contact).");
+    expect(t).not.toContain("this prompts a call to the flight surgeon");
     expect(t).toMatch(
       /2 findings meet the criteria to contact the flight surgeon for Commander: .*, but there is no contact with the ground \(blackout\): act on the onboard procedures and transmit when contact returns\./,
     );
@@ -172,6 +202,28 @@ describe("blackout findings", () => {
     expect(list).not.toMatch(BANNED);
     expect(list).toContain(`Vision 1 /3: ${BLACKOUT_ESCALATION}.`);
     expect(list).toContain("Record the 12-lead ECG; transmit it to the flight surgeon when contact returns.");
+  });
+
+  it("delayed link keeps the call wording in the training line", () => {
+    expect(findings(750)).toContain("Training: in a real mission this prompts a call to the flight surgeon.");
+  });
+
+  it("the guidance links keep ?link=; without a choice they stay clean", () => {
+    const render = (link: "conjunction" | null) =>
+      renderToStaticMarkup(
+        createElement(Findings, {
+          assessments: [vision, st],
+          sources: {},
+          crewName: "Commander",
+          commDelaySeconds: link ? null : 0.5,
+          drill: false,
+          link,
+        }),
+      );
+    expect(render("conjunction")).toContain('href="/guidance?link=conjunction#ind-stDeviation"');
+    const clean = render(null);
+    expect(clean).toContain('href="/guidance#ind-stDeviation"');
+    expect(clean).not.toContain("link=");
   });
 
   it("overview banner in a blackout: finding texts say no contact", () => {
@@ -206,8 +258,9 @@ describe("check-in legend follows ?link=", () => {
   it("blackout: an escalation rule met, no contact, onboard procedures (like the field preview)", async () => {
     const l = legend(await checkIn("conjunction"));
     expect(l).toBe(
-      "In the critical band: re-check and log. Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns. ",
+      "In the critical band: re-check and log. Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns. Training: in a real mission this prompts the onboard procedures; transmit when contact returns. ",
     );
+    expect(l).toBe(`In the critical band: re-check and log. ${CRITICAL_BAND_ESCALATION.blackout} `);
     expect(l).not.toMatch(BANNED);
   });
 

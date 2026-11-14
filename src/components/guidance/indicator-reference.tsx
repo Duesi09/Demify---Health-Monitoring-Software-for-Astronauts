@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useId, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowUpRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, PhoneCall, Search, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, PhoneCall, PhoneOff, Search, X } from "lucide-react";
+import { actionUnderLink } from "@/components/crew/protocols";
 import { BODY_REGIONS, HAZARDS, INDICATORS, escalationFlags, type IndicatorDef } from "@/lib/health/knowledge";
+import { withLink, type LinkMode, type LinkProfileId } from "@/lib/link";
 import type { BodyRegionId, HazardId, IndicatorId } from "@/lib/types";
 import { BASIS_INFO, BasisTag } from "./basis";
 import { HAZARD_ICON, HAZARD_ORDER } from "./hazards";
@@ -48,8 +50,23 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-export function IndicatorReference() {
+/**
+ * Searchable reference of every indicator. Under a blackout link (mode
+ * "blackout", no contact) the crew actions follow the onboard procedures
+ * (actionUnderLink), like the crew page and the body map; links to the body
+ * map keep ?link=.
+ */
+export function IndicatorReference({
+  mode = "live",
+  link = null,
+}: {
+  /** linkPolicy mode of the page's signal delay. */
+  mode?: LinkMode;
+  /** Signal-delay profile chosen with ?link=, carried into the links (null: none chosen). */
+  link?: LinkProfileId | null;
+}) {
   const uid = useId();
+  const blackout = mode === "blackout";
   const [query, setQuery] = useState("");
   const [hazard, setHazard] = useState<HazardId | "all">("all");
   const [region, setRegion] = useState<BodyRegionId | "all">("all");
@@ -244,13 +261,13 @@ export function IndicatorReference() {
                         <h4 className="text-xs font-semibold text-muted">Crew actions</h4>
                         <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm marker:text-muted">
                           {def.actions.map((a) => (
-                            <li key={a}>{a}</li>
+                            <li key={a}>{actionUnderLink(a, mode)}</li>
                           ))}
                         </ol>
                       </div>
                       <div className="rounded-lg border border-critical/40 bg-critical/5 p-3">
                         <h4 className="flex items-center gap-1.5 text-xs font-semibold text-critical">
-                          <PhoneCall size={12} aria-hidden /> When to escalate
+                          {blackout ? <PhoneOff size={12} aria-hidden /> : <PhoneCall size={12} aria-hidden />} When to escalate
                         </h4>
                         <p className="mt-1 text-sm">{def.escalation}</p>
                         {flags.length > 0 && <p className="mt-1 text-xs text-muted">Automatic flag: {flags.join("; ")}</p>}
@@ -273,7 +290,7 @@ export function IndicatorReference() {
                         <p className="text-muted">Body regions</p>
                         <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                           {def.regions.map((r) => (
-                            <Link key={r} href={`/body?region=${r}`} className="hover:text-accent">
+                            <Link key={r} href={withLink(`/body?region=${r}`, link)} className="hover:text-accent">
                               {BODY_REGIONS[r].name}
                             </Link>
                           ))}

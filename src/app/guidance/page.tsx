@@ -6,6 +6,7 @@ import { IndicatorReference } from "@/components/guidance/indicator-reference";
 import { PageHeader, tagClass } from "@/components/ui";
 import { currentLink, currentMission } from "@/lib/config";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { linkPolicy } from "@/lib/link";
 
 export const metadata: Metadata = { title: "Guidance" };
 export const dynamic = "force-dynamic";
@@ -21,17 +22,29 @@ function SectionTitle({ id, title, description }: { id: string; title: string; d
   );
 }
 
-const TOC = [
-  { href: "#hazards", label: "Five hazards" },
-  { href: "#escalation", label: "When to call the flight surgeon" },
-  { href: "#reference", label: "Indicator reference" },
-];
+/** Escalation section title: in a blackout there is no one to call. */
+const ESCALATION_TITLE = {
+  contact: "When to call the flight surgeon",
+  blackout: "When to escalate (no contact)",
+};
+
+function toc(blackout: boolean) {
+  return [
+    { href: "#hazards", label: "Five hazards" },
+    { href: "#escalation", label: blackout ? ESCALATION_TITLE.blackout : ESCALATION_TITLE.contact },
+    { href: "#reference", label: "Indicator reference" },
+  ];
+}
 
 export default async function GuidancePage(props: PageProps<"/guidance">) {
   const sp = await props.searchParams;
   const mission = currentMission();
-  // ?link= swaps the signal delay shown in the communication-delay card.
-  const { profile: link } = currentLink(sp.link);
+  // ?link= swaps the signal delay in the communication-delay card, and in a
+  // blackout (no contact) the escalation tiers, the conferences and the crew
+  // actions follow the onboard procedures (linkPolicy mode).
+  const { profile: link, selected } = currentLink(sp.link);
+  const mode = linkPolicy(link.oneWayS).mode;
+  const blackout = mode === "blackout";
   return (
     <div className="space-y-12">
       <div>
@@ -55,7 +68,7 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
           </div>
         </aside>
         <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-1.5">
-          {TOC.map((t) => (
+          {toc(blackout).map((t) => (
             <a
               key={t.href}
               href={t.href}
@@ -79,14 +92,18 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
       <section aria-labelledby="escalation" className="scroll-mt-20">
         <SectionTitle
           id="escalation"
-          title="When to call the flight surgeon"
-          description="Work down this list from the top. The first tier that matches decides what you do."
+          title={blackout ? ESCALATION_TITLE.blackout : ESCALATION_TITLE.contact}
+          description={
+            blackout
+              ? "Work down this list from the top. The first tier that matches decides what you do on board; with no contact (blackout), transmit when contact returns."
+              : "Work down this list from the top. The first tier that matches decides what you do."
+          }
         />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <EscalationProtocol />
+          <EscalationProtocol mode={mode} />
           <div className="space-y-4">
             <CommDelay link={link} missionName={mission.name} />
-            <PrivateConferences />
+            <PrivateConferences mode={mode} />
           </div>
         </div>
       </section>
@@ -97,7 +114,7 @@ export default async function GuidancePage(props: PageProps<"/guidance">) {
           title="Indicator reference"
           description="Every health indicator Demify tracks, with its ranges and where each range comes from. Search or filter, then open an entry for the details."
         />
-        <IndicatorReference />
+        <IndicatorReference mode={mode} link={selected} />
       </section>
     </div>
   );

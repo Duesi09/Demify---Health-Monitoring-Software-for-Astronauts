@@ -18,7 +18,7 @@ import { currentLink, currentMission } from "@/lib/config";
 import { INTENDED_PURPOSE } from "@/lib/disclaimer";
 import type { Basis } from "@/lib/health/knowledge";
 import { ADMIN_HEADER, adminToken } from "@/lib/http";
-import { linkPolicy, withLink } from "@/lib/link";
+import { CRITICAL_BAND_ESCALATION, linkPolicy, withLink, type LinkMode } from "@/lib/link";
 import { MAX_SCENARIO_MS } from "@/lib/store/scenarios";
 import type { Status } from "@/lib/types";
 
@@ -98,59 +98,68 @@ function PageLink({ href, children }: { href: string; children: ReactNode }) {
 
 /* ------------------------------------------------------------------------- */
 
-const ROUTINE: { title: string; text: string; links: { href: string; label: string }[] }[] = [
-  {
-    title: "Check in every morning",
-    text: "Enter vitals, sleep, mood and symptoms. Each value is rated as you type.",
-    links: [{ href: "/check-in", label: "Check-in" }],
-  },
-  {
-    title: "Read your ratings",
-    text: "Nominal, caution or critical, against tagged reference ranges and your own pre-flight baseline.",
-    links: [{ href: "/guidance#reference", label: "Indicator ranges" }],
-  },
-  {
-    title: "See what needs attention",
-    text: "The Overview shows every crew member; the Body map shows which body system is affected.",
-    links: [
-      { href: "/", label: "Overview" },
-      { href: "/body", label: "Body map" },
-    ],
-  },
-  {
-    title: "Follow the actions",
-    text: "Every finding lists what to do now. The Crew monitor has the full record and trends.",
-    links: [{ href: "/crew", label: "Crew monitor" }],
-  },
-  {
-    title: "Practise the escalation",
-    text: "An escalation banner shows when, in a real mission, the flight surgeon would be called. In a real situation, never wait for it.",
-    links: [{ href: "/guidance#escalation", label: "When to call" }],
-  },
-];
+/** The five routine steps; in a blackout (no contact) step 5 prompts the onboard procedures, not a call. */
+function routine(mode: LinkMode): { title: string; text: string; links: { href: string; label: string }[] }[] {
+  const blackout = mode === "blackout";
+  return [
+    {
+      title: "Check in every morning",
+      text: "Enter vitals, sleep, mood and symptoms. Each value is rated as you type.",
+      links: [{ href: "/check-in", label: "Check-in" }],
+    },
+    {
+      title: "Read your ratings",
+      text: "Nominal, caution or critical, against tagged reference ranges and your own pre-flight baseline.",
+      links: [{ href: "/guidance#reference", label: "Indicator ranges" }],
+    },
+    {
+      title: "See what needs attention",
+      text: "The Overview shows every crew member; the Body map shows which body system is affected.",
+      links: [
+        { href: "/", label: "Overview" },
+        { href: "/body", label: "Body map" },
+      ],
+    },
+    {
+      title: "Follow the actions",
+      text: "Every finding lists what to do now. The Crew monitor has the full record and trends.",
+      links: [{ href: "/crew", label: "Crew monitor" }],
+    },
+    {
+      title: "Practise the escalation",
+      text: blackout
+        ? "An escalation banner shows when an escalation rule is met; in a real mission it prompts the onboard procedures (no contact). In a real situation, never wait for it."
+        : "An escalation banner shows when, in a real mission, the flight surgeon would be called. In a real situation, never wait for it.",
+      links: [{ href: "/guidance#escalation", label: blackout ? "When to escalate" : "When to call" }],
+    },
+  ];
+}
 
-const STATUS_ROWS: { status: Status; meaning: string; todo: string }[] = [
-  {
-    status: "nominal",
-    meaning: "Inside the normal range and close to your pre-flight baseline.",
-    todo: "Nothing extra. Keep the routine.",
-  },
-  {
-    status: "caution",
-    meaning: "Outside the normal range, or 25 % or more away from your own baseline.",
-    todo: "Follow the listed actions, re-measure and watch the trend.",
-  },
-  {
-    status: "critical",
-    meaning: "In the critical band of the reference range.",
-    todo: "Re-check and log. Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
-  },
-  {
-    status: "unknown",
-    meaning: "There is no reading to judge yet.",
-    todo: "Measure it, or complete today's check-in.",
-  },
-];
+/** Status table; the critical row follows the link (CRITICAL_BAND_ESCALATION, shared with the check-in legend). */
+function statusRows(mode: LinkMode): { status: Status; meaning: string; todo: string }[] {
+  return [
+    {
+      status: "nominal",
+      meaning: "Inside the normal range and close to your pre-flight baseline.",
+      todo: "Nothing extra. Keep the routine.",
+    },
+    {
+      status: "caution",
+      meaning: "Outside the normal range, or 25 % or more away from your own baseline.",
+      todo: "Follow the listed actions, re-measure and watch the trend.",
+    },
+    {
+      status: "critical",
+      meaning: "In the critical band of the reference range.",
+      todo: `Re-check and log. ${CRITICAL_BAND_ESCALATION[mode]}`,
+    },
+    {
+      status: "unknown",
+      meaning: "There is no reading to judge yet.",
+      todo: "Measure it, or complete today's check-in.",
+    },
+  ];
+}
 
 const TAG_ROWS: { tag: ReactNode; name: string; meaning: string; dark?: boolean }[] = [
   {
@@ -256,9 +265,9 @@ export default async function HelpPage(props: PageProps<"/help">) {
         title="Your daily routine"
         description="Five steps, most of them in the morning. Demify rates the values; you practise acting on what it shows."
       >
-        <DailyRoutineDiagram />
+        <DailyRoutineDiagram mode={policy.mode} />
         <ol className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {ROUTINE.map((s, i) => (
+          {routine(policy.mode).map((s, i) => (
             <li key={s.title} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
               <p className="flex items-start gap-2 text-sm font-semibold">
                 <StepNumber n={i + 1} />
@@ -267,7 +276,7 @@ export default async function HelpPage(props: PageProps<"/help">) {
               <p className="flex-1 text-sm leading-relaxed text-muted">{s.text}</p>
               <p className="flex flex-wrap gap-1.5">
                 {s.links.map((l) => (
-                  <PageLink key={l.href} href={l.href}>
+                  <PageLink key={l.href} href={withLink(l.href, selected)}>
                     {l.label}
                   </PageLink>
                 ))}
@@ -292,7 +301,7 @@ export default async function HelpPage(props: PageProps<"/help">) {
               <span>What to do</span>
             </div>
             <ul className="divide-y divide-border">
-              {STATUS_ROWS.map((r) => (
+              {statusRows(policy.mode).map((r) => (
                 <li key={r.status} className="grid gap-x-4 gap-y-1.5 px-4 py-3 text-sm sm:grid-cols-[110px_1fr_1fr]">
                   <span>
                     <StatusBadge status={r.status} size="md" />
@@ -414,7 +423,7 @@ export default async function HelpPage(props: PageProps<"/help">) {
             {[
               <>
                 Open the{" "}
-                <Link href="/crew" className="font-medium text-accent underline-offset-2 hover:underline">
+                <Link href={withLink("/crew", selected)} className="font-medium text-accent underline-offset-2 hover:underline">
                   Crew monitor
                 </Link>{" "}
                 and choose the crew member.

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   AU_KM,
   BLACKOUT_ADVICE,
+  CRITICAL_BAND_ESCALATION,
   LINK_PROFILES,
   LINK_PROFILE_IDS,
   LIVE_LIMIT_RULE,
@@ -12,6 +13,7 @@ import {
   MISSION_LINK,
   conjunctionProfile,
   formatDelay,
+  groundActionUnderLink,
   lightTimeSeconds,
   linkPolicy,
   parseLinkParam,
@@ -167,6 +169,40 @@ describe("?link= parsing and fallback", () => {
     expect(withLink("/check-in?crew=cdr", "iss")).toBe("/check-in?crew=cdr&link=iss");
     expect(withLink("/?crew=cdr#detail", "conjunction")).toBe("/?crew=cdr&link=conjunction#detail");
     expect(withLink("/?link=iss", "mars-far")).toBe("/?link=mars-far");
+    expect(withLink("/guidance#ind-stDeviation", "conjunction")).toBe("/guidance?link=conjunction#ind-stDeviation");
+  });
+});
+
+describe("blackout strings shared by the pages", () => {
+  it("groundActionUnderLink: steps that need the ground wait for contact, only in a blackout", () => {
+    expect(groundActionUnderLink("Schedule personal time and a call with family.", "blackout")).toBe(
+      "Schedule personal time and a call with family when contact returns.",
+    );
+    expect(groundActionUnderLink("Review planned high-exposure activities with ground.", "blackout")).toBe(
+      "Review planned high-exposure activities with ground when contact returns.",
+    );
+    expect(groundActionUnderLink("Raise workload concerns at the daily planning conference.", "blackout")).toBe(
+      "Raise workload concerns at the daily planning conference when contact returns.",
+    );
+    // Only at the end of a sentence; other text is left alone.
+    expect(groundActionUnderLink("Talk with a crewmate.", "blackout")).toBe("Talk with a crewmate.");
+    expect(groundActionUnderLink("OCT exam with ground support.", "blackout")).toBe("OCT exam with ground support.");
+    for (const mode of ["live", "delayed"] as const) {
+      expect(groundActionUnderLink("Review planned high-exposure activities with ground.", mode)).toBe(
+        "Review planned high-exposure activities with ground.",
+      );
+    }
+  });
+
+  it("CRITICAL_BAND_ESCALATION: live and delayed name the call, framed as training; a blackout has no one to call", () => {
+    expect(CRITICAL_BAND_ESCALATION.live).toBe(
+      "Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
+    );
+    expect(CRITICAL_BAND_ESCALATION.delayed).toBe(CRITICAL_BAND_ESCALATION.live);
+    expect(CRITICAL_BAND_ESCALATION.blackout).toBe(
+      "Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns. Training: in a real mission this prompts the onboard procedures; transmit when contact returns.",
+    );
+    expect(CRITICAL_BAND_ESCALATION.blackout).not.toMatch(/immediately|contact the flight surgeon|flight surgeon direction/i);
   });
 });
 

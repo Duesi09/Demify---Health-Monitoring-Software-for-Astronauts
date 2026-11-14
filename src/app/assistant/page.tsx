@@ -37,7 +37,7 @@ export default async function AssistantPage() {
           </h2>
           <p>
             {NOTICE_BODY} The alarms and the response checklists stay primary: the assistant never raises or clears an alarm. In an
-            emergency, start the checklist first.
+            emergency, start the checklist before asking.
           </p>
           <p className="font-medium">{DISCLAIMER_SHORT}</p>
         </div>

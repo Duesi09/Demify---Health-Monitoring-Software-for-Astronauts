@@ -1,6 +1,14 @@
-import { CircleCheck, Lock, PhoneCall, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
+import { CircleCheck, Lock, PhoneCall, PhoneOff, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
 import { INDICATORS, bandEscalationLabel, escalationFlags, type IndicatorDef } from "@/lib/health/knowledge";
-import { LINK_PROFILES, LINK_PROFILE_IDS, LIVE_LIMIT_RULE, MARS_DELAY_RANGE, linkPolicy, type LinkProfile } from "@/lib/link";
+import {
+  LINK_PROFILES,
+  LINK_PROFILE_IDS,
+  LIVE_LIMIT_RULE,
+  MARS_DELAY_RANGE,
+  linkPolicy,
+  type LinkMode,
+  type LinkProfile,
+} from "@/lib/link";
 import type { Status } from "@/lib/types";
 import { StatusBadge, Tag } from "@/components/ui";
 
@@ -38,24 +46,14 @@ function automaticFlagSummary(): string {
   }
   if (defs.some((d) => d.persistence)) parts.push("a value repeated for the stated days or hours");
   if (defs.some((d) => d.stormAlert)) parts.push("a current solar radiation storm alert (NOAA S1 or higher)");
-  return `Any reading that meets an automatic flag in the table below: ${listText(parts, "; ")}. The Body Map shows a red “Contact the flight surgeon” callout when this applies.`;
+  return `Any reading that meets an automatic flag in the table below: ${listText(parts, "; ")}. The Body Map shows a red escalation callout when this applies.`;
 }
 
-const TIERS: Tier[] = [
-  {
-    status: "critical",
-    icon: Siren,
-    when: "Emergency",
-    title: "Act immediately, then call",
-    body: "Chest pain, fainting or loss of consciousness, severe shortness of breath, sudden vision loss, a sudden severe headache, or any thought of self-harm. Start the onboard emergency procedure first; the call must not delay treatment.",
-  },
-  {
-    status: "critical",
-    icon: PhoneCall,
-    when: "Now",
-    title: "Contact the flight surgeon",
-    body: automaticFlagSummary(),
-  },
+const EMERGENCY_SIGNS =
+  "Chest pain, fainting or loss of consciousness, severe shortness of breath, sudden vision loss, a sudden severe headache, or any thought of self-harm.";
+
+/** Tiers 3 and 4 read the same under every link. */
+const ROUTINE_TIERS: Tier[] = [
   {
     status: "caution",
     icon: Stethoscope,
@@ -71,6 +69,48 @@ const TIERS: Tier[] = [
     body: "Everything Nominal: keep the daily check-in, countermeasure exercise and the full sleep period. Your history is what makes the next decision accurate.",
   },
 ];
+
+/**
+ * The four tiers under a link mode. Live and delayed links call the flight
+ * surgeon; in a blackout (no contact) tiers 1 and 2 act on the onboard
+ * procedures, prepare the report and transmit it when contact returns.
+ */
+function tiers(mode: LinkMode): Tier[] {
+  const blackout = mode === "blackout";
+  return [
+    blackout
+      ? {
+          status: "critical",
+          icon: Siren,
+          when: "Emergency",
+          title: "Act on the onboard emergency procedure",
+          body: `${EMERGENCY_SIGNS} Start the onboard emergency procedure first. No contact (blackout): log every reading and action, prepare the report for the flight surgeon and transmit it when contact returns.`,
+        }
+      : {
+          status: "critical",
+          icon: Siren,
+          when: "Emergency",
+          title: "Act immediately, then call",
+          body: `${EMERGENCY_SIGNS} Start the onboard emergency procedure first; the call must not delay treatment.`,
+        },
+    blackout
+      ? {
+          status: "critical",
+          icon: PhoneOff,
+          when: "Now",
+          title: "Act on the onboard procedures; prepare the report",
+          body: `${automaticFlagSummary()} No contact (blackout): act on the onboard procedures, prepare the report for the flight surgeon and transmit it when contact returns.`,
+        }
+      : {
+          status: "critical",
+          icon: PhoneCall,
+          when: "Now",
+          title: "Contact the flight surgeon",
+          body: automaticFlagSummary(),
+        },
+    ...ROUTINE_TIERS,
+  ];
+}
 
 const ICON_TILE = "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-fg";
 
@@ -98,11 +138,12 @@ function capitalized(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function EscalationProtocol() {
+/** mode: linkPolicy mode of the page's signal delay (blackout: no contact with the ground). */
+export function EscalationProtocol({ mode = "live" }: { mode?: LinkMode }) {
   return (
     <div className="space-y-4">
       <ol className="grid gap-3 md:grid-cols-2">
-        {TIERS.map((t, i) => {
+        {tiers(mode).map((t, i) => {
           const Icon = t.icon;
           return (
             <li key={t.title} className="flex gap-3 rounded-xl border border-border bg-surface p-4 md:p-5">
@@ -291,7 +332,9 @@ export function CommDelay({ link, missionName }: { link: LinkProfile; missionNam
   );
 }
 
-export function PrivateConferences() {
+/** mode: linkPolicy mode; in a blackout a conference waits until contact returns. */
+export function PrivateConferences({ mode = "live" }: { mode?: LinkMode }) {
+  const blackout = mode === "blackout";
   return (
     <section className="rounded-xl border border-border bg-surface p-4 md:p-5" aria-labelledby="pmc-title">
       <header className="flex items-start gap-3">
@@ -309,8 +352,9 @@ export function PrivateConferences() {
         <p>
           <span className="font-medium">Private Medical Conference (PMC):</span>{" "}
           <span className="text-muted">
-            a regularly scheduled, private call between each crew member and their flight surgeon. Bring trends and
-            Cautions from Demify here; you can also request an unscheduled one at any time.
+            {blackout
+              ? "a regularly scheduled, private call between each crew member and their flight surgeon; none during a blackout. Bring trends and Cautions from Demify to the next one; request an unscheduled one when contact returns."
+              : "a regularly scheduled, private call between each crew member and their flight surgeon. Bring trends and Cautions from Demify here; you can also request an unscheduled one at any time."}
           </span>
         </p>
         <p>
@@ -318,7 +362,9 @@ export function PrivateConferences() {
           <span className="text-muted">
             a private session with behavioural health specialists. Use it for low mood, high stress, sleep trouble or
             crew conflict; a mood score of 2 or less on two days in a row, or any thought of self-harm, warrants
-            requesting one now.
+            {blackout
+              ? " requesting one when contact returns. Until then, act on the onboard procedures with the Crew Medical Officer."
+              : " requesting one now."}
           </span>
         </p>
         <p className="text-xs text-muted">

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { OctagonAlert, PhoneCall } from "lucide-react";
+import { OctagonAlert, PhoneCall, PhoneOff } from "lucide-react";
 import { byEscalation } from "@/components/overview/format";
 import { DrillTag, SimulatedTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
 import { INDICATORS } from "@/lib/health/knowledge";
-import { findingUnderLink, linkPolicy } from "@/lib/link";
+import { findingUnderLink, linkPolicy, withLink, type LinkProfileId } from "@/lib/link";
 import type { Assessment, ReadingSource } from "@/lib/types";
 import { actionUnderLink } from "./protocols";
 
@@ -13,9 +13,11 @@ import { actionUnderLink } from "./protocols";
  *
  * Like the overview banner, the callout is framed as training when every
  * escalation comes from SIMULATED telemetry or a drill ("Training: in a real
- * mission this prompts a call to the flight surgeon"). In a blackout it says
- * the criteria are met but there is no contact, and finding texts and crew
- * actions drop "contact the flight surgeon" for the onboard procedures.
+ * mission this prompts a call to the flight surgeon"; in a blackout "the
+ * onboard procedures (no contact)", like the overview banner). In a blackout
+ * it says the criteria are met but there is no contact, and finding texts and
+ * crew actions drop "contact the flight surgeon" for the onboard procedures.
+ * Links to the guidance keep ?link=.
  */
 export function Findings({
   assessments,
@@ -23,6 +25,7 @@ export function Findings({
   crewName,
   commDelaySeconds,
   drill,
+  link = null,
 }: {
   assessments: Assessment[];
   sources: Partial<Record<string, ReadingSource>>;
@@ -31,6 +34,8 @@ export function Findings({
   commDelaySeconds: number | null;
   /** A training scenario is running: findings partly come from drill telemetry. */
   drill: boolean;
+  /** Signal-delay profile chosen with ?link=, carried into the links (null: none chosen). */
+  link?: LinkProfileId | null;
 }) {
   // Met escalation rules first, then most severe: the same order as the overview cards.
   const open = assessments.filter((a) => a.status === "caution" || a.status === "critical").sort(byEscalation);
@@ -52,10 +57,18 @@ export function Findings({
             {training && <SimulatedTag />}
           </div>
           {training && (
-            <p className="mt-3 text-sm font-semibold">Training: in a real mission this prompts a call to the flight surgeon.</p>
+            <p className="mt-3 text-sm font-semibold">
+              {blackout
+                ? "Training: in a real mission this prompts the onboard procedures (no contact)."
+                : "Training: in a real mission this prompts a call to the flight surgeon."}
+            </p>
           )}
           <p className="mt-3 flex items-start gap-2 text-sm">
-            <PhoneCall size={16} className="mt-0.5 shrink-0 text-critical" aria-hidden />
+            {blackout ? (
+              <PhoneOff size={16} className="mt-0.5 shrink-0 text-critical" aria-hidden />
+            ) : (
+              <PhoneCall size={16} className="mt-0.5 shrink-0 text-critical" aria-hidden />
+            )}
             <span>
               {escalations.length === 1 ? "One finding meets" : `${escalations.length} findings meet`} the criteria to
               contact the flight surgeon for {crewName}:{" "}
@@ -87,7 +100,7 @@ export function Findings({
             return (
               <li key={a.indicator} className="min-w-0 rounded-2xl border border-border bg-surface p-4 md:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Link href={`/guidance#ind-${a.indicator}`} className="font-semibold hover:text-accent hover:underline">
+                  <Link href={withLink(`/guidance#ind-${a.indicator}`, link)} className="font-semibold hover:text-accent hover:underline">
                     {INDICATORS[a.indicator].short}
                   </Link>
                   <div className="flex flex-wrap items-center gap-1.5">

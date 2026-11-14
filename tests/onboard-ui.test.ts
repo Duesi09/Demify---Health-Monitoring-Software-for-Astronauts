@@ -273,6 +273,7 @@ describe("library page helpers", () => {
     expect(durationText("2026-11-14T09:00:00Z", "2026-11-14T09:00:01.234Z")).toBe("1.2 s");
     expect(durationText("2026-11-14T09:00:00Z", "2026-11-14T09:03:04Z")).toBe("3 min 04 s");
     expect(durationText("2026-11-14T09:00:00Z", null)).toBe("running");
+    expect(durationText("2026-11-14T09:00:00.000Z", "2026-11-14T09:00:00.040Z")).toBe("< 0.1 s");
   });
 
   it("summarises sync runs", () => {
@@ -283,6 +284,10 @@ describe("library page helpers", () => {
         detail: { docsAdded: 2, docsUpdated: 0, docsRemoved: 0, docsUnchanged: 7, chunksEmbedded: 30, chunksPendingEmbedding: 0 },
       }),
     ).toBe("Documents: 2 added, 7 unchanged · 30 passages embedded");
+    expect(syncDetailText({ kind: "library", status: "ok", detail: { docsAdded: 9, docsUnchanged: 0, chunksEmbedded: 88 } })).toBe(
+      "Documents: 9 added · 88 passages embedded",
+    );
+    expect(syncDetailText({ kind: "library", status: "ok", detail: { docsAdded: 0, docsUnchanged: 0 } })).toBe("No changes");
     expect(syncDetailText({ kind: "library", status: "skipped", detail: { reason: "Ground link is down (blackout): nothing to sync from" } })).toBe(
       "Ground link is down (blackout): nothing to sync from",
     );
@@ -339,6 +344,26 @@ describe("answer card rendering", () => {
     expect(html).toContain("2 library passages were");
     expect(html).toContain("Library may be out of date");
     expect(html).toContain("Advises, never decides.");
+  });
+});
+
+describe("answer card crew context", () => {
+  const crewContext = { crewId: "plt", crewName: "Pilot", summary: "Pilot. Overall status: caution.", takenAt: "2026-11-14T12:03:00Z", source: "SIMULATED" };
+  const render = (text: string) =>
+    renderToStaticMarkup(createElement(AnswerCard, { entry: { key: "a2", question: "BP?", answer: answer({ answer: text, crewContext }) } }));
+
+  it("links [C] to the crew data and shows it open when the answer cites it", () => {
+    const html = render("Systolic is high [C]; contact the flight surgeon [1].");
+    expect(html).toContain('href="#a2-crew"');
+    expect(html).toMatch(/<details[^>]*id="a2-crew"[^>]*open=""/);
+    expect(html).toContain("Crew data used as context: Pilot");
+    expect(html).toContain("Crew data: SIMULATED 12:03 UTC");
+  });
+
+  it("keeps the crew data collapsed when the answer does not cite it", () => {
+    const html = render("Contact the flight surgeon [1].");
+    expect(html).not.toContain('href="#a2-crew"');
+    expect(html).not.toMatch(/<details[^>]*id="a2-crew"[^>]*open=""/);
   });
 });
 

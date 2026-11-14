@@ -273,6 +273,41 @@ export function findingUnderLink(finding: string, mode: LinkMode): string {
   return mode === "blackout" ? finding.replace(/contact the flight surgeon(?=\.)/g, BLACKOUT_ESCALATION) : finding;
 }
 
+/** What a step that needs the ground waits for in a blackout. */
+export const WHEN_CONTACT_RETURNS = "when contact returns";
+
+/**
+ * Crew-action phrases (knowledge.ts) that need the ground: a call home, a
+ * review with ground, the daily planning conference. Matched by phrase at
+ * the end of a sentence, not by the whole action text, because knowledge.ts
+ * imports this module.
+ */
+const GROUND_ACTION = /\b(a call with family|with ground|daily planning conference)(?=[.;]|$)/g;
+
+/**
+ * A crew action that needs the ground, as written for this link mode. Live
+ * and delayed links keep it as it is; in a blackout the ground part waits
+ * ("… a call with family when contact returns."). actionUnderLink in
+ * src/components/crew/protocols.ts applies it to every action it does not
+ * rewrite in full (the ECG and chest-pain steps).
+ */
+export function groundActionUnderLink(text: string, mode: LinkMode): string {
+  return mode === "blackout" ? text.replace(GROUND_ACTION, `$1 ${WHEN_CONTACT_RETURNS}`) : text;
+}
+
+/**
+ * What a value in the critical band asks for after "re-check and log", per
+ * link mode: only a met escalation rule escalates, framed as training. One
+ * text for the check-in legend and the /help status table.
+ */
+export const CRITICAL_BAND_ESCALATION: Record<LinkMode, string> = {
+  live: "Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
+  delayed:
+    "Escalation only when Demify shows “contact the flight surgeon”. Training: in a real mission this prompts a call to the flight surgeon.",
+  blackout:
+    "Escalation only when Demify shows an escalation rule met; with no contact (blackout) act on the onboard procedures and transmit when contact returns. Training: in a real mission this prompts the onboard procedures; transmit when contact returns.",
+};
+
 /**
  * Adds `link=<id>` to an internal href (keeps other query parameters and the
  * hash). No-op when id is null, so URLs stay clean without an explicit choice.

@@ -117,6 +117,11 @@ describe("body map region panel follows the link", () => {
     const criteria = t.slice(t.indexOf("Mood:"), t.indexOf("Act on the onboard procedures"));
     expect(criteria).toContain(INDICATORS.mood.escalation);
     expect(criteria).not.toMatch(/\bnow\b/i);
+    // A crew action that needs the ground waits until contact returns; live keeps it as written.
+    expect(t).toContain("Schedule personal time and a call with family when contact returns.");
+    const live = text(region("brain", "live"));
+    expect(live).toContain("Schedule personal time and a call with family.");
+    expect(live).not.toContain("when contact returns");
   });
 
   it("live and delayed keep their wording", () => {

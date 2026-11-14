@@ -1,5 +1,5 @@
 import { INDICATORS } from "@/lib/health/knowledge";
-import { linkPolicy, type LinkMode } from "@/lib/link";
+import { groundActionUnderLink, linkPolicy, type LinkMode } from "@/lib/link";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 
 /**
@@ -69,9 +69,13 @@ const BLACKOUT_ACTION: Record<string, string> = {
   [INDICATORS.stDeviation.actions[2]]: "Follow the onboard medical checklist for chest pain.",
 };
 
-/** A crew action as written for this link mode (unchanged unless in a blackout). */
+/**
+ * A crew action as written for this link mode (unchanged unless in a
+ * blackout): the ECG and chest-pain steps are rewritten in full, other
+ * actions that need the ground wait for contact (groundActionUnderLink).
+ */
 export function actionUnderLink(text: string, mode: LinkMode): string {
-  return mode === "blackout" ? (BLACKOUT_ACTION[text] ?? text) : text;
+  return mode === "blackout" ? (BLACKOUT_ACTION[text] ?? groundActionUnderLink(text, mode)) : text;
 }
 
 /**
