@@ -30,12 +30,12 @@ Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Mon
 
 | Item | State |
 |---|---|
-| Unit tests | 51 of 51 pass |
+| Unit tests | 61 of 61 pass |
 | Type check and production build | Clean |
 | Browser run | No console errors on desktop and phone width |
 | Accessibility scan | No WCAG A or AA violations found by the automated scan |
-| Simulated mission | 79 nominal days, 26 Watch, 70 Act, 5 Critical |
-| Hazards covered | 4 of 5. Space radiation has no indicator yet |
+| Simulated mission | 76 nominal days, 28 Watch, 71 Act, 5 Critical |
+| Hazards covered | 5 of 5. Space radiation is covered by a simulated daily dose |
 
 ### Branches
 
@@ -67,10 +67,11 @@ Three principles carry the whole app:
 | Health status banner | The overall triage level, its guidance and the first thing to do |
 | Vital signs monitor | A heartbeat trace at the measured heart rate and a pressure wave, drawn from the latest readings. It is an illustration, not a live sensor signal |
 | Mission timeline | One cell per mission day in the colour of that day's status. It is also the day control |
-| Body map | A clickable figure with a full skeleton and nine body systems. Organs are filled in the colour of their status; the weight-bearing bones turn from white to the status colour when bones and muscles are flagged |
+| Body map | A clickable figure with a full skeleton and ten body systems. Organs are filled in the colour of their status; the weight-bearing bones turn from white to the status colour when bones and muscles are flagged; the outline of the body stands for the whole body and carries the radiation status |
 | Findings list | Each finding with detail, action and links to its indicators |
 | Five hazards row | One ring per NASA hazard showing how many of its indicators are nominal |
 | Indicator tiles | Value, trend line, range bar and change against the pre-flight baseline |
+| Radiation dose | The daily dose from the dosimeter, the mission total as a bar against NASA's 600 mSv career limit, and during a solar particle event its dose against NASA's 250 mSv limit for one event |
 | Detail panel | Trend chart with normal range and baseline, table view, manual entry, explanation and sources |
 | Manual entry | Values are checked in the browser and again on the server, then saved on the server |
 | Reminders | Readings that are too old are not judged; the app asks for a new measurement |
@@ -105,7 +106,7 @@ src/
     types.ts              data shapes: Reading, MetricDef, Finding, Status
     metrics.ts            every indicator: unit, ranges, drift rule, how to measure
     hazards.ts            the five NASA hazards and the page for each NASA risk
-    bodyRegions.ts        the nine body systems and their indicators
+    bodyRegions.ts        the ten body systems and their indicators
     engine.ts             rule engine: ranges, baseline drift, patterns, reminders
     simulator.ts          180-day demo mission with scripted events
     validate.ts           input checks, used on both sides
@@ -128,6 +129,7 @@ src/
     FindingsList.tsx      findings and measurements due
     HazardRow.tsx         one ring per hazard
     MetricTile.tsx        one tile per indicator, with Sparkline and RangeBar
+    DoseBar.tsx           an accumulated radiation dose against a NASA limit
     MetricDetail.tsx      detail panel, with TrendChart and LogForm
     AnimatedNumber.tsx    numbers that glide to a new value
     status.tsx, tiles.ts  colours, icons and tile layout
@@ -189,6 +191,7 @@ These are demo defaults taken from general clinical reference ranges. They are n
 | Mood (7-day average) | 1 to 5 | 3 and above | 2 to 2.9 | below 2 | none |
 | Exercise (7-day average) | min | 90 and above | 45 to 89 | below 45 | none |
 | Cabin CO₂ | mmHg | below 3 | 3 to 3.9 | 4 to 5.2 | 5.3 and above |
+| Radiation dose | mSv/day | below 3 | 3 to 7.9 | 8 to 19.9 | 20 and above |
 
 ### Baseline drift
 
@@ -209,7 +212,7 @@ The 7-day average is compared with the pre-flight average. A drift raises its ow
 
 | Indicator | Counts as out of date after |
 |---|---|
-| Cabin CO₂ | 1 day |
+| Cabin CO₂, radiation dose | 1 day |
 | Sleep, mood, exercise | 2 days |
 | Heart rate, blood pressure, temperature, blood oxygen | 3 days |
 | Fasting blood sugar | 7 days |
@@ -227,6 +230,7 @@ The 7-day average is compared with the pre-flight average. A drift raises its ow
 | Metabolism and nutrition | Fasting blood sugar | Distance from Earth |
 | Kidneys and fluids | None yet | Gravity fields |
 | Bones and muscles | Exercise | Gravity fields |
+| Whole body | Radiation dose | Space radiation |
 
 ---
 
@@ -256,6 +260,17 @@ A fifth state exists on the banner: **Measurements due**. It appears when nothin
 
 A pattern replaces the single findings it explains, unless a single finding is more urgent than the pattern.
 
+### Radiation limits
+
+The daily dosimeter readings are added up and compared with two NASA limits from NASA-STD-3001 Volume 1. Both limits and the readings are effective dose in mSv, so they can share one bar. The limits are NASA's; the shares at which the app raises a finding are project defaults.
+
+| Total | NASA limit | Finding |
+|---|---|---|
+| Mission dose: all readings since launch | 600 mSv over a career (V1 4030) | Watch from 60%, Act from 80%, Critical from 100% |
+| Event dose: the unbroken run of raised readings (3 mSv a day or more) that ends today | 250 mSv per solar particle event (V1 4031) | Act from 50%, Critical from 100% |
+
+The mission dose counts this mission only. A real crew member's earlier flights would have to be added.
+
 ---
 
 ## 6. The simulated mission
@@ -266,6 +281,7 @@ One crew member, 14 pre-flight days for the baseline, then 180 mission days. The
 
 | Days | Event | What the app shows |
 |---|---|---|
+| 23 to 25 | Solar particle event | Raised radiation: Watch on day 23, **Act on day 24** with the advice to go to the storm shelter, Watch on day 25. The event adds up to about 23 mSv |
 | 28 to 46 | Heavy workload with shifted sleep | Sleep loss with falling mood, Watch from day 34, Act from day 38 |
 | 36 to 44 | CO₂ scrubber degrades | "Symptoms may come from the cabin air" |
 | 54 to 58 | Life-support fault: the scrubber fails | Act on day 54, **Critical on days 55 to 57**, "low blood oxygen with raised cabin CO₂" |
@@ -278,11 +294,17 @@ One crew member, 14 pre-flight days for the baseline, then 180 mission days. The
 
 The mission shows two kinds of Critical on purpose: one where the cabin is the cause and one where the body is.
 
+Radiation runs at a background of about 1.8 mSv a day from launch, the rate Curiosity's RAD instrument measured on the cruise to Mars. The mission total reaches about 340 mSv on day 180, which is 57% of the career limit and stays below the first finding.
+
 ### Status of every day
 
 | Days | Status |
 |---|---|
-| 1 to 33 | Nominal |
+| 1 to 22 | Nominal |
+| 23 | Watch (solar particle event) |
+| 24 | Act |
+| 25 | Watch |
+| 26 to 33 | Nominal |
 | 34 to 37 | Watch |
 | 38 to 47 | Act |
 | 48 | Watch |
@@ -314,6 +336,7 @@ The mission shows two kinds of Critical on purpose: one where the cabin is the c
 | Day | Shows |
 |---|---|
 | 20 | A calm, all-nominal day |
+| 24 | Solar particle event: the outline of the body lights up, the app sends the crew to the storm shelter and counts the event dose against NASA's limit |
 | 42 | Two patterns at once: the cabin air behind poor sleep |
 | 56 | Critical from the cabin: the lungs turn red, the app blames the air and not the astronaut |
 | 74 | Infection: immune system and heart light up on the body map |
@@ -344,7 +367,7 @@ Open a day directly with `?day=56` at the end of the address.
 | 12 | White text on the blue buttons failed the contrast check (3.6 to 1) | A darker button blue (4.9 to 1) | `f25ced7` |
 | 13 | Nothing checked pushes automatically | A workflow runs type check, tests and build on every push | `f25ced7` |
 
-Tests grew from 31 to 51. New tests cover the new patterns, the fever and heart rules, the Critical days, the risk links and the data store.
+Tests grew from 31 to 61. New tests cover the new patterns, the fever and heart rules, the Critical days, the risk links, the data store and the radiation dose with its limits.
 
 ### Deliberately left alone
 
@@ -388,7 +411,7 @@ Tests grew from 31 to 51. New tests cover the new patterns, the fever and heart 
 - **Storage is a JSON file.** Good for one container on one machine. Static hosts cannot run it, and serverless hosts lose the data.
 - **Sensor data is simulated.** Only manual entry is real.
 - **Thresholds are demo values**, not flight rules and not medical advice.
-- **Radiation is missing.** It is the only one of the five hazards without an indicator, and the hazard row shows it as "Not monitored yet". Judges will see that.
+- **Radiation is simulated.** The daily dose is modelled on one published measurement (about 1.8 mSv a day on the cruise to Mars) and one scripted solar particle event. It is not fed from a detector or a data service. The daily ranges for Watch and Act are project defaults; only the 600 mSv and 250 mSv limits come from NASA.
 - **Eyes, balance and kidneys have no indicator.** The body systems are explained on the map and drawn as dashed outlines.
 - **The vital signs traces are drawn, not measured.** The app says so on screen. Say it in the pitch too.
 
@@ -452,7 +475,7 @@ All of these were found through search results that showed the page title and ad
 | Risk of Altered Immune System Responses | <https://www.nasa.gov/reference/risk-of-altered-immune-system-responses/> | Title matches |
 | Risk of Acute and Chronic Carbon Dioxide Exposure | <https://www.nasa.gov/directorates/esdmd/hhp/risk-of-acute-and-chronic-carbon-dioxide-exposure/> | A Human System Risk, not part of the Human Research Program list |
 
-For radiation, when an indicator is added: NASA's short public name is "Risk of radiation-induced cancers" at <https://www.nasa.gov/reference/risk-of-radiation-induced-cancers/>. The formal name is "Risk of Radiation Carcinogenesis".
+The radiation indicator cites NASA's risk as "Risk of Radiation-Induced Cancers", the name on NASA's list of risks, and links to <https://www.nasa.gov/reference/risk-of-radiation-induced-cancers/>, whose own title writes it in lower case. The formal name is "Risk of Radiation Carcinogenesis".
 
 ### Other references named in the app
 
@@ -471,7 +494,7 @@ Assumption: a 48-hour hackathon with roughly 40 hours left when this was written
 
 | Priority | What | Why | Rough effort |
 |---|---|---|---|
-| 1 | Radiation indicator | Closes the fifth hazard; today the hazard row shows a gap | 3 h |
+| 1 | Radiation indicator | Done with simulated data. Open: feed it from measured data (RadLab for the ISS, Curiosity's RAD for Mars) | Done |
 | 2 | Reaction Self-Test | A real measurement without hardware that a judge can try | 5 h |
 | 3 | Mission switch (ISS, Moon, Mars) with signal delay | Makes "distance from Earth" visible and changes the Critical wording | 3 h |
 | 4 | Light-time ledger | Shows the core idea instead of asserting it | 6 to 9 h |
@@ -689,7 +712,7 @@ Space Apps projects are usually judged on impact, creativity, validity, relevanc
 |---|---|
 | Are the thresholds medically valid? | They are general clinical ranges used as demo defaults, not flight rules |
 | Is the data real? | The mission is simulated; manual entry is real |
-| Why no radiation? | Say what is planned, or build the indicator first |
+| Is the radiation real? | The daily dose is simulated around the rate Curiosity measured on the way to Mars. The two limits are NASA's own |
 | Is this an AI doctor? | No. It is a transparent rule engine, and every finding shows why it fired |
 | What about privacy? | One crew member's data stays on the on-board computer |
 | How would real sensors connect? | Readings are plain records with a source field, so a device feed can be added next to manual entry |

@@ -11,6 +11,7 @@ export type MetricId =
   | 'mood'
   | 'exerciseMin'
   | 'cabinCo2'
+  | 'radiationDose'
 
 /** Triage levels, in rising order of urgency. */
 export type Status = 'nominal' | 'watch' | 'act' | 'critical'
@@ -105,7 +106,8 @@ export interface MetricAssessment {
 
 export interface Finding {
   id: string
-  kind: 'range' | 'drift' | 'pattern'
+  /** `limit` findings compare an accumulated dose with a NASA exposure limit. */
+  kind: 'range' | 'drift' | 'pattern' | 'limit'
   status: Exclude<Status, 'nominal'>
   title: string
   detail: string
@@ -126,4 +128,16 @@ export interface Evaluation {
   /** Sorted most urgent first. */
   findings: Finding[]
   reminders: Reminder[]
+  radiation: RadiationSummary
+}
+
+/** Accumulated radiation dose, in mSv, from the daily dosimeter readings. */
+export interface RadiationSummary {
+  /** Sum of all daily readings from mission day 1 up to today. */
+  missionDose: number
+  /**
+   * Dose of the solar particle event under way: the sum over the unbroken run
+   * of raised daily readings that ends today. Zero when today is at background.
+   */
+  eventDose: number
 }

@@ -1,4 +1,4 @@
-import { METRICS, METRIC_IDS, classify } from './metrics'
+import { METRICS, METRIC_IDS, RADIATION_LIMITS, RADIATION_RAISED_FROM, classify } from './metrics'
 import { changeUnit, formatAverage, formatDelta, formatValue } from './format'
 import {
   STATUS_ORDER,
@@ -7,6 +7,7 @@ import {
   type Finding,
   type MetricAssessment,
   type MetricId,
+  type RadiationSummary,
   type Reading,
   type Reminder,
   type Status,
@@ -335,6 +336,79 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
   return findings
 }
 
+/** Adds up the daily dosimeter readings: over the mission, and over the event under way. */
+function radiationSummary(series: Series, today: number): RadiationSummary {
+  let missionDose = 0
+  for (let day = 1; day <= today; day++) missionDose += series.get(day) ?? 0
+  // An event is the unbroken run of raised readings that ends today.
+  let eventDose = 0
+  for (let day = today; day >= 1; day--) {
+    const dose = series.get(day)
+    if (dose === undefined || dose < RADIATION_RAISED_FROM) break
+    eventDose += dose
+  }
+  const round = (v: number) => Math.round(v * 10) / 10
+  return { missionDose: round(missionDose), eventDose: round(eventDose) }
+}
+
+/**
+ * Share of a NASA limit from which a finding is raised. The limits themselves
+ * are NASA's; these shares are project defaults.
+ */
+const CAREER_SHARES: [number, Finding['status']][] = [
+  [1, 'critical'],
+  [0.8, 'act'],
+  [0.6, 'watch'],
+]
+const EVENT_SHARES: [number, Finding['status']][] = [
+  [1, 'critical'],
+  [0.5, 'act'],
+]
+
+function limitFindings(radiation: RadiationSummary): Finding[] {
+  const findings: Finding[] = []
+  const reached = (share: number, steps: [number, Finding['status']][]) =>
+    steps.find(([from]) => share >= from)?.[1]
+  const percent = (share: number) => Math.floor(share * 100)
+
+  const careerShare = radiation.missionDose / RADIATION_LIMITS.career
+  const career = reached(careerShare, CAREER_SHARES)
+  if (career) {
+    findings.push({
+      id: 'limit:radiationCareer',
+      kind: 'limit',
+      status: career,
+      title: `Radiation: mission dose at ${percent(careerShare)}% of the career limit`,
+      detail: `Your dosimeter readings on this mission add up to ${radiation.missionDose} mSv. NASA's limit for a whole career is ${RADIATION_LIMITS.career} mSv.`,
+      action:
+        career === 'critical'
+          ? 'Contact the flight surgeon. The career limit is reached, and ground has to decide how the mission continues.'
+          : career === 'act'
+            ? 'Tell the Crew Medical Officer and ground. Plan the rest of the mission so that further exposure stays as low as possible.'
+            : 'Review with the Crew Medical Officer where you sleep and work, and move routine tasks to the best-shielded areas.',
+      metrics: ['radiationDose'],
+    })
+  }
+
+  const eventShare = radiation.eventDose / RADIATION_LIMITS.event
+  const event = reached(eventShare, EVENT_SHARES)
+  if (event) {
+    findings.push({
+      id: 'limit:radiationEvent',
+      kind: 'limit',
+      status: event,
+      title: `Radiation: this solar particle event is at ${percent(eventShare)}% of the event limit`,
+      detail: `The raised readings of this event add up to ${radiation.eventDose} mSv. NASA's limit for one solar particle event is ${RADIATION_LIMITS.event} mSv.`,
+      action:
+        event === 'critical'
+          ? 'Stay in the storm shelter and contact the flight surgeon now. Watch for nausea, vomiting or unusual tiredness.'
+          : 'Stay in the storm shelter and tell the Crew Medical Officer and ground. Leave it only for tasks that cannot wait.',
+      metrics: ['radiationDose'],
+    })
+  }
+  return findings
+}
+
 /** Assesses every indicator as of `today` and derives the overall triage level. */
 export function evaluate(readings: Reading[], today: number): Evaluation {
   return evaluateIndexed(indexReadings(readings), today)
@@ -353,12 +427,19 @@ export function evaluateIndexed(index: Record<MetricId, Series>, today: number):
     patterns.some(
       (p) => p.metrics.includes(f.metrics[0]) && worst(p.status, f.status) === p.status,
     )
+  const radiation = radiationSummary(index.radiationDose, today)
   const findings = [
     ...patterns,
+    ...limitFindings(radiation),
     ...METRIC_IDS.map((id) => metricFinding(assessments[id])).filter(
       (f): f is Finding => f !== null && !explained(f),
     ),
   ]
+  // A raised dose reading also says how much of the event limit is used so far.
+  const raised = findings.find((f) => f.id === 'range:radiationDose')
+  if (raised && radiation.eventDose > 0) {
+    raised.detail += ` This solar particle event adds up to ${radiation.eventDose} mSv so far; NASA's limit for one event is ${RADIATION_LIMITS.event} mSv.`
+  }
   // Most urgent first; within a level, patterns come before single values.
   findings.sort((x, y) => STATUS_ORDER.indexOf(y.status) - STATUS_ORDER.indexOf(x.status))
 
@@ -368,7 +449,7 @@ export function evaluateIndexed(index: Record<MetricId, Series>, today: number):
   }))
 
   const status = findings.reduce<Status>((s, f) => worst(s, f.status), 'nominal')
-  return { day: today, status, assessments, findings, reminders }
+  return { day: today, status, assessments, findings, reminders, radiation }
 }
 
 /** The overall triage level of every mission day from 1 to `days`. */

@@ -21,6 +21,7 @@ export const TILES: Tile[] = [
   single('mood'),
   single('exerciseMin'),
   single('cabinCo2'),
+  single('radiationDose'),
 ]
 
 export function tileFor(metric: MetricId): Tile {
@@ -30,5 +31,12 @@ export function tileFor(metric: MetricId): Tile {
 export function tileTone(tile: Tile, evaluation: Evaluation): Tone {
   const fresh = tile.metrics.map((m) => evaluation.assessments[m]).filter((a) => !a.stale)
   if (fresh.length === 0) return 'stale'
-  return fresh.reduce<Status>((s, a) => worst(s, a.status), 'nominal')
+  let status = fresh.reduce<Status>((s, a) => worst(s, a.status), 'nominal')
+  // A dose limit can be reached while each daily reading is unremarkable.
+  for (const finding of evaluation.findings) {
+    if (finding.kind === 'limit' && finding.metrics.some((m) => tile.metrics.includes(m))) {
+      status = worst(status, finding.status)
+    }
+  }
+  return status
 }

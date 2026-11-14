@@ -309,3 +309,45 @@ describe('missionStatuses', () => {
     expect(statuses[6]).toBe('nominal')
   })
 })
+
+describe('radiation dose', () => {
+  it('adds up the daily readings of the mission, without the days before launch', () => {
+    const result = evaluate(log('radiationDose', 0, [1.8, 1.9, 1.7, 1.8]), 4)
+    expect(result.radiation.missionDose).toBeCloseTo(7.2)
+    expect(result.radiation.eventDose).toBe(0)
+    expect(result.status).toBe('nominal')
+  })
+
+  it('counts a solar particle event as the run of raised readings that ends today', () => {
+    const readings = log('radiationDose', 0, [1.8, 4.5, 13.5, 5.2, 1.8])
+    expect(evaluate(readings, 3).radiation.eventDose).toBeCloseTo(18)
+    expect(evaluate(readings, 4).radiation.eventDose).toBeCloseTo(23.2)
+    // Back at background level the event is over.
+    expect(evaluate(readings, 5).radiation.eventDose).toBe(0)
+  })
+
+  it('sends the crew to the shelter during a solar particle event and names the event dose', () => {
+    const result = evaluate(log('radiationDose', 0, [1.8, 4.5, 13.5]), 3)
+    const finding = result.findings.find((f) => f.id === 'range:radiationDose')
+    expect(finding?.status).toBe('act')
+    expect(finding?.action).toContain('storm shelter')
+    expect(finding?.detail).toContain('18 mSv so far')
+    expect(finding?.detail).toContain('250 mSv')
+  })
+
+  it('warns when the mission dose reaches 60% of the 600 mSv career limit', () => {
+    // 2.9 mSv a day stays below the raised level, so only the total counts.
+    const readings = log('radiationDose', 0, days(140, 2.9))
+    expect(evaluate(readings, 120).findings.map((f) => f.id)).not.toContain('limit:radiationCareer')
+    const finding = evaluate(readings, 130).findings.find((f) => f.id === 'limit:radiationCareer')
+    expect(finding?.status).toBe('watch')
+    expect(finding?.title).toContain('62%')
+  })
+
+  it('treats the 250 mSv event limit as critical', () => {
+    const result = evaluate(log('radiationDose', 0, [1.8, ...days(5, 60)]), 6)
+    const finding = result.findings.find((f) => f.id === 'limit:radiationEvent')
+    expect(finding?.status).toBe('critical')
+    expect(result.radiation.eventDose).toBe(300)
+  })
+})

@@ -14,6 +14,8 @@ const HEIGHT = 740
 const CENTRE = WIDTH / 2
 /** Bones when nothing is flagged; they take the status colour when it is. */
 const BONE_WHITE = '#e9eef5'
+/** The outline of the body while nothing is flagged or selected. */
+const BODY_EDGE = 'rgb(140 190 240 / 0.45)'
 /** The dark of the skull's openings and of outlines drawn over the blue body. */
 const DEEP = '#0b2038'
 
@@ -215,27 +217,54 @@ const MARKER: Record<RegionId, { x: number; y: number; r: number; badge: [number
   metabolism: { x: 124, y: 262, r: 20, badge: [98, 280] },
   kidneys: { x: 162, y: 288, r: 13, badge: [180, 276] },
   bones: { x: 106, y: 440, r: 16, badge: [126, 424] },
+  wholeBody: { x: 191, y: 262, r: 10, badge: [208, 246] },
 }
 
 /**
- * Drawn back to front: lungs, liver and stomach lie behind the rib cage, the
+ * Drawn back to front: the body itself comes first and stands for the whole
+ * body (radiation). Lungs, liver and stomach lie behind the rib cage, the
  * skeleton comes next, and the rest is drawn over it. The heart is drawn over
  * the ribs on purpose, so the organ this app watches most closely stays visible.
  */
-const DRAW_ORDER: RegionId[] = ['lungs', 'metabolism', 'bones', 'heart', 'kidneys', 'immune', 'brain', 'eyes', 'balance']
+const DRAW_ORDER: RegionId[] = [
+  'wholeBody',
+  'lungs',
+  'metabolism',
+  'bones',
+  'heart',
+  'kidneys',
+  'immune',
+  'brain',
+  'eyes',
+  'balance',
+]
 
 /**
  * The shapes of one body system. Measured systems are filled in their status
  * colour; systems without an indicator are dashed outlines. The bones are the
  * whole skeleton.
  */
-function Organ({ id, hollow }: { id: RegionId; hollow: boolean }) {
+function Organ({ id, hollow, emphasis }: { id: RegionId; hollow: boolean; emphasis: boolean }) {
   const paint = hollow
     ? ({ fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeDasharray: '3 2.5' } as const)
     : ({ fill: 'currentColor', stroke: DEEP, strokeOpacity: 0.5, strokeWidth: 1 } as const)
   const fold = { fill: 'none', stroke: DEEP, strokeOpacity: 0.45, strokeWidth: 1.3, strokeLinecap: 'round' } as const
 
   switch (id) {
+    case 'wholeBody':
+      // The body keeps its blue fill; its outline carries the status and the selection.
+      return (
+        <g
+          fill="url(#body-fill)"
+          stroke="currentColor"
+          strokeWidth={emphasis ? 3 : 1.5}
+          strokeLinejoin="round"
+          className="transition-[stroke-width] duration-300"
+        >
+          <path d={BODY_OUTLINE} />
+          <ellipse cx={CENTRE} cy="56" rx="36" ry="48" />
+        </g>
+      )
     case 'brain':
       return (
         <>
@@ -376,11 +405,6 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
               <stop offset="1" stopColor="#1f5a9c" stopOpacity="0.5" />
             </radialGradient>
           </defs>
-          <g fill="url(#body-fill)" stroke="rgb(140 190 240 / 0.45)" strokeWidth="1.5" strokeLinejoin="round">
-            <path d={BODY_OUTLINE} />
-            <ellipse cx={CENTRE} cy="56" rx="36" ry="48" />
-          </g>
-
           {DRAW_ORDER.map((id) => {
             const region = BODY_REGIONS.find((r) => r.id === id)!
             const tone = tones[id]
@@ -388,9 +412,34 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
             const active = id === selectedId || id === hoveredId
             const attention = needsAttention(tone)
             // The skeleton stays bone white until something is flagged; organs always carry their status colour.
-            const color = id === 'bones' && !attention ? (tone === 'stale' ? 'var(--color-muted)' : BONE_WHITE) : TONE[tone].color
+            // The body outline stays pale blue and turns white when selected.
+            const resting =
+              id === 'bones'
+                ? tone === 'stale'
+                  ? 'var(--color-muted)'
+                  : BONE_WHITE
+                : id === 'wholeBody'
+                  ? active
+                    ? 'var(--color-ink)'
+                    : BODY_EDGE
+                  : null
+            const color = resting !== null && !attention ? resting : TONE[tone].color
             const strength =
-              id === 'bones' ? 0.94 : active ? 1 : attention ? 0.95 : tone === 'nominal' ? (id === 'heart' ? 0.9 : 0.7) : tone === 'stale' ? 0.45 : 0.85
+              id === 'wholeBody'
+                ? 1
+                : id === 'bones'
+                  ? 0.94
+                  : active
+                    ? 1
+                    : attention
+                      ? 0.95
+                      : tone === 'nominal'
+                        ? id === 'heart'
+                          ? 0.9
+                          : 0.7
+                        : tone === 'stale'
+                          ? 0.45
+                          : 0.85
             return (
               <g
                 key={id}
@@ -422,10 +471,12 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
                   />
                 )}
                 <g opacity={strength} className="transition-[opacity,color] duration-500">
-                  <Organ id={id} hollow={tone === 'unmonitored'} />
+                  <Organ id={id} hollow={tone === 'unmonitored'} emphasis={active || attention} />
                 </g>
-                {/* A generous target, since some systems are drawn very small. */}
-                <circle cx={marker.x} cy={marker.y} r={Math.max(marker.r, 11)} fill="transparent" />
+                {/* A generous target, since some systems are drawn very small. The body is its own target. */}
+                {id !== 'wholeBody' && (
+                  <circle cx={marker.x} cy={marker.y} r={Math.max(marker.r, 11)} fill="transparent" />
+                )}
               </g>
             )
           })}
@@ -445,7 +496,7 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
                     fill="none"
                     className="stroke-ink transition-opacity duration-200"
                     strokeWidth="2"
-                    opacity={active ? 1 : 0}
+                    opacity={active && region.id !== 'wholeBody' ? 1 : 0}
                   />
                   {needsAttention(tone) && (
                     <>

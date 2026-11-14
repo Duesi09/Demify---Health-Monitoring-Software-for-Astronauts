@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { resetManualReadings } from '@/app/actions'
 import { regionForMetric, type RegionId } from '@/domain/bodyRegions'
 import { evaluateIndexed, indexReadings, missionStatuses } from '@/domain/engine'
+import { RADIATION_LIMITS } from '@/domain/metrics'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
 import { BodyMap } from './BodyMap'
+import { DoseBar } from './DoseBar'
 import { FindingsList } from './FindingsList'
 import { HazardRow } from './HazardRow'
 import { MetricDetail } from './MetricDetail'
@@ -149,6 +151,16 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
                 index={index}
                 selected={tile.id === selected.id}
                 order={i}
+                aside={
+                  tile.id === 'radiationDose' ? (
+                    <DoseBar
+                      label="Mission dose"
+                      dose={evaluation.radiation.missionDose}
+                      limit={RADIATION_LIMITS.career}
+                      limitName="career limit"
+                    />
+                  ) : undefined
+                }
                 onSelect={() => selectMetric(tile.metrics[0])}
               />
             ))}

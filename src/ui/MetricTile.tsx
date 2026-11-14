@@ -17,6 +17,8 @@ interface Props {
   selected: boolean
   /** Position in the grid, for the staggered entrance. */
   order: number
+  /** Extra content beside the usual tile; the tile then takes a full row when there is room. */
+  aside?: React.ReactNode
   onSelect: () => void
 }
 
@@ -26,7 +28,7 @@ function describe(daysSince: number | null): string {
   return `Last measured ${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago`
 }
 
-export function MetricTile({ tile, evaluation, index, selected, order, onSelect }: Props) {
+export function MetricTile({ tile, evaluation, index, selected, order, aside, onSelect }: Props) {
   const playing = usePlaying()
   const primary = evaluation.assessments[tile.metrics[0]]
   const def = METRICS[primary.metric]
@@ -64,7 +66,7 @@ export function MetricTile({ tile, evaluation, index, selected, order, onSelect 
       aria-pressed={selected}
       className={`card rise relative flex flex-col gap-3 overflow-hidden p-5 text-left transition-[translate,box-shadow] duration-300 ease-(--ease-soft) hover:-translate-y-1 ${
         selected ? 'ring-2 ring-series-1' : ''
-      }`}
+      } ${aside ? '@3xl:col-span-3 @3xl:flex-row @3xl:items-center @3xl:gap-10' : ''}`}
       style={{ '--i': 6 + order } as React.CSSProperties}
     >
       {/* A wash of the status colour marks tiles that need attention. */}
@@ -73,6 +75,7 @@ export function MetricTile({ tile, evaluation, index, selected, order, onSelect 
         style={{ background: TONE[tone].color, opacity: needsAttention(tone) ? 0.22 : 0 }}
         aria-hidden="true"
       />
+      <span className="relative flex min-w-0 flex-col gap-3 @3xl:flex-1">
       <span className="relative flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-ink-2">{tile.label}</span>
         <StatusBadge tone={tone} />
@@ -95,6 +98,8 @@ export function MetricTile({ tile, evaluation, index, selected, order, onSelect 
         <RangeBar metric={primary.metric} value={judged} />
       </span>
       <span className="relative text-xs text-muted">{note}</span>
+      </span>
+      {aside && <span className="relative block min-w-0 @3xl:flex-[2]">{aside}</span>}
     </button>
   )
 }

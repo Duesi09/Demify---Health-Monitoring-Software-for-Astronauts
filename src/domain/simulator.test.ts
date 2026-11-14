@@ -73,4 +73,27 @@ describe('simulateMission', () => {
     expect(idsOn(95).filter((id) => id.startsWith('pattern:'))).toEqual([])
     expect(idsOn(MISSION_DAYS).filter((id) => id.startsWith('pattern:'))).toEqual([])
   })
+
+  it('contains a solar particle event on days 23 to 25 and background radiation otherwise', () => {
+    expect(evaluate(readings, 22).assessments.radiationDose.status).toBe('nominal')
+    expect(evaluate(readings, 23).assessments.radiationDose.status).toBe('watch')
+    expect(evaluate(readings, 24).assessments.radiationDose.status).toBe('act')
+    expect(idsOn(24)).toContain('range:radiationDose')
+    expect(evaluate(readings, 25).assessments.radiationDose.status).toBe('watch')
+    expect(evaluate(readings, 26).assessments.radiationDose.status).toBe('nominal')
+  })
+
+  it('stays well inside the career limit over the whole mission', () => {
+    const { missionDose } = evaluate(readings, MISSION_DAYS).radiation
+    // About 1.8 mSv a day for 180 days plus the storm.
+    expect(missionDose).toBeGreaterThan(300)
+    expect(missionDose).toBeLessThan(380)
+    expect(idsOn(MISSION_DAYS)).not.toContain('limit:radiationCareer')
+  })
+
+  it('records no dose before launch', () => {
+    const before = readings.filter((r) => r.metric === 'radiationDose' && r.day < 1)
+    expect(before.length).toBeGreaterThan(0)
+    expect(before.every((r) => r.value === 0)).toBe(true)
+  })
 })

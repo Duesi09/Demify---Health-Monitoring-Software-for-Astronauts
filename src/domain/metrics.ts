@@ -8,6 +8,20 @@ import type { MetricDef, MetricId } from './types'
  * (named per metric in `reference`). They are not flight rules and would need
  * sign-off from flight surgeons before real use.
  */
+/** Daily dose, in mSv, from which a reading counts as raised above the background. */
+export const RADIATION_RAISED_FROM = 3
+
+/**
+ * NASA's exposure limits for spaceflight radiation, as effective dose in mSv
+ * (NASA-STD-3001 Volume 1, requirements V1 4030 and V1 4031).
+ */
+export const RADIATION_LIMITS = {
+  /** Total over an astronaut's career. */
+  career: 600,
+  /** From a single solar particle event. */
+  event: 250,
+} as const
+
 export const METRICS: Record<MetricId, MetricDef> = {
   restingHr: {
     id: 'restingHr',
@@ -557,6 +571,50 @@ export const METRICS: Record<MetricId, MetricDef> = {
     howToMeasure:
       'Read the partial pressure of CO₂ from the cabin atmosphere monitor nearest to where you work and sleep.',
     reference: 'NASA spacecraft maximum allowable concentration for CO₂ (5.3 mmHg long-term) and ISS operating practice of keeping it lower. Lower thresholds are project defaults.',
+  },
+  radiationDose: {
+    id: 'radiationDose',
+    label: 'Radiation dose',
+    unit: 'mSv/day',
+    decimals: 1,
+    evaluateOn: 'latest',
+    bands: [
+      { below: RADIATION_RAISED_FROM, status: 'nominal', label: 'Background level' },
+      {
+        below: 8,
+        status: 'watch',
+        label: 'Raised radiation',
+        action:
+          'Check for a solar particle event alert. Stay in the well-shielded parts of the vehicle and read your dosimeter again in one hour.',
+      },
+      {
+        below: 20,
+        status: 'act',
+        label: 'Solar particle event',
+        action:
+          'Go to the storm shelter now and stay there until the all-clear. Read your dosimeter every hour and tell the Crew Medical Officer.',
+      },
+      {
+        below: Infinity,
+        status: 'critical',
+        label: 'Severe solar particle event',
+        action:
+          'Stay in the storm shelter and contact the flight surgeon. Watch for nausea, vomiting or unusual tiredness, the first signs of radiation sickness.',
+      },
+    ],
+    staleAfterDays: 1,
+    inputMin: 0,
+    inputMax: 500,
+    inputStep: 0.1,
+    scale: [0, 24],
+    hazard: 'radiation',
+    nasaRisk: 'Risk of Radiation-Induced Cancers',
+    whyInSpace:
+      "Outside Earth's magnetic field and atmosphere, galactic cosmic rays arrive as a steady background that shielding hardly stops, and solar particle events add bursts lasting hours to days. Radiation exposure increases cancer risk, damages the central nervous system and can alter cognitive function.",
+    howToMeasure:
+      'Read the dose of the last 24 hours from your personal dosimeter at the same time every day.',
+    reference:
+      "The daily ranges are project defaults. The background is modelled on the 1.8 mSv per day measured by the Curiosity rover's RAD instrument on the cruise to Mars. Limits from NASA-STD-3001 Volume 1: 600 mSv over a career, 250 mSv per solar particle event.",
   },
 }
 

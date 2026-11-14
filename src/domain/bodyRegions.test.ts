@@ -53,6 +53,21 @@ describe('body regions', () => {
     expect(regionStatus(region('lungs'), evaluation)).toBe('critical')
   })
 
+  it('shows the solar particle event on the whole body', () => {
+    expect(regionStatus(region('wholeBody'), evaluate(mission, 20))).toBe('nominal')
+    expect(regionStatus(region('wholeBody'), evaluate(mission, 24))).toBe('act')
+  })
+
+  it('raises the whole body when a dose limit is reached, even at background level', () => {
+    const readings: Reading[] = []
+    for (let day = -13; day <= 130; day++) {
+      readings.push({ day, metric: 'radiationDose', value: day < 1 ? 0 : 2.9, source: 'simulated' })
+    }
+    const evaluation = evaluate(readings, 130)
+    expect(evaluation.assessments.radiationDose.status).toBe('nominal')
+    expect(regionStatus(region('wholeBody'), evaluation)).toBe('watch')
+  })
+
   it('is stale when none of its indicators has a recent reading', () => {
     // Blood pressure is not measured on days 86 to 90, but heart rate still is.
     expect(regionStatus(region('heart'), evaluate(mission, 90))).toBe('nominal')

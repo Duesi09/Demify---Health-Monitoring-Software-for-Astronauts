@@ -16,6 +16,7 @@ export type RegionId =
   | 'metabolism'
   | 'kidneys'
   | 'bones'
+  | 'wholeBody'
 
 export interface BodyRegion {
   id: RegionId
@@ -170,6 +171,21 @@ export const BODY_REGIONS: BodyRegion[] = [
     hazard: 'gravity',
     nasaRisk: 'Risk of Spaceflight-Induced Bone Changes',
   },
+  {
+    id: 'wholeBody',
+    label: 'Whole body',
+    role: 'Every tissue absorbs radiation, so the dose is counted for the body as a whole.',
+    inSpace:
+      "Outside Earth's magnetic field and atmosphere, galactic cosmic rays arrive as a steady background and solar particle events add sudden bursts. Radiation exposure increases cancer risk, damages the central nervous system and can alter cognitive function.",
+    protect: [
+      'Read your personal dosimeter every day and log the dose.',
+      'When a solar particle event is announced, go to the storm shelter and stay until the all-clear.',
+      'Sleep and rest in the best-shielded part of the vehicle.',
+    ],
+    metrics: ['radiationDose'],
+    hazard: 'radiation',
+    nasaRisk: 'Risk of Radiation-Induced Cancers',
+  },
 ]
 
 export function regionForMetric(metric: MetricId): BodyRegion {
@@ -181,7 +197,7 @@ export type GroupStatus = Status | 'stale' | 'unmonitored'
 
 /**
  * The status of a group of indicators: the worst of the indicators and of any
- * pattern finding that involves one of them.
+ * pattern or limit finding that involves one of them.
  */
 export function groupStatus(metrics: MetricId[], evaluation: Evaluation): GroupStatus {
   if (metrics.length === 0) return 'unmonitored'
@@ -190,7 +206,8 @@ export function groupStatus(metrics: MetricId[], evaluation: Evaluation): GroupS
 
   let status = fresh.reduce<Status>((s, m) => worst(s, evaluation.assessments[m].status), 'nominal')
   for (const finding of evaluation.findings) {
-    if (finding.kind === 'pattern' && finding.metrics.some((m) => fresh.includes(m))) {
+    const acrossReadings = finding.kind === 'pattern' || finding.kind === 'limit'
+    if (acrossReadings && finding.metrics.some((m) => fresh.includes(m))) {
       status = worst(status, finding.status)
     }
   }

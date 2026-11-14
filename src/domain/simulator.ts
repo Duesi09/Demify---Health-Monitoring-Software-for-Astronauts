@@ -20,6 +20,8 @@ interface Profile {
   max: number
   /** Rounding step of the instrument, e.g. 0.1 for a thermometer. */
   step: number
+  /** Spread before launch, when it differs from the spread in flight. */
+  groundNoise?: number
 }
 
 const PROFILE: Record<MetricId, Profile> = {
@@ -33,6 +35,8 @@ const PROFILE: Record<MetricId, Profile> = {
   mood: { base: 4.2, noise: 0.45, inFlightShift: -0.2, min: 1, max: 5, step: 1 },
   exerciseMin: { base: 110, noise: 12, inFlightShift: 15, min: 0, max: 240, step: 5 },
   cabinCo2: { base: 0.4, noise: 0.15, inFlightShift: 2, min: 0.2, max: 9, step: 0.1 },
+  // On the ground the dose is practically zero; in flight it comes from `scenarioOffset`.
+  radiationDose: { base: 0, noise: 0.12, inFlightShift: 0, min: 0, max: 500, step: 0.1, groundNoise: 0 },
 }
 
 /** Days it takes for the body to settle into the in-flight shift. */
@@ -43,6 +47,22 @@ function bump(day: number, start: number, end: number, ramp: number): number {
   if (day < start || day > end) return 0
   return Math.min(1, (day - start + 1) / ramp, (end - day + 1) / ramp)
 }
+
+/**
+ * Daily dose in deep space from galactic cosmic rays, in mSv. Curiosity's RAD
+ * instrument measured about 1.8 mSv per day on the cruise to Mars.
+ */
+const DEEP_SPACE_BACKGROUND = 1.8
+
+/** A solar particle event: mission day and the dose it adds that day, in mSv. */
+const SOLAR_STORM: Record<number, number> = { 23: 2.8, 24: 11.7, 25: 3.4 }
+
+/**
+ * Indicators added after the mission was first scripted. They draw their
+ * random variation from a generator of their own, so adding one leaves every
+ * value of the other indicators exactly as it was.
+ */
+const LATE_METRICS = new Set<MetricId>(['radiationDose'])
 
 /** Mission days on which the crew member has a heart attack. */
 export const HEART_ATTACK_DAYS = [97, 168]
@@ -97,6 +117,9 @@ function scenarioOffset(metric: MetricId, day: number): number {
       return 6 * deconditioning + 27 * attack - 8 * afterAttack
     case 'spo2':
       return -9.5 * airFault - 6 * attack - 2 * afterAttack
+    case 'radiationDose':
+      // The background applies in full from launch; days 23 to 25 add a solar storm.
+      return day >= 1 ? DEEP_SPACE_BACKGROUND + (SOLAR_STORM[day] ?? 0) : 0
     case 'glucose':
       // Day 153: a missed meal before the morning measurement.
       return day === 153 ? -36 : 0
@@ -138,6 +161,7 @@ function roundTo(value: number, step: number): number {
 
 export function simulateMission(seed = 2026): Reading[] {
   const random = seededRandom(seed)
+  const lateRandom = seededRandom(seed + 7919)
   const readings: Reading[] = []
   const metrics = Object.keys(PROFILE) as MetricId[]
 
@@ -147,7 +171,8 @@ export function simulateMission(seed = 2026): Reading[] {
       const p = PROFILE[metric]
       // Draw noise for every slot, measured or not, so that skipping a
       // measurement never shifts the values of later days.
-      const noise = gaussian(random) * p.noise
+      const spread = day < 1 && p.groundNoise !== undefined ? p.groundNoise : p.noise
+      const noise = gaussian(LATE_METRICS.has(metric) ? lateRandom : random) * spread
       if (!isMeasured(metric, day)) continue
       const raw = p.base + p.inFlightShift * adapted + scenarioOffset(metric, day) + noise
       const value = roundTo(Math.min(p.max, Math.max(p.min, raw)), p.step)

@@ -52,6 +52,7 @@ const RISK_PAGES: Record<string, string> = {
   'Risk of Altered Immune System Responses': 'https://www.nasa.gov/reference/risk-of-altered-immune-system-responses/',
   'Risk of Altered Sensorimotor and Vestibular Function':
     'https://www.nasa.gov/reference/risk-of-altered-sensorimotor-and-vestibular-function/',
+  'Risk of Radiation-Induced Cancers': 'https://www.nasa.gov/reference/risk-of-radiation-induced-cancers/',
   'Risk of Acute and Chronic Carbon Dioxide Exposure':
     'https://www.nasa.gov/directorates/esdmd/hhp/risk-of-acute-and-chronic-carbon-dioxide-exposure/',
 }

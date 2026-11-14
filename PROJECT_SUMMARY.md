@@ -18,12 +18,13 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 
 | Bereich | Umsetzung |
 |---|---|
-| Messwerte | Ruhepuls, Blutdruck, Körpertemperatur, Blutsauerstoff, Nüchternzucker, Schlaf, Stimmung, Training, Kabinen-CO₂ |
+| Messwerte | Ruhepuls, Blutdruck, Körpertemperatur, Blutsauerstoff, Nüchternzucker, Schlaf, Stimmung, Training, Kabinen-CO₂, Strahlendosis |
+| Strahlung | Tagesdosis vom Dosimeter, Missionssumme gegen NASAs Karriere-Limit von 600 mSv und bei einem Sonnensturm die Ereignisdosis gegen NASAs Limit von 250 mSv pro Ereignis. Die Dosis ist simuliert (rund 1,8 mSv pro Tag wie auf dem Flug von Curiosity zum Mars) |
 | Herzmonitor | Herzschlag-Kurve im Takt des gemessenen Pulses und Druckwelle zwischen diastolischem und systolischem Wert, daneben Puls, Blutdruck, Sauerstoff und Temperatur. Die Kurven werden aus den letzten Messwerten gezeichnet und sind kein Live-Sensorsignal |
 | Missions-Zeitleiste | Die ganze Mission als Streifen mit einer Zelle pro Tag in der Farbe des Tagesstatus; der Streifen ist zugleich der Regler |
 | Fünf Hazards | Die fünf NASA-Hazards mit je einem Ring, der zeigt, wie viele zugehörige Messwerte nominal sind |
 | Bereichsbalken | Jeder Messwert zeigt, wo er zwischen Normal-, Watch-, Act- und Critical-Bereich liegt |
-| Körperkarte | Anatomische Figur mit neun Körpersystemen in ihrer Statusfarbe (Gehirn, Augen, Gleichgewicht, Immunsystem, Lunge, Herz, Stoffwechsel, Nieren, Knochen und Muskeln). Die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
+| Körperkarte | Figur mit vollständigem Skelett und zehn Körpersystemen in ihrer Statusfarbe (Gehirn, Augen, Gleichgewicht, Immunsystem, Lunge, Herz, Stoffwechsel, Nieren, Knochen und Muskeln, ganzer Körper für die Strahlung). Die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
 | Triage | Vier Stufen: Nominal, Watch (selbst handeln), Act (Crew Medical Officer), Critical (Flight Surgeon). Jede Stufe hat eigene Farbe und eigene Icon-Form |
 | Baseline-Drift | 7-Tage-Durchschnitt gegen den Vor-Flug-Wert, inklusive Dauer („seit 6 Tagen") |
 | Muster | Möglicher Herzinfarkt (rasender Puls plus Blutdruckspitze oder niedriger Sauerstoff), möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, niedriger Blutsauerstoff plus hohes Kabinen-CO₂ (Störung der Lebenserhaltung), Herz-Kreislauf-Abbau bei Trainingsausfall |
@@ -33,13 +34,13 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 | Demo | Simulierte 180-Tage-Mission mit eingebauten Ereignissen und Zeitraffer |
 | Quellen | Jede Messgröße verlinkt auf die NASA-Seite ihres Hazards und auf die NASA-Seite ihres Risikos |
 
-Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 56 (Störung der Lebenserhaltung), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker).
+Interessante Tage in der Simulation: 24 (Sonnensturm), 42 (CO₂ plus Schlafmangel), 56 (Störung der Lebenserhaltung), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker).
 
 ## Technik
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
-- **Tests:** Vitest, 51 Unit-Tests für Regel-Engine, Simulator, Körperkarte und Datenspeicher.
+- **Tests:** Vitest, 61 Unit-Tests für Regel-Engine, Simulator, Körperkarte und Datenspeicher.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |
@@ -87,7 +88,7 @@ Danach jeweils <http://localhost:3000> öffnen.
 - **Grenzwerte sind Demo-Werte:** Sie stammen aus allgemeinen klinischen Richtlinien, sind keine Flugregeln und keine medizinische Beratung.
 - **Drei Körpersysteme ohne Messwert:** Augen, Gleichgewicht und Nieren sind auf der Karte erklärt, aber noch nicht gemessen. Ein Sehtest kommt in Phase 3.
 - **Herzinfarkt wird nur an Messwerten erkannt:** Die App kennt keine Symptome wie Brustschmerz und kein echtes EKG. Die Regel meldet deshalb einen möglichen Herzinfarkt und fragt nach den Symptomen.
-- **Strahlung fehlt noch:** Der fünfte NASA-Hazard hat bisher keine Messgröße; er kommt mit Phase 4.
+- **Strahlung ist simuliert:** Die Tagesdosis kommt nicht aus einem Detektor oder Datendienst. Nur die beiden Limits (600 mSv und 250 mSv) stammen von der NASA, die Tagesbereiche für Watch und Act sind Demo-Werte.
 
 ## Offene Entscheidungen
 

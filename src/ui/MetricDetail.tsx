@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { formatDay, formatValue } from '@/domain/format'
 import { HAZARDS, riskUrl } from '@/domain/hazards'
-import { METRICS } from '@/domain/metrics'
+import { METRICS, RADIATION_LIMITS } from '@/domain/metrics'
 import { PREFLIGHT_DAYS } from '@/domain/simulator'
 import { STATUS_ORDER, type Evaluation, type MetricId, type Reading } from '@/domain/types'
+import { DoseBar } from './DoseBar'
 import { LogForm } from './LogForm'
 import { RangeBar } from './RangeBar'
 import { StatusBadge } from './status'
@@ -73,6 +74,26 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
           })}
         </div>
       </div>
+
+      {tile.metrics.includes('radiationDose') && (
+        <div className="flex flex-col gap-5">
+          <p className="eyebrow">Accumulated dose</p>
+          <DoseBar
+            label="Mission dose"
+            dose={evaluation.radiation.missionDose}
+            limit={RADIATION_LIMITS.career}
+            limitName="career limit"
+          />
+          {evaluation.radiation.eventDose > 0 && (
+            <DoseBar
+              label="This solar particle event"
+              dose={evaluation.radiation.eventDose}
+              limit={RADIATION_LIMITS.event}
+              limitName="limit for one event"
+            />
+          )}
+        </div>
+      )}
 
       <div>
         <div className="mb-3 flex gap-1 rounded-full bg-page/60 p-1 ring-1 ring-edge w-fit" role="group" aria-label="Period shown">
