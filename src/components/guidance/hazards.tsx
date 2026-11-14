@@ -44,7 +44,6 @@ export function HazardCards() {
                   <Icon size={15} className="shrink-0 text-muted" aria-hidden />
                   {h.name}
                 </h3>
-                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted">Hazard {i + 1} of 5</p>
               </div>
             </div>
             <p className="mt-3 text-sm text-muted">{h.summary}</p>
@@ -57,7 +56,7 @@ export function HazardCards() {
               ))}
             </ul>
             <div className="mt-auto pt-4">
-              <p className="text-[11px] uppercase tracking-wider text-muted">Body systems · {tracked} indicators tracked</p>
+              <p className="text-[11px] text-muted">Body systems · {tracked} indicators tracked</p>
               <ul className="mt-2 flex flex-wrap gap-1">
                 {affected.map((r) => (
                   <li key={r.id}>

@@ -83,7 +83,7 @@ function Numeric({
       data-alarm={alarm?.priority}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/55">
+        <span className="flex items-center gap-1.5 text-[10px] font-medium text-white/55">
           {label}
         </span>
         {limits && (
@@ -261,9 +261,6 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
             <DemoTag />
             <div className="min-w-0">
               <div className="truncate text-[15px] font-medium tracking-[-0.01em] text-white/95 @3xl:text-[17px]">{v.crewName}</div>
-              <div className="text-[9.5px] font-medium uppercase tracking-[0.2em] text-white/45">
-                Crew monitor · {v.crewId.toUpperCase()}
-              </div>
             </div>
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -293,7 +290,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
         {/* ---- alarm message area ---- */}
         <div className="mt-3 flex min-h-8 items-stretch @3xl:mt-4">
           {stale ? (
-            <div className="flex w-full items-center gap-3 rounded-[10px] bg-white/[0.06] px-3 py-1.5 text-[12.5px] font-semibold uppercase tracking-[0.12em] text-[#64d2ff]">
+            <div className="flex w-full items-center gap-3 rounded-[10px] bg-white/[0.06] px-3 py-1.5 text-[12.5px] font-semibold text-[#64d2ff]">
               <span className="@md:hidden">No signal</span>
               <span className="hidden @md:inline">No signal · comms lost</span>
               <span className="ml-auto whitespace-nowrap text-[10px] font-medium tracking-[0.16em] text-white/45">
@@ -312,7 +309,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               </span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {shown.drill && (
-                  <span className="rounded-[4px] bg-black/80 px-1.5 py-0.5 text-[9.5px] uppercase tracking-[0.16em] text-[#ffcc00]">Drill</span>
+                  <span className="rounded-[4px] bg-black/80 px-1.5 py-0.5 text-[9.5px] text-[#ffcc00]">Drill</span>
                 )}
                 {alarmCount > 1 && (
                   <span className="text-[10px] tabular-nums tracking-[0.1em] opacity-80">
@@ -322,7 +319,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               </span>
             </div>
           ) : (
-            <div className="flex w-full items-center px-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/30">
+            <div className="flex w-full items-center px-1 text-[10px] font-medium text-white/30">
               No active alarms
             </div>
           )}
@@ -348,7 +345,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               limits={[String(lim.hrHigh), String(lim.hrLow)]}
               className="order-1 @3xl:col-span-2"
               extra={
-                <div className="mt-0.5 text-[10px] font-medium uppercase leading-snug tracking-[0.14em] text-white/45">
+                <div className="mt-0.5 text-[10px] font-medium leading-snug text-white/45">
                   <span className="whitespace-nowrap @3xl:hidden">{RHYTHM_SHORT[v.rhythm]}</span>
                   <span className="hidden @3xl:inline">{RHYTHM_LABEL[v.rhythm]}</span>
                   {v.pvcPerMin > 0 && <span className="whitespace-nowrap"> · PVC {v.pvcPerMin}/min</span>}
@@ -460,7 +457,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
             {stale && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-[14px] bg-black/55 text-center">
                 <div className="text-[34px] font-extralight tracking-[-0.02em] text-white @3xl:text-[48px]">No signal</div>
-                <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-[#64d2ff]">
+                <div className="text-[10px] font-medium text-[#64d2ff]">
                   Comms lost · last sample {v.t.slice(11, 19)} UTC
                 </div>
               </div>

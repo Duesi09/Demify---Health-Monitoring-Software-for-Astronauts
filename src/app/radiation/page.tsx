@@ -86,7 +86,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-muted">Solar radiation storm</span>
+            <span className="text-xs text-muted">Solar radiation storm</span>
             <AlertTriangle size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">{level != null ? `S${level}` : "—"}</p>
@@ -98,7 +98,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         </Card>
         <Card>
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-muted">Proton flux ≥10 MeV</span>
+            <span className="text-xs text-muted">Proton flux ≥10 MeV</span>
             <Zap size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">
@@ -109,7 +109,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         </Card>
         <Card>
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-muted">Solar X-ray flare class</span>
+            <span className="text-xs text-muted">Solar X-ray flare class</span>
             <Sun size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">{sw?.data.flareClass ?? "—"}</p>
@@ -117,7 +117,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         </Card>
         <Card>
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-muted">Est. crew dose rate</span>
+            <span className="text-xs text-muted">Est. crew dose rate</span>
             <ShieldCheck size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">

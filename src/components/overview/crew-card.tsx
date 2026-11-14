@@ -67,14 +67,12 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
-            {sameRole ? `Crew · ${id.toUpperCase()}` : role}
-          </p>
-          <h3 id={`crew-${id}-name`} className="mt-1 text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">
+          <h3 id={`crew-${id}-name`} className="text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">
             <Link href={`/crew/${id}`} className="hover:text-accent focus-visible:text-accent">
               {name}
             </Link>
           </h3>
+          {!sameRole && <p className="mt-0.5 text-sm text-muted">{role}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <StatusBadge status={status} size="md" flash={alarmLevel === "high"} />
@@ -102,7 +100,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
       )}
 
       <div className="mt-5">
-        <h4 className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Body regions</h4>
+        <h4 className="text-[11px] font-medium text-muted">Body regions</h4>
         <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Body regions for ${name}`}>
           {(Object.keys(BODY_REGIONS) as BodyRegionId[]).map((r) => {
             const s = regions[r] ?? "unknown";
@@ -117,7 +115,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
       </div>
 
       <div className="mt-5 flex-1">
-        <h4 className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Top findings</h4>
+        <h4 className="text-[11px] font-medium text-muted">Top findings</h4>
         {findings.length ? (
           <ul className="mt-2 space-y-1.5 text-[13px] leading-snug">
             {findings.map((f) => (

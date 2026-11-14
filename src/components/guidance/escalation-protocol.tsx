@@ -116,7 +116,7 @@ export function EscalationProtocol() {
                   </a>
                   {flag && (
                     <span className="tabular text-xs text-critical">
-                      <span className="font-medium uppercase tracking-wider text-muted">Flag </span>
+                      <span className="font-medium text-muted">Flag </span>
                       {flag}
                     </span>
                   )}

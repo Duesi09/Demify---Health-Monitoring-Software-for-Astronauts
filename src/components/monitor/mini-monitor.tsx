@@ -71,7 +71,7 @@ export function MiniMonitor({ vitals: v }: { vitals: LiveVitals }) {
             {v.scenario ? (
               <DrillTag scenario={v.scenario} compact className="!h-[15px] !px-1 !text-[8.5px]" />
             ) : (
-              <span className="text-[9px] font-medium uppercase tracking-[0.16em]" style={{ color: MONITOR_COLOR.ecg }}>
+              <span className="text-[9px] font-medium" style={{ color: MONITOR_COLOR.ecg }}>
                 II
               </span>
             )}
@@ -84,19 +84,19 @@ export function MiniMonitor({ vitals: v }: { vitals: LiveVitals }) {
         {/* numerics */}
         <div className="flex shrink-0 items-center gap-3 pl-1 pr-3.5 pt-1 tabular-nums">
           <div style={{ color: MONITOR_COLOR.ecg }}>
-            <div className="text-[8.5px] font-medium uppercase tracking-[0.18em] text-white/50">HR</div>
+            <div className="text-[8.5px] font-medium text-white/50">HR</div>
             <div className="text-[36px] font-extralight leading-[0.95] tracking-[-0.045em]">
               <Val>{fmt(v.hr)}</Val>
             </div>
           </div>
           <div className="hidden @[17rem]:block" style={{ color: MONITOR_COLOR.abp }}>
-            <div className="text-[8.5px] font-medium uppercase tracking-[0.18em] text-white/50">ABP</div>
+            <div className="text-[8.5px] font-medium text-white/50">ABP</div>
             <div className="text-[17px] font-light leading-none tracking-[-0.02em]">
               <Val>{`${fmt(v.sys)}/${fmt(v.dia)}`}</Val>
             </div>
           </div>
           <div style={{ color: MONITOR_COLOR.pleth }}>
-            <div className="text-[8.5px] font-medium uppercase tracking-[0.18em] text-white/50">SpO₂</div>
+            <div className="text-[8.5px] font-medium text-white/50">SpO₂</div>
             <div className="text-[22px] font-extralight leading-none tracking-[-0.03em]">
               <Val>{fmt(v.spo2)}</Val>
             </div>
@@ -114,7 +114,7 @@ export function MiniMonitor({ vitals: v }: { vitals: LiveVitals }) {
             <AlarmPrefix alarm={top} /> {top.text}
           </span>
         ) : (
-          <span className="truncate text-[8.5px] font-medium uppercase tracking-[0.18em] text-white/30">No active alarms</span>
+          <span className="truncate text-[8.5px] font-medium text-white/30">No active alarms</span>
         )}
         {more > 0 && (
           <span className="shrink-0 text-[9px] font-medium tabular-nums tracking-[0.08em] text-white/55" aria-hidden>

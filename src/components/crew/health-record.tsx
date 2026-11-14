@@ -13,9 +13,9 @@ function SourceText({ row }: { row: RecordRow }) {
   const real = row.source !== "simulated";
   return (
     <span
-      className={`inline-flex items-center rounded-[3px] px-1.5 py-px text-[10px] font-medium uppercase tracking-[0.07em] ${
-        real ? "border border-accent/50 text-accent" : "border border-dashed border-muted/50 text-muted"
-      }`}
+      className={`inline-flex items-center rounded-[3px] px-1.5 py-px text-[10px] font-medium ${
+ real ?"border border-accent/50 text-accent":"border border-dashed border-muted/50 text-muted"
+ }`}
     >
       {row.sourceLabel}
     </span>
@@ -78,7 +78,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
             drill sample during a training scenario), status, normal range, pre-flight baseline, change, trend, time of
             last measurement and data source
           </caption>
-          <thead className="bg-surface-2 text-[11px] uppercase tracking-[0.08em] text-muted">
+          <thead className="bg-surface-2 text-[11px] text-muted">
             <tr>
               <th scope="col" className="px-3 py-2.5 font-medium">Indicator</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">Current value</th>
@@ -97,7 +97,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
                 <th
                   scope="colgroup"
                   colSpan={9}
-                  className="bg-surface px-3 pb-1.5 pt-4 text-xs font-semibold uppercase tracking-[0.12em] text-fg"
+                  className="bg-surface px-3 pb-1.5 pt-4 text-xs font-semibold text-fg"
                 >
                   {g.title}
                 </th>
@@ -150,7 +150,7 @@ export function HealthRecord({ rows }: { rows: RecordRow[] }) {
       <div className="space-y-6 sm:hidden">
         {groups.map((g) => (
           <section key={g.id} aria-labelledby={`rec-${g.id}`}>
-            <h3 id={`rec-${g.id}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.12em]">
+            <h3 id={`rec-${g.id}`} className="mb-2 text-xs font-semibold">
               {g.title}
             </h3>
             <ul className="space-y-2">

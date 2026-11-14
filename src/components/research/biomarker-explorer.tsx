@@ -182,14 +182,14 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
 
         <aside className="space-y-3 text-sm">
           <div className="rounded-lg border border-border bg-surface-2 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted">
+            <p className="text-[11px] text-muted">
               Why it matters in space{info ? ` · ${info.system}` : ""}
             </p>
             <p className="mt-1.5 leading-relaxed">{info?.why ?? panel.data.description}</p>
           </div>
           {clinical && (
             <div className="rounded-lg border border-border p-3">
-              <p className="text-[11px] uppercase tracking-wider text-muted">Outside lab range</p>
+              <p className="text-[11px] text-muted">Outside lab range</p>
               {outOfRange.length === 0 ? (
                 <p className="mt-1.5 text-muted">All draws within the reported reference range.</p>
               ) : (
@@ -211,7 +211,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
           )}
           {analyte.flags && analyte.flags.length > 0 && (
             <div className="rounded-lg border border-border p-3">
-              <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
+              <p className="flex items-center gap-1.5 text-[11px] text-muted">
                 <FileWarning size={12} aria-hidden /> Data-quality notes
               </p>
               <ul className="mt-1.5 space-y-1.5 text-xs">

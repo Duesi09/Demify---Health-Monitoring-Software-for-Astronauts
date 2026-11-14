@@ -56,7 +56,7 @@ export function VitalTile({ title, icon: Icon, parts, status, source, chart }: V
       className="flex min-w-0 flex-col rounded-[22px] border border-border/70 bg-surface/80 p-5"
     >
       <header className="flex items-start justify-between gap-2">
-        <h3 id={`vital-${parts[0].id}`} className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
+        <h3 id={`vital-${parts[0].id}`} className="flex items-center gap-2 text-[11px] font-medium text-muted">
           <Icon size={15} aria-hidden />
           {title}
         </h3>

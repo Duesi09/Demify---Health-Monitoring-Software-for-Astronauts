@@ -35,7 +35,7 @@ function Stat({
   return (
     <section className="flex min-w-0 flex-col rounded-[24px] border border-border/70 bg-surface p-5 md:p-6">
       <div className="flex items-center justify-between gap-2 text-muted">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.2em]">{label}</h2>
+        <h2 className="text-[11px] font-medium">{label}</h2>
         {icon}
       </div>
       <p className="mt-4 text-4xl font-light leading-none tracking-[-0.03em] tabular md:text-5xl">
@@ -106,10 +106,7 @@ export default async function OverviewPage() {
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
         <div className="min-w-0 max-w-3xl">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted">
-            Overview · Mission day {day} · {mission.name}
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">Crew health.</h1>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">Crew health.</h1>
           <p className="mt-3 text-base leading-relaxed text-muted md:text-lg">
             {longDelay
               ? `At ${formatDelay(mission.commDelaySeconds)} one-way signal delay, ground support cannot respond in real time. The crew assesses itself first: every crew member's status, what needs attention and what to do.`
@@ -181,15 +178,10 @@ export default async function OverviewPage() {
       <section aria-labelledby="crew-heading">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted">Crew status · live</p>
-            <h2 id="crew-heading" className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
+            <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
               Every crew member, beat by beat.
             </h2>
           </div>
-          <p className="max-w-md text-xs text-muted">
-            Demo monitors update every 2 s. Open a crew member&apos;s monitor for the full bedside view, the health
-            record and training scenarios.
-          </p>
         </div>
         <CrewGrid crew={crew} initialVitals={initialVitals} />
       </section>

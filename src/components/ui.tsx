@@ -72,7 +72,7 @@ export function StatusBadge({
         : "h-5 gap-1 px-1.5 text-[10.5px]";
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-[3px] font-semibold uppercase leading-none tracking-[0.07em] ${dims} ${BADGE_STYLE[status]} ${flash && status === "critical" ? "alarm-flash" : ""} ${className}`}
+      className={`inline-flex shrink-0 items-center rounded-[3px] font-semibold leading-none ${dims} ${BADGE_STYLE[status]} ${flash && status ==="critical"?"alarm-flash":""} ${className}`}
     >
       <Icon size={size === "md" ? 13 : size === "xs" ? 10 : 11} strokeWidth={2.5} aria-hidden />
       {label ?? STATUS_LABEL[status]}
@@ -94,21 +94,21 @@ const TAG_SIZE = {
  * Never add a coloured dot; if it carries a status, use StatusBadge.
  */
 export function tagClass(size: keyof typeof TAG_SIZE = "sm", interactive = false): string {
-  return `inline-flex shrink-0 items-center rounded-[3px] border border-border bg-surface-2 font-semibold uppercase leading-none tracking-[0.07em] text-muted ${TAG_SIZE[size]} ${
-    interactive
-      ? "transition-colors hover:border-muted/60 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-      : ""
-  }`;
+  return `inline-flex shrink-0 items-center rounded-[3px] border border-border bg-surface-2 font-semibold leading-none text-muted ${TAG_SIZE[size]} ${
+ interactive
+ ?"transition-colors hover:border-muted/60 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+ :""
+ }`;
 }
 
 /** Selected state for a squared filter chip (`aria-pressed`): inverted, not coloured. */
-export const TAG_SELECTED = "border-fg! bg-fg! text-bg!";
+export const TAG_SELECTED ="border-fg! bg-fg! text-bg!";
 
 /**
  * Squared segmented control in the monitor style: one bordered strip of
- * uppercase keys divided by hairlines, the selected key inverted (never a
- * floating rounded "pill" on a tray). Controlled and hook-free, so it can be
- * rendered from any client component. `role` picks the ARIA pattern:
+ * keys divided by hairlines, the selected key inverted (never a
+ * floating rounded"pill"on a tray). Controlled and hook-free, so it can be
+ * rendered from any client component.`role` picks the ARIA pattern:
  * "radiogroup" for a view/axis switch, "tablist" for switching content.
  * It is a grid with one column per option; pass e.g. `max-sm:grid-cols-2`
  * in `className` to fold long strips on phones (hairlines stay intact).
@@ -149,9 +149,9 @@ export function Segmented<T extends string>({
             {...(itemRole === "tab" ? { "aria-selected": on } : { "aria-checked": on })}
             disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase leading-none tracking-[0.07em] transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed ${
-              on ? "bg-fg text-bg" : "bg-surface-2 text-muted hover:bg-surface hover:text-fg"
-            }`}
+            className={`inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap px-2.5 text-[11px] font-semibold leading-none transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed ${
+ on ?"bg-fg text-bg":"bg-surface-2 text-muted hover:bg-surface hover:text-fg"
+ }`}
           >
             {o.label}
           </button>

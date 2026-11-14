@@ -105,7 +105,7 @@ export function AlarmPrefix({ alarm }: { alarm: MonitorAlarm }) {
 /* Tags (squared, uppercase; never rounded pills)                             */
 /* ------------------------------------------------------------------------- */
 
-const TAG = "inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 text-[9.5px] font-semibold uppercase leading-none tracking-[0.14em]";
+const TAG = "inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 text-[9.5px] font-semibold leading-none";
 
 /** Solid, permanent DEMO tag (like a bedside monitor in demo mode). */
 export function DemoTag({ className = "" }: { className?: string }) {

@@ -71,7 +71,7 @@ export function Findings({
                   <div className="flex flex-wrap items-center gap-1.5">
                     {a.drill && <DrillTag label="Drill" />}
                     {a.escalate && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-critical">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-critical">
                         <OctagonAlert size={11} aria-hidden /> Escalate
                       </span>
                     )}
@@ -80,9 +80,9 @@ export function Findings({
                 </div>
                 <p className="mt-1.5 text-sm">{a.finding}</p>
                 {a.drill ? (
-                  <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">training scenario value · not a real emergency</p>
+                  <p className="mt-1 text-[11px] text-muted">training scenario value · not a real emergency</p>
                 ) : (
-                  src === "simulated" && <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">simulated value</p>
+                  src === "simulated" && <p className="mt-1 text-[11px] text-muted">simulated value</p>
                 )}
                 {a.actions.length > 0 && (
                   <ul className="mt-3 space-y-1 text-sm text-muted">

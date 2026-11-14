@@ -236,7 +236,7 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
 function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="rounded-lg bg-surface-2 p-3">
-      <p className="text-[11px] uppercase tracking-wider text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular">
         {value}
         <span className="ml-1 text-xs font-normal text-muted">{unit}</span>
@@ -248,7 +248,7 @@ function Stat({ label, value, unit }: { label: string; value: string; unit: stri
 function Takeaway({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-surface-2 p-3">
-      <p className="text-[11px] uppercase tracking-wider text-muted">{title}</p>
+      <p className="text-[11px] text-muted">{title}</p>
       <p className="mt-1 leading-relaxed">{children}</p>
     </div>
   );

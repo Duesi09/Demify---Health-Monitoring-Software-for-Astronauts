@@ -52,11 +52,12 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
           <Stethoscope size={20} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-critical">Escalation</p>
-            {anyDrill && <DrillTag label={allDrill ? "Training scenario · drill" : "Includes a drill"} />}
-          </div>
-          <h2 id="escalation-heading" className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">
+          {anyDrill && (
+            <div className="mb-1.5">
+              <DrillTag label={allDrill ? "Training scenario · drill" : "Includes a drill"} />
+            </div>
+          )}
+          <h2 id="escalation-heading" className="text-xl font-semibold tracking-tight md:text-2xl">
             {allDrill ? (
               <>Drill: rehearse contacting the flight surgeon for {crewText}</>
             ) : (
@@ -91,7 +92,8 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
                     <span>
-                      {it.crewName} <span className="font-normal text-muted">· {it.role}</span>
+                      {it.crewName}
+                      {it.role !== it.crewName && <span className="font-normal text-muted"> · {it.role}</span>}
                     </span>
                     {(it.scenarioLabel || it.findings.some((f) => f.drill)) && (
                       <DrillTag label={drillOnly(it) ? "Drill" : "Drill active"} />

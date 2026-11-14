@@ -94,7 +94,7 @@ export function RegionDetail({
         )}
 
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">How spaceflight affects it</h3>
+          <h3 className="text-xs font-semibold text-muted">How spaceflight affects it</h3>
           <p className="mt-1.5 text-sm leading-relaxed">{def.spaceEffects}</p>
           <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="NASA hazards involved">
             {def.hazards.map((h) => (
@@ -115,7 +115,7 @@ export function RegionDetail({
 
         <div>
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Indicators</h3>
+            <h3 className="text-xs font-semibold text-muted">Indicators</h3>
             <span className="text-xs text-muted">
               {measured} of {rows.length} measured for {crewName}
             </span>

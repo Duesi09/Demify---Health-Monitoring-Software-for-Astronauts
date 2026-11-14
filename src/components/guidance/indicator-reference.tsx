@@ -234,15 +234,15 @@ export function IndicatorReference() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Effect of spaceflight</h4>
+                        <h4 className="text-xs font-semibold text-muted">Effect of spaceflight</h4>
                         <p className="mt-1 text-sm leading-relaxed">{def.spaceflightEffect}</p>
                       </div>
                       <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">How it is measured in space</h4>
+                        <h4 className="text-xs font-semibold text-muted">How it is measured in space</h4>
                         <p className="mt-1 text-sm leading-relaxed">{def.measurement}</p>
                       </div>
                       <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Crew actions</h4>
+                        <h4 className="text-xs font-semibold text-muted">Crew actions</h4>
                         <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm marker:text-muted">
                           {def.actions.map((a) => (
                             <li key={a}>{a}</li>
@@ -250,7 +250,7 @@ export function IndicatorReference() {
                         </ol>
                       </div>
                       <div className="rounded-lg border border-critical/40 bg-critical/5 p-3">
-                        <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-critical">
+                        <h4 className="flex items-center gap-1.5 text-xs font-semibold text-critical">
                           <PhoneCall size={12} aria-hidden /> When to escalate
                         </h4>
                         <p className="mt-1 text-sm">{def.escalation}</p>

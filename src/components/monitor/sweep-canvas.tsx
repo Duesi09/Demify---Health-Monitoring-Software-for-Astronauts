@@ -448,7 +448,7 @@ export function SweepCanvas({
       {channels.map((c, i) => (
         <div key={c.key} className="relative min-h-0" style={{ flex: `${c.weight / total} 1 0%` }}>
           {showLabels && (
-            <div className="pointer-events-none absolute left-0 top-0.5 z-10 flex items-baseline gap-2 text-[10px] font-medium uppercase tracking-[0.16em]">
+            <div className="pointer-events-none absolute left-0 top-0.5 z-10 flex items-baseline gap-2 text-[10px] font-medium">
               <span style={{ color: c.color }}>{c.label}</span>
               {(c.sublabel || (c.showSpeed && speedMm != null)) && (
                 <span className="normal-case tracking-[0.08em] text-white/40">

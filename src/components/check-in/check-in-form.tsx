@@ -465,7 +465,7 @@ function ResultPanel({
             <p className="mt-1 text-sm text-muted">{i.finding}</p>
             {i.actions.length > 0 && (
               <div className="mt-2">
-                <h3 className="text-[11px] uppercase tracking-wider text-muted">What to do now</h3>
+                <h3 className="text-[11px] text-muted">What to do now</h3>
                 <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm">
                   {i.actions.map((a) => (
                     <li key={a}>{a}</li>

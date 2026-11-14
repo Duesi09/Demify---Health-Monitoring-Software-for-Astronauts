@@ -166,7 +166,7 @@ export function LiveAlarmsNote() {
         alarms.some((a) => a.priority === "high" && !a.drill) ? "border-critical/60" : "border-border"
       } bg-surface`}
     >
-      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Monitor now</span>
+      <span className="text-[11px] font-medium text-muted">Monitor now</span>
       {alarms.length === 0 ? (
         <span className="text-muted">
           No live alarms ({ACTIVITY_LABEL[live.activity]}). Findings below use the resting median of the last 60 min.

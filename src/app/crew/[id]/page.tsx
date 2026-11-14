@@ -20,7 +20,7 @@ import { buildRecord } from "@/components/crew/record-data";
 import { PatientMonitor } from "@/components/monitor/patient-monitor";
 import { formatDelay } from "@/components/overview/format";
 import { StatusBadge } from "@/components/ui";
-import { currentMission, missionDay } from "@/lib/config";
+import { currentMission } from "@/lib/config";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
 import { getLiveVitals } from "@/lib/monitor/live";
 import { getCrew } from "@/lib/store/readings";
@@ -46,12 +46,11 @@ const TELEMETRY_CAPTION: Record<LiveVitals["source"], string> = {
   mixed: "Sensor + simulated telemetry",
 };
 
-function SectionTitle({ id, eyebrow, title, children }: { id: string; eyebrow: string; title: string; children?: ReactNode }) {
+function SectionTitle({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted">{eyebrow}</p>
-        <h2 id={id} className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
+        <h2 id={id} className="text-2xl font-semibold tracking-tight md:text-3xl">
           {title}
         </h2>
       </div>
@@ -69,7 +68,6 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
 
   const crew = a.crew;
   const mission = currentMission();
-  const day = missionDay(now);
   const readings = await readingsFor(crew, 24 * 7);
   const rows = buildRecord(a, readings, now);
   // Server view of the drill; the client poll (CrewLiveProvider) refreshes the
@@ -85,10 +83,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
         <header className="space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted">
-                Crew Monitor · Mission day {day} · {mission.name}
-              </p>
-              <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">{crew.name}</h1>
+              <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">{crew.name}</h1>
               <p className="mt-2 text-base text-muted md:text-lg">
                 {sameRole ? "Crew role: " : ""}
                 {crew.role} · signal delay to Earth {formatDelay(mission.commDelaySeconds)} one way
@@ -130,11 +125,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
         >
           <StageGlow />
           <div className="relative mx-auto max-w-3xl px-2 text-center">
-            <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
-              <span className="rounded-[3px] bg-white px-1.5 py-0.5 text-[10px] tracking-[0.18em] text-black">Demo</span>
-              Demo monitor
-            </p>
-            <h2 id="monitor-heading" className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">
+            <h2 id="monitor-heading" className="text-3xl font-semibold tracking-tight md:text-5xl">
               Vital signs, beat by beat.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-white/60 md:text-base">
@@ -150,7 +141,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
 
         {/* Emergency drill + response checklist */}
         <section aria-labelledby="emergency-heading">
-          <SectionTitle id="emergency-heading" eyebrow="Training" title="Emergency drills" />
+          <SectionTitle id="emergency-heading" title="Emergency drills" />
           <EmergencyConsole
             crewId={crew.id}
             crewName={crew.name}
@@ -161,7 +152,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
 
         {/* Findings */}
         <section aria-labelledby="findings-heading">
-          <SectionTitle id="findings-heading" eyebrow="Assessment" title="Findings & actions" />
+          <SectionTitle id="findings-heading" title="Findings & actions" />
           <div className="mb-4">
             <LiveAlarmsNote />
           </div>
@@ -176,7 +167,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
 
         {/* Health record */}
         <section aria-labelledby="record-heading">
-          <SectionTitle id="record-heading" eyebrow="Health record" title={`Every indicator for ${crew.name}`}>
+          <SectionTitle id="record-heading" title={`Every indicator for ${crew.name}`}>
             <Link href="/guidance" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
               How values are judged <ArrowUpRight size={14} aria-hidden />
             </Link>
@@ -192,7 +183,7 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
 
         {/* 24 h charts + 7-day check-ins */}
         <section aria-labelledby="trends-heading">
-          <SectionTitle id="trends-heading" eyebrow="Trends" title="Last 24 hours and 7 days" />
+          <SectionTitle id="trends-heading" title="Last 24 hours and 7 days" />
           <CrewTrends a={a} readings={readings} now={now} />
         </section>
       </div>
