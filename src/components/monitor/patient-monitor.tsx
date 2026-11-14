@@ -130,7 +130,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
     if (stale) return `${v.crewName}: no signal, communications lost.`;
     if (alarmCount === 0) return "";
     const drill = v.alarms.some((a) => a.drill) ? "Training drill. " : "";
-    return `${drill}${v.crewName} alarms: ${v.alarms.map((a) => `${a.priority} priority ${a.text}`).join("; ")}`;
+    return `${drill}${v.crewName} alarms: ${v.alarms.map((a) => `${a.priority} priority ${a.text}${a.reported ? " (reported by the crew, not measured)" : ""}`).join("; ")}`;
   };
   const [announce, setAnnounce] = useState(() => ({ key: announceKey, text: makeAnnouncement() }));
   if (announce.key !== announceKey) setAnnounce({ key: announceKey, text: makeAnnouncement() });
@@ -250,7 +250,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
     `Heart rate ${v.hr ?? "not measurable"}${v.hr != null ? " beats per minute" : ""}, ${RHYTHM_LABEL[v.rhythm]}. ` +
     `ST ${st} millimetres. Arterial pressure ${v.sys != null ? `${v.sys} over ${v.dia}, mean ${v.map}` : "not measurable"}. ` +
     `SpO2 ${v.spo2 != null ? `${v.spo2} percent` : "not measurable"}. Respiration ${v.resp ?? "not measurable"} per minute. ` +
-    `Temperature ${v.temp ?? "unknown"} °C. ${stale ? "No signal, last values shown. " : ""}Waveforms synthesised from ${CAPTION_SOURCE[v.source]}.`;
+    `Temperature ${v.temp ?? "unknown"} °C. ${(v.motionArtifact ?? 0) > 0.2 ? "Motion artefact on the waveforms. " : ""}${stale ? "No signal, last values shown. " : ""}Waveforms synthesised from ${CAPTION_SOURCE[v.source]}.`;
 
   const stageAlarm = stale ? "" : top?.priority === "high" ? "dm-alarm-high" : top ? "dm-alarm-medium" : "";
 
@@ -311,6 +311,14 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
                 <AlarmPrefix alarm={shown} /> {shown.text}
               </span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
+                {shown.reported && (
+                  <span
+                    className="rounded-[4px] bg-black/80 px-1.5 py-0.5 text-[9.5px] text-white"
+                    title="Reported by the crew, not measured"
+                  >
+                    Crew report
+                  </span>
+                )}
                 {shown.drill && (
                   <span className="rounded-[4px] bg-black/80 px-1.5 py-0.5 text-[9.5px] text-[#ffcc00]">Drill</span>
                 )}
@@ -352,6 +360,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
                   <span className="whitespace-nowrap @3xl:hidden">{RHYTHM_SHORT[v.rhythm]}</span>
                   <span className="hidden @3xl:inline">{RHYTHM_LABEL[v.rhythm]}</span>
                   {v.pvcPerMin > 0 && <span className="whitespace-nowrap"> · PVC {v.pvcPerMin}/min</span>}
+                  {(v.motionArtifact ?? 0) > 0.2 && <span className="whitespace-nowrap"> · Motion artefact</span>}
                 </div>
               }
             >

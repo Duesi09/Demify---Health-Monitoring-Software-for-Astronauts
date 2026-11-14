@@ -53,6 +53,7 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
     rhythm,
     stMm: Number((sim?.stMm ?? 0).toFixed(1)),
     pvcPerMin: sim?.pvcPerMin ?? 0,
+    ...(sim && sim.motion > 0 ? { motionArtifact: Number(sim.motion.toFixed(2)) } : {}),
     sys: round(vals.sys),
     dia: round(vals.dia),
     map: round(map),

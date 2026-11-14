@@ -1,4 +1,5 @@
 import type { IndicatorId, LiveVitals, MonitorAlarm } from "../types";
+import { SEIZURE_ALARM_TEXT, SEIZURE_ENDED_ALARM_TEXT, STROKE_ALARM_TEXT, seizureActive } from "./drills";
 
 /**
  * Patient-monitor alarm limits. Modelled on common bedside-monitor defaults
@@ -22,12 +23,32 @@ export const ALARM_LIMITS = {
 
 type Draft = Omit<MonitorAlarm, "id" | "crewId" | "crewName" | "drill"> & { key: string };
 
+/**
+ * Training alarms that come from the drill itself, not from a measured value:
+ * the stroke drill is a crew report of F.A.S.T. signs (vital signs cannot show
+ * a stroke), the seizure drill raises its alarm while the convulsions last and
+ * a medium recovery alarm after. See src/lib/monitor/drills.ts for sources.
+ */
+function scenarioAlarms(v: Omit<LiveVitals, "alarms">): Draft[] {
+  switch (v.scenario?.type) {
+    case "stroke":
+      return [{ key: "stroke", priority: "high", text: STROKE_ALARM_TEXT, reported: true }];
+    case "seizure":
+      return seizureActive(v.scenario.elapsedS)
+        ? [{ key: "seizure", priority: "high", text: SEIZURE_ALARM_TEXT }]
+        : [{ key: "seizure", priority: "medium", text: SEIZURE_ENDED_ALARM_TEXT }];
+    default:
+      return [];
+  }
+}
+
 export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
   const out: Draft[] = [];
   const add = (key: string, priority: MonitorAlarm["priority"], text: string, indicator?: IndicatorId) =>
     out.push({ key, priority, text, indicator });
   const L = ALARM_LIMITS;
 
+  out.push(...scenarioAlarms(v));
   if (v.rhythm === "vf") add("vfib", "high", "VFIB / NO PULSE", "heartRate");
   else if (v.rhythm === "vt") add("vtach", "high", "VTACH", "heartRate");
 
@@ -73,6 +94,7 @@ export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
       text: d.text,
       indicator: d.indicator,
       drill,
+      ...(d.reported ? { reported: true } : {}),
     }))
     .sort((a, b) => (a.priority === b.priority ? 0 : a.priority === "high" ? -1 : 1));
 }

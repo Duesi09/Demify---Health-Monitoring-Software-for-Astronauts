@@ -36,6 +36,11 @@ export interface SynthParams {
   dia: number | null;
   spo2: number | null;
   resp: number | null;
+  /**
+   * Motion artefact, 0 (none) to 1 (convulsions in the seizure drill): large
+   * irregular movement on ECG, pleth and resp, a little on ABP. Absent = 0.
+   */
+  motion?: number;
 }
 
 export interface WaveSample {
@@ -62,6 +67,7 @@ export function paramsFromVitals(v: LiveVitals): SynthParams {
     dia: v.dia,
     spo2: v.spo2,
     resp: v.resp,
+    motion: v.motionArtifact ?? 0,
   };
 }
 
@@ -133,6 +139,23 @@ export function vfSignal(t: number): number {
   const b = 0.18 * Math.sin(2 * Math.PI * 6.7 * t + 2.0 * Math.sin(2 * Math.PI * 0.9 * t));
   const c = 0.1 * Math.sin(2 * Math.PI * 3.3 * t + 0.5);
   return env * (a + b + c);
+}
+
+/**
+ * Deterministic part of a motion artefact (rhythmic jerks of a convulsion
+ * plus slower body movement), per channel, for full intensity. Sums of
+ * frequency-modulated sines, so it is irregular but repeatable in t.
+ */
+export function motionSignal(t: number): WaveSample {
+  const jerk = Math.sin(2 * Math.PI * 2.4 * t + 1.6 * Math.sin(2 * Math.PI * 0.31 * t));
+  const sway = Math.sin(2 * Math.PI * 0.8 * t + 0.9 * Math.sin(2 * Math.PI * 0.13 * t + 1.1));
+  const fast = Math.sin(2 * Math.PI * 5.3 * t + 2.2 * Math.sin(2 * Math.PI * 0.7 * t));
+  return {
+    ecg: 0.3 * jerk + 0.2 * sway + 0.08 * fast,
+    abp: 7 * jerk + 4 * sway,
+    pleth: 0.3 * jerk + 0.22 * sway,
+    resp: 0.75 * jerk + 0.45 * sway,
+  };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -374,12 +397,21 @@ export class WaveSynth {
     }
 
     const noise = () => (this.rand() - 0.5) * 2;
-    return {
+    const out = {
       ecg: cur.ecg + off.ecg + noise() * 0.008,
       abp: cur.abp + off.abp + noise() * (p.sys == null || p.dia == null ? 0.8 : 0.4),
       pleth: cur.pleth + off.pleth + noise() * (p.spo2 == null ? 0.012 : 0.006),
       resp: cur.resp + off.resp + noise() * (p.resp == null || p.resp <= 0 ? 0.015 : 0.01),
     };
+    // Muscle noise on top of the movement (random, so only drawn while there
+    // is an artefact: the noise sequence of a still trace stays unchanged).
+    const m = clamp(p.motion ?? 0, 0, 1);
+    if (m > 0) {
+      out.ecg += m * noise() * 0.12;
+      out.pleth += m * noise() * 0.04;
+      out.resp += m * noise() * 0.08;
+    }
+    return out;
   }
 
   /** Noise-free channel values for parameters `p` at time t. */
@@ -412,7 +444,18 @@ export class WaveSynth {
     }
 
     // Resp: phase integrates the current rate; flat line when apnoeic.
-    const resp = p.resp == null || p.resp <= 0 ? 0 : 0.85 * Math.sin(this.respPhase);
+    let resp = p.resp == null || p.resp <= 0 ? 0 : 0.85 * Math.sin(this.respPhase);
+
+    // Motion artefact (seizure drill): movement swamps pleth and resp and
+    // rides on the ECG; the arterial line moves a little.
+    const m = clamp(p.motion ?? 0, 0, 1);
+    if (m > 0) {
+      const art = motionSignal(t);
+      ecg += m * art.ecg;
+      if (p.sys != null && p.dia != null) abpV += m * art.abp;
+      if (p.spo2 != null) plethV = (1 - 0.6 * m) * plethV + m * (0.2 + art.pleth);
+      resp = (1 - 0.7 * m) * resp + m * art.resp;
+    }
 
     return { ecg, abp: abpV, pleth: plethV, resp };
   }

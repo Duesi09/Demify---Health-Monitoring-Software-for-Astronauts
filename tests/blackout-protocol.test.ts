@@ -29,7 +29,7 @@ vi.mock("@/app/check-in/actions", () => ({ submitCheckIn: async () => null }));
 
 const BANNED = /immediately|contact the flight surgeon|flight surgeon direction/i;
 const IDS = Object.keys(INDICATORS) as IndicatorId[];
-const SCENARIOS: ProtocolId[] = ["stemi", "vf", "hypertensive-crisis", "general"];
+const SCENARIOS: ProtocolId[] = ["stemi", "vf", "hypertensive-crisis", "stroke", "seizure", "general"];
 
 const alarm = (indicator: IndicatorId): MonitorAlarm => ({
   id: `cdr:${indicator}`,

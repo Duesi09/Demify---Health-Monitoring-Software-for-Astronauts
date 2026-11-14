@@ -11,7 +11,7 @@ import type { Scenario, ScenarioType } from "../types";
  * forgotten drill can never keep a crew member in alarm indefinitely.
  */
 
-export const SCENARIO_TYPES: ScenarioType[] = ["stemi", "vf", "hypertensive-crisis"];
+export const SCENARIO_TYPES: ScenarioType[] = ["stemi", "vf", "hypertensive-crisis", "stroke", "seizure"];
 export const MAX_SCENARIO_MS = 30 * 60_000;
 
 const file = () => path.join(config.dataDir, "demify-scenarios.json");

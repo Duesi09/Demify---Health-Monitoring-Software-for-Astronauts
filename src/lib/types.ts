@@ -139,8 +139,12 @@ export interface SourceResult<T> {
  *  - stemi: acute ST-elevation myocardial infarction (heart attack)
  *  - vf: cardiac arrest with ventricular fibrillation
  *  - hypertensive-crisis: blood pressure > 180/120
+ *  - stroke: stroke signs (F.A.S.T.) reported by the crew; vital signs cannot
+ *    show a stroke, so the monitor stays near baseline (raised BP)
+ *  - seizure: a seizure with convulsions for a bounded time (motion artefact,
+ *    tachycardia, falling SpO2), then recovery values
  */
-export type ScenarioType = "stemi" | "vf" | "hypertensive-crisis";
+export type ScenarioType = "stemi" | "vf" | "hypertensive-crisis" | "stroke" | "seizure";
 
 export interface Scenario {
   crewId: string;
@@ -167,6 +171,11 @@ export interface MonitorAlarm {
   indicator?: IndicatorId;
   /** True when produced by a training scenario. */
   drill: boolean;
+  /**
+   * True when the alarm comes from a crew report (e.g. F.A.S.T. stroke signs
+   * in the stroke drill), not from a measured value.
+   */
+  reported?: boolean;
 }
 
 /**
@@ -184,6 +193,11 @@ export interface LiveVitals {
   stMm: number;
   /** Premature ventricular contractions per minute (0 = none). */
   pvcPerMin: number;
+  /**
+   * Motion artefact on the ECG, pleth and resp waveforms, 0 (none) to 1
+   * (convulsions in the seizure drill). Absent means none.
+   */
+  motionArtifact?: number;
   sys: number | null;
   dia: number | null;
   /** Mean arterial pressure. */

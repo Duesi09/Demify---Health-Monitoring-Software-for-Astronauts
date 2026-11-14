@@ -440,7 +440,7 @@ describe("the curated library (library/**)", () => {
 
   it("restates the drill checklists of the crew page word for word", () => {
     const body = plain(byId.get("alarm-response")!.body);
-    for (const id of ["stemi", "vf", "hypertensive-crisis"] as const) {
+    for (const id of ["stemi", "vf", "hypertensive-crisis", "stroke", "seizure"] as const) {
       const protocol = buildProtocol(id, { commDelaySeconds: 0.5, missionName: "ISS" });
       expect(body).toContain(`"${protocol.title}"`);
       for (const step of protocol.steps) {

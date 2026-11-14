@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CircleStop, Siren, TriangleAlert } from "lucide-react";
 import { DrillTag } from "@/components/overview/status-icon";
 import { StatusBadge } from "@/components/ui";
+import { REPORTED_NOT_MEASURED, SEIZURE_ACTIVE_S, seizureActive } from "@/lib/monitor/drills";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 import { useCrewLiveContext } from "./crew-live";
 import { DRILL_BUTTONS, SCENARIO_NAME, activeProtocol, buildProtocol, type ProtocolId } from "./protocols";
@@ -29,7 +30,7 @@ function sheetFor(v: LiveVitals): Sheet | null {
   if (!p) return null;
   if (v.scenario) return { key: `drill:${v.scenario.type}:${v.scenario.startedAt}`, protocol: p.id, drill: true, alarm: null };
   // A general sheet belongs to one alarm; the specific protocols (STEMI, VF,
-  // hypertensive crisis) persist while the alarm that maps to them changes.
+  // hypertensive crisis; stroke and seizure exist only as drills) persist while the alarm that maps to them changes.
   const key = p.id === "general" ? `alarm:general:${p.alarm?.id ?? "?"}` : `alarm:${p.id}`;
   return { key, protocol: p.id, drill: false, alarm: p.alarm };
 }
@@ -182,6 +183,18 @@ export function EmergencyConsole({
                 <DrillTag label="Training scenario · drill · not a real emergency" className="!h-auto min-h-[18px] py-[3px] leading-[1.25]" />
               </p>
               <p className="mt-1 text-lg font-semibold leading-snug">{scenario.label ?? SCENARIO_NAME[scenario.type]}</p>
+              {scenario.type === "stroke" && (
+                <p className="mt-1 text-sm text-fg/85">
+                  F.A.S.T. signs {REPORTED_NOT_MEASURED.toLowerCase()}: vital signs cannot show a stroke.
+                </p>
+              )}
+              {scenario.type === "seizure" && (
+                <p className="mt-1 text-sm text-fg/85" aria-live="off">
+                  {seizureActive(elapsedS)
+                    ? `Convulsions until ${formatElapsed(SEIZURE_ACTIVE_S)} drill time, then recovery values.`
+                    : `Convulsions ended at ${formatElapsed(SEIZURE_ACTIVE_S)} drill time; recovery values.`}
+                </p>
+              )}
               <p className="mt-1 text-sm tabular text-muted" aria-live="off">
                 Running for <span className="font-semibold">{formatElapsed(elapsedS)}</span> · started{" "}
                 {scenario.startedAt.slice(11, 19)} UTC · ends automatically after 30 min

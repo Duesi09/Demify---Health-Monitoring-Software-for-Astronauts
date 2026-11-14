@@ -1,5 +1,6 @@
 import { INDICATORS } from "@/lib/health/knowledge";
 import { groundActionUnderLink, linkPolicy, type LinkMode } from "@/lib/link";
+import { REPORTED_NOT_MEASURED, SEIZURE_ACTIVE_S } from "@/lib/monitor/drills";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 
 /**
@@ -16,6 +17,16 @@ import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
  * flight surgeon "immediately" or to act "under flight surgeon direction".
  * Those steps follow the onboard procedures and transmit when contact returns
  * (guarded by tests/blackout-protocol.test.ts).
+ *
+ * Stroke and seizure checklists restate public first-aid guidance only:
+ * American Stroke Association F.A.S.T. (Face drooping, Arm weakness, Speech
+ * difficulty, Time to call; note when the symptoms started / last known
+ * well), https://www.stroke.org/en/about-stroke/stroke-symptoms, and CDC
+ * "First aid for seizures",
+ * https://www.cdc.gov/epilepsy/first-aid-for-seizures/index.html.
+ * Steps marked "Microgravity (project text)" are our own adaptation, not
+ * from those sources and not clinically reviewed. No restraint during a
+ * seizure (CDC: do not hold them down).
  */
 
 export type ProtocolId = ScenarioType | "general";
@@ -25,7 +36,12 @@ export const SCENARIO_NAME: Record<ScenarioType, string> = {
   stemi: "Acute myocardial infarction (STEMI)",
   vf: "Cardiac arrest (ventricular fibrillation)",
   "hypertensive-crisis": "Hypertensive crisis",
+  stroke: "Stroke signs reported (F.A.S.T.)",
+  seizure: "Seizure with convulsions",
 };
+
+/** Convulsion time of the seizure drill, as the button and the docs say it. */
+const SEIZURE_DURATION = `${SEIZURE_ACTIVE_S / 60} minutes`;
 
 export const DRILL_BUTTONS: Array<{ type: ScenarioType; label: string; effect: string }> = [
   {
@@ -42,6 +58,16 @@ export const DRILL_BUTTONS: Array<{ type: ScenarioType; label: string; effect: s
     type: "hypertensive-crisis",
     label: "Simulate hypertensive crisis",
     effect: "Blood pressure climbing above 180/120 mmHg with a rising heart rate.",
+  },
+  {
+    type: "stroke",
+    label: "Simulate stroke signs (F.A.S.T.)",
+    effect: `The crew reports F.A.S.T. signs: face drooping, arm weakness, speech difficulty. ${REPORTED_NOT_MEASURED}: vital signs cannot show a stroke; the monitor shows raised blood pressure, otherwise near baseline.`,
+  },
+  {
+    type: "seizure",
+    label: "Simulate seizure",
+    effect: `Convulsions for about ${SEIZURE_DURATION}: motion artefact on ECG, pleth and resp, rising heart rate, falling SpO₂; then recovery values.`,
   },
 ];
 
@@ -192,6 +218,71 @@ export function buildProtocol(
           },
           surgeon,
           { id: "trend", text: "Re-measure every 5–15 minutes and log each value with its time." },
+        ],
+      };
+    case "stroke":
+      return {
+        id,
+        mode,
+        title: "Suspected stroke (F.A.S.T.)",
+        steps: [
+          {
+            id: "fast",
+            text: "Check F.A.S.T.: Face drooping (ask them to smile), Arm weakness (ask them to raise both arms), Speech difficulty (ask them to repeat a simple sentence).",
+            detail:
+              "Microgravity (project text): an arm cannot drift downward without gravity; compare whether one arm is weaker or harder to hold in place than the other.",
+          },
+          {
+            id: "time",
+            text: "Note the time the symptoms started, or when the crew member was last known well.",
+            detail: `${REPORTED_NOT_MEASURED}: vital signs cannot show a stroke.`,
+          },
+          {
+            id: "rest",
+            text: "Stop all activity; the crew member rests, restrained and monitored, with the Crew Medical Officer.",
+            detail: "Microgravity (project text): keep them from drifting into hardware.",
+          },
+          {
+            id: "checklist",
+            text: blackout
+              ? "Follow the onboard medical checklist for stroke signs."
+              : "Follow the onboard medical checklist for stroke signs.",
+            detail: blackout
+              ? "F.A.S.T. “Time to call”: with no contact, act on the onboard procedures; transmit when contact returns."
+              : "F.A.S.T. “Time to call”: on Earth the emergency number, onboard the flight surgeon.",
+          },
+          surgeon,
+          {
+            id: "recheck",
+            text: "Repeat the F.A.S.T. check and log each result with its time; keep continuous blood pressure, ECG and SpO₂ monitoring.",
+          },
+        ],
+      };
+    case "seizure":
+      return {
+        id,
+        mode,
+        title: "Seizure (convulsions)",
+        steps: [
+          { id: "stay", text: "Stay with the crew member; call out “seizure” to the crew." },
+          { id: "time", text: "Time the seizure: note when it started and when it ends." },
+          {
+            id: "safe",
+            text: "Keep them safe from injury: move hardware and loose objects away.",
+            detail:
+              "Microgravity (project text): guide them away from hardware without holding them down; keep them from drifting into hardware.",
+          },
+          { id: "mouth", text: "Do not put anything in their mouth. Do not hold them down." },
+          { id: "side", text: "When the seizure ends, turn them on their side." },
+          {
+            id: "emergency",
+            text: blackout
+              ? "A first seizure, a seizure longer than 5 minutes, a second seizure, trouble breathing or waking afterwards, or an injury is an emergency: follow the onboard medical checklist."
+              : "A first seizure, a seizure longer than 5 minutes, a second seizure, trouble breathing or waking afterwards, or an injury is an emergency: follow the onboard medical checklist.",
+            ...(blackout ? { detail: "No contact: act on the onboard procedures; transmit when contact returns." } : {}),
+          },
+          surgeon,
+          { id: "log", text: "Keep this sheet: record start and end time, what was seen and the vital signs after the seizure." },
         ],
       };
     default: {

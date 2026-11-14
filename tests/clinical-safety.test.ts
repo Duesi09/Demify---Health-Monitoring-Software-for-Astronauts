@@ -98,7 +98,7 @@ describe("P0.2 no drug names, doses or amounts in advice", () => {
       drill: false,
     });
     const protocols = [
-      ...(["stemi", "vf", "hypertensive-crisis", "general"] as const).map((id) => buildProtocol(id, opts)),
+      ...(["stemi", "vf", "hypertensive-crisis", "stroke", "seizure", "general"] as const).map((id) => buildProtocol(id, opts)),
       ...ALL_IDS.map((id) => buildProtocol("general", { ...opts, alarm: alarm(id) })),
     ];
     for (const p of protocols) {

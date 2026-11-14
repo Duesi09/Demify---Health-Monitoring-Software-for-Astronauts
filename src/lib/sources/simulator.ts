@@ -1,4 +1,5 @@
 import "server-only";
+import { SEIZURE_ACTIVE_S } from "../monitor/drills";
 import type { CrewMember, IndicatorId, Reading, Rhythm, Scenario, ScenarioType } from "../types";
 
 /**
@@ -271,6 +272,8 @@ export const SCENARIO_LABEL: Record<ScenarioType, string> = {
   stemi: "Acute myocardial infarction (STEMI)",
   vf: "Cardiac arrest (ventricular fibrillation)",
   "hypertensive-crisis": "Hypertensive crisis",
+  stroke: "Stroke signs reported (F.A.S.T.)",
+  seizure: "Seizure with convulsions",
 };
 
 /** Instantaneous physiological state; null = not measurable (no pulse). */
@@ -280,6 +283,8 @@ export interface PhysioState {
   rhythm: Rhythm;
   stMm: number;
   pvcPerMin: number;
+  /** Motion artefact on the waveforms, 0..1 (convulsions in the seizure drill). */
+  motion: number;
   sys: number | null;
   dia: number | null;
   spo2: number | null;
@@ -316,6 +321,7 @@ export function baseState(crew: CrewMember, t: number): PhysioState {
     rhythm: hr > 100 ? "sinus-tachycardia" : hr < 50 ? "sinus-bradycardia" : "sinus",
     stMm: 0.05 * jitter(seed, t, 7),
     pvcPerMin: 0,
+    motion: 0,
     sys: val("systolicBP") + 2 * jitter(seed, t, 2),
     dia: val("diastolicBP") + 1.5 * jitter(seed, t, 3),
     spo2: Math.min(100, val("spo2") + 0.5 * jitter(seed, t, 4)),
@@ -370,6 +376,52 @@ export function applyScenario(base: PhysioState, scenario: Scenario, t: number, 
       s.dia = lerp(base.dia ?? 76, 124, a) + 2 * jitter(seed, t, 22);
       s.hr = lerp(base.hr ?? 65, 98, a) + 2 * jitter(seed, t, 23);
       s.resp = lerp(base.resp ?? 14, 20, a) + jitter(seed, t, 24);
+      s.rhythm = (s.hr ?? 0) > 100 ? "sinus-tachycardia" : "sinus";
+      break;
+    }
+    case "stroke": {
+      // A stroke cannot be recognised from vital signs: the drill is a crew
+      // report of F.A.S.T. signs (American Stroke Association). The monitor
+      // stays plausible: blood pressure raised, everything else near
+      // baseline. The alarm comes from the report (see monitor/alarms.ts).
+      const a = ramp(e, 0, 60);
+      s.sys = lerp(base.sys ?? 118, 168, a) + 3 * jitter(seed, t, 31);
+      s.dia = lerp(base.dia ?? 76, 96, a) + 2 * jitter(seed, t, 32);
+      s.hr = lerp(base.hr ?? 65, (base.hr ?? 65) + 8, a) + 2 * jitter(seed, t, 33);
+      s.rhythm = (s.hr ?? 0) > 100 ? "sinus-tachycardia" : "sinus";
+      break;
+    }
+    case "seizure": {
+      // Convulsions for SEIZURE_ACTIVE_S (bounded, under the 5-minute
+      // emergency limit of the CDC first-aid guidance): tachycardia, raised
+      // pressure, falling SpO2, irregular breathing and motion artefact on
+      // ECG / pleth / resp. Afterwards recovery values: the rate and pressure
+      // settle over minutes, SpO2 recovers, breathing is deep and regular.
+      const hr0 = base.hr ?? 65;
+      const sys0 = base.sys ?? 118;
+      const dia0 = base.dia ?? 76;
+      const spo20 = base.spo2 ?? 98;
+      const resp0 = base.resp ?? 14;
+      if (e < SEIZURE_ACTIVE_S) {
+        const a = ramp(e, 0, 25);
+        const b = ramp(e, 20, SEIZURE_ACTIVE_S);
+        s.hr = lerp(hr0, 128, a) + 10 * b + 5 * jitter(seed, t, 41);
+        s.sys = lerp(sys0, 150, a) + 6 * b + 4 * jitter(seed, t, 42);
+        s.dia = lerp(dia0, 90, a) + 3 * b + 3 * jitter(seed, t, 43);
+        s.spo2 = lerp(spo20, 93, a) - (93 - 85) * b + 0.8 * jitter(seed, t, 44);
+        s.resp = lerp(resp0, 24, a) + 6 * jitter(seed, t, 45);
+        s.motion = ramp(e, 0, 4);
+      } else {
+        const r = e - SEIZURE_ACTIVE_S;
+        const hrEnd = hr0 + 12;
+        s.hr = hrEnd + (138 - hrEnd) * Math.exp(-r / 90) + 2 * jitter(seed, t, 41);
+        s.sys = sys0 + 8 + (156 - sys0 - 8) * Math.exp(-r / 120) + 3 * jitter(seed, t, 42);
+        s.dia = dia0 + 4 + (93 - dia0 - 4) * Math.exp(-r / 120) + 2 * jitter(seed, t, 43);
+        s.spo2 = spo20 - 1 - (spo20 - 1 - 85) * Math.exp(-r / 40) + 0.4 * jitter(seed, t, 44);
+        s.resp = resp0 + 4 + 8 * Math.exp(-r / 60) + jitter(seed, t, 45);
+        s.motion = 1 - ramp(r, 0, 4);
+      }
+      s.spo2 = Math.min(100, s.spo2);
       s.rhythm = (s.hr ?? 0) > 100 ? "sinus-tachycardia" : "sinus";
       break;
     }

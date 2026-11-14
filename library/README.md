@@ -18,7 +18,7 @@ Not in this version: medicines. There are no drug names, doses, amounts or sched
 
 | Folder | Category | Contents |
 |---|---|---|
-| `protocols/` | `protocol` | Drill response checklists (STEMI, VF, hypertensive crisis, general alarm), escalation and signal delay, ground link blackout |
+| `protocols/` | `protocol` | Drill response checklists (STEMI, VF, hypertensive crisis, stroke, seizure, general alarm), escalation and signal delay, ground link blackout |
 | `reference/` | `reference` | Vital-sign ranges and escalation rules, space radiation, spaceflight physiology, cabin environment and CO₂, ISS medical operations (crew medical officers, flight surgeons, biomedical engineers, private medical conferences, procedures with ground guidance, CPR on the Crew Medical Restraint System, ground-guided ultrasound, what the station cannot do, Crew-11 as published) |
 | `inventory/` | `inventory` | `med-kit.json`: the medical-kit inventory, devices and supplies without medicines, grouped by the ISS Crew Health Care System (CHeCS) pack names (Medical Diagnostics Pack, Minor Treatment Pack, Medical Supply Pack, IV Supply Pack, Physician Equipment Pack, Emergency Medical Treatment Pack, Advanced Life Support Pack, Respiratory Support Pack) plus the emergency equipment (Crew Medical Restraint System, AED LIFEPAK 1000). A representative training inventory, not the real ISS kit: the pack names come from public NASA sources (2011/2015), the contents are not confirmed for 2026 and the pouch numbers are training examples |
 
