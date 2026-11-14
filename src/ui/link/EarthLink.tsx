@@ -62,6 +62,7 @@ export function EarthLink({ initialReadings, initialDay, initialProfile, profile
     }
     try {
       const saved = window.sessionStorage.getItem(PROFILE_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- storage exists only in the browser, so it is read after mount
       if (saved !== null) setProfile(parseProfile(saved))
     } catch {
       // The default place is fine then.

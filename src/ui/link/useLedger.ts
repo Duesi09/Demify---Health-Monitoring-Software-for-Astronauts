@@ -58,10 +58,12 @@ export function useLedger(reducedMotion: boolean) {
   const [stored, setStored] = useState(true)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- storage exists only in the browser, so it is read after mount
     setLedger(parseLedger(readStored(), Date.now()))
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- records whether the write to storage went through
     if (ledger) setStored(writeStored(serializeLedger(ledger)))
   }, [ledger])
 

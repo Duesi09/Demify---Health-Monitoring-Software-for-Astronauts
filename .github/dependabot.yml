@@ -1,0 +1,48 @@
+# Weekly update proposals. Minor and patch updates of one ecosystem arrive as a
+# single pull request; a major update gets a pull request of its own, because it
+# needs a closer look.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Pinned to the browser build installed on the development machines. Raise it
+      # by hand, together with that browser (`npx playwright install chromium`).
+      - dependency-name: '@playwright/test'
+      # Follows the Node.js release the project runs on (22), not the newest one.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # The Node.js release line is chosen by hand, in step with CI and @types/node.
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major

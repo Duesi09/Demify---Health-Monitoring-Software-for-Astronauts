@@ -2,10 +2,17 @@ services:
   demify:
     build: .
     ports:
-      - "3000:3000"
+      - '3000:3000'
+    environment:
+      # Passed on from .env or the shell when set there (see .env.example);
+      # left unset otherwise, so the server's own defaults apply.
+      - DEMIFY_STORE
+      - DEMIFY_API_TOKEN
+      # DEMIFY_DATA_DIR is not passed on: in the container it is always /data, the volume below.
     volumes:
       - demify-data:/data
     restart: unless-stopped
+    # Health is checked by the image itself (HEALTHCHECK in the Dockerfile): docker compose ps shows it.
 
 volumes:
   demify-data:

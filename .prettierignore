@@ -1,0 +1,16 @@
+# Build and test output
+.next
+out
+build
+playwright-report
+test-results
+
+# Written by tools
+package-lock.json
+next-env.d.ts
+
+# Prose is laid out by hand
+*.md
+
+# Local agent worktrees and tool state
+.claude

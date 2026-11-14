@@ -90,6 +90,7 @@ export function useShelterSession(): {
   // Read after mount, so the server and the first client render agree.
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- storage exists only in the browser, so it is read after mount
       setSession(parseSession(window.sessionStorage.getItem(STORAGE_KEY)))
     } catch {
       // Storage is unavailable: carry on with the session held in memory.

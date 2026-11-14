@@ -4,8 +4,14 @@ next-env.d.ts
 *.tsbuildinfo
 # Manual readings saved by the server while running locally
 .data
+# Local settings; .env.example lists what can be set
+.env
 .env*.local
 .DS_Store
+
+# Output of the end-to-end tests
+playwright-report/
+test-results/
 
 # Local agent worktrees and tool state
 .claude/

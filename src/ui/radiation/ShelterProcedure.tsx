@@ -72,6 +72,7 @@ const CLOCK_NAME: Record<ClockId, string> = { alarm: 'Alarm clock', shelter: 'Sh
 function useNow(active: boolean, intervalMs: number): [number, () => void] {
   const [now, setNow] = useState(0)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the clock is read after mount, so server and client agree
     setNow(Date.now())
     if (!active) return
     const timer = setInterval(() => setNow(Date.now()), intervalMs)

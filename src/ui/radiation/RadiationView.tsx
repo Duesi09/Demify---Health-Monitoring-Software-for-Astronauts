@@ -199,6 +199,7 @@ export function RadiationView({ readings, initialDay }: Props) {
   useEffect(() => {
     if (moveFocus === 'invite') invite.current?.focus()
     // One request moves focus once. Left set, it would pull focus again whenever the panel remounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the request is cleared once the focus has moved
     if (moveFocus !== null) setMoveFocus(null)
   }, [moveFocus])
 

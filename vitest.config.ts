@@ -11,5 +11,6 @@ export default defineConfig({
     },
   },
   // Local worktrees hold copies of the project; their tests are not ours to run.
-  test: { exclude: [...configDefaults.exclude, '.claude/**'] },
+  // The end-to-end tests under e2e/ belong to Playwright (`npm run e2e`).
+  test: { exclude: [...configDefaults.exclude, '.claude/**', 'e2e/**'] },
 })

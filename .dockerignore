@@ -1,8 +1,22 @@
+# Rebuilt inside the image
 node_modules
 .next
-.git
+
+# Local data and settings never go into an image
 .data
+.env
+.env*.local
+
+# Not needed to build the server; leaving them out keeps the build cache valid when they change
+.git
+.github
+.claude
+e2e
+playwright.config.ts
+playwright-report
+test-results
 *.tsbuildinfo
 Dockerfile
 compose.yaml
-README.md
+*.md
+LICENSE

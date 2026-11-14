@@ -2,20 +2,130 @@ name: Checks
 
 on:
   push:
+    # Branches only: a version tag is handled by the release workflow. Dependabot's
+    # branches are checked through their pull requests, not twice.
+    branches-ignore:
+      - 'dependabot/**'
   pull_request:
+
+# A newer push to the same branch or pull request makes the older run pointless.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
   checks:
+    name: Lint, types, unit tests, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
+      - name: Install dependencies
+        id: install
+        run: npm ci
+      # Each check runs even when an earlier one failed, so one push shows everything that is wrong.
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+      - name: Unit tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test
+      - name: Production build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium and the system libraries it needs
+        run: npx playwright install --with-deps chromium
+      # Builds the app, serves it with `next start` and drives it in Chromium (see playwright.config.ts).
+      - name: Run the end-to-end tests
+        run: npm run e2e
+      - name: Upload the Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          # Into the local Docker engine, to be started below. Nothing is pushed.
+          load: true
+          push: false
+          tags: demify:ci
+          cache-from: type=gha
+          # A run that may not write the cache (a pull request from a fork) must not fail for it.
+          cache-to: type=gha,mode=max,ignore-error=true
+      - name: Start the container
+        run: docker run --detach --name demify --publish 3000:3000 demify:ci
+      - name: Wait for the health check
+        run: |
+          for attempt in $(seq 1 60); do
+            running=$(docker inspect --format '{{.State.Running}}' demify)
+            health=$(docker inspect --format '{{.State.Health.Status}}' demify)
+            echo "Attempt $attempt: running=$running health=$health"
+            if [ "$health" = healthy ]; then exit 0; fi
+            if [ "$running" != true ] || [ "$health" = unhealthy ]; then break; fi
+            sleep 2
+          done
+          echo "::error::The container did not become healthy."
+          exit 1
+      - name: Request the dashboard and the liveness endpoint
+        run: |
+          for path in / /api/health; do
+            code=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:3000$path")
+            echo "GET $path answered $code"
+            if [ "$code" != 200 ]; then
+              echo "::error::GET $path answered $code, expected 200."
+              exit 1
+            fi
+          done
+      - name: Show the container log
+        if: ${{ always() }}
+        run: docker logs demify || true
+      - name: Stop the container
+        if: ${{ always() }}
+        run: |
+          docker stop demify || true
+          docker rm --force demify || true
