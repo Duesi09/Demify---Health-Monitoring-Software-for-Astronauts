@@ -1,4 +1,4 @@
-# Demify: Business Model (version 2, reality-checked)
+# Demify: Business Model (version 2.1, reality-checked)
 
 Draft for the NASA Space Apps pitch, 15 November 2026. Version 1 was checked by five independent reviewers against real sources: astronaut numbers, the Earth market, prices, costs and regulation, funding and open source. This version keeps what held up and fixes what did not. Numbers marked **estimate** are ours; everything else has a source at the end.
 
@@ -12,6 +12,7 @@ Draft for the NASA Space Apps pitch, 15 November 2026. Version 1 was checked by 
 | "Space proves it, Earth pays" | Order and money are reversed: Earth analogs come first, agencies and grants pay first | "Built to space standards, proven with Earth crews" |
 | CHF 40 per person per month to many small sites | Buyers are a few large organisations; they buy per programme and take about a year to sign | Paid pilots and agency contracts first; per-site licences only after certification |
 | Venture Kick CHF 150,000 as grant | CHF 10,000 grant, then CHF 140,000 as convertible loans | Shown as financing, with a base case and a funded case |
+| (v2.1) ESA money counted in CHF in the funded case | ESA BIC must not be converted to CHF; Swiss participation in ESA Kick-Start is unconfirmed | Funded case shown without ESA money; ESA BIC named separately in EUR |
 | Break-even at 18 sites by year 4 | Ignored ramp-up, regulation, and that 18 sites is half of all year-round Antarctic stations | No break-even within 3 years; honest plan in section 7 |
 
 ---
@@ -35,7 +36,7 @@ The software has no technical limit. The limit is adoption, and adoption follows
 
 | Year | People reaching orbit | Demify users |
 |---|---|---|
-| **2027** | about 25 to 35 (**estimate**: depends on Ax-5, Vast's ISS mission and Artemis III flying on time) | **0 astronauts.** **10 to 20 analog crew members**: Asclepios VII (Swiss lunar analog, summer 2027, crews of 6 to 10; call for projects open since 26 October 2026) and 1 or 2 rotations at the Mars Desert Research Station (about 6 people each) |
+| **2027** | about 25 to 35 (**estimate**: depends on Ax-5, Vast's ISS mission and Artemis III flying on time) | **0 astronauts.** **Target, only if our proposal is accepted: 10 to 20 analog crew members** in Asclepios VII (Swiss lunar analog, summer 2027, crews of 6 to 10; call for projects open since 26 October 2026). The Mars Desert Research Station only through a crew whose home institution provides ethics review |
 | **2028 to 2029** | | **Goal:** a first in-flight research demonstration through a Swiss partner with ISS experience (BIOTESC at HSLU, ESA's Swiss operations centre; or the UZH Space Hub) |
 | **2030 to 2035** | about 30 to 80 (**estimate**; no published forecast exists) | **4 to 10 astronauts a year** if one operator uses Demify on its missions |
 | **2040 onwards** | | **10 to 30 a year**: a vision, not a forecast |
@@ -75,13 +76,13 @@ That is an honest **niche worth a few million CHF a year**, not a billion-dollar
 | Who | What they do | How Demify differs |
 |---|---|---|
 | **Hexoskin / Astroskin** (Canadian Space Agency) | Smart shirt recording ECG, breathing, blood pressure and oxygen; on the ISS since 2019 | Hardware that sends data to scientists on the ground. Demify is the software layer that rates and explains the data on board |
-| **Oura ring with Booz Allen** (Ax-4, 2025) | Sleep and heart-rate variability, processed on the station | One commercial device with population norms. Demify works with any device and uses each person's own baseline |
-| **NASA and Google's medical assistant (CMO-DA)** | AI that answers symptom questions, tested on simulated cases | Runs in the cloud. Demify works offline and every rule can be checked |
+| **Oura ring with Booz Allen** (Ax-4, 2025) | A demo that processed ring data on the station without Oura's cloud; no results published | Personal-baseline wellness scores from one device. Demify takes readings from any device or gateway that can POST its JSON and adds symptoms, radiation and sourced thresholds |
+| **NASA and Google's medical assistant (CMO-DA)** | AI that answers symptom questions, tested on simulated cases; offline in ground tests since June 2026 | Answers once something already hurts. Demify rates readings as they arrive, and every rule can be checked line by line |
 | **Philips Tempus IC2** | Vital-sign monitor with telemedicine for non-medical users at sea, in the air and in remote areas | A device for acute care. Demify tracks slow changes over weeks |
 | **International SOS, RMI** | Remote medical services and telemedicine for industrial and remote sites | Service providers: **partners and sales channel**, not competitors |
 | **TrialX** (Fram2 mission, 2025) | Collects wearable data for research on private spaceflights | Research data collection. Demify turns the data into actions for the crew |
 
-**Our position:** an open layer that sits on top of existing devices and services. Three things together make it different: each person's own baseline, an explanation of the likely cause, and escalation that adapts to the delay to Earth.
+**Our position:** an open layer that sits on top of existing devices and services. Personal baselines already exist elsewhere (Apple, Oura). What we combine: a visible source tag on every threshold, escalation that adapts to the delay to Earth, and offline operation in one open tool.
 
 ---
 
@@ -96,13 +97,13 @@ That is an honest **niche worth a few million CHF a year**, not a billion-dollar
 
 | Phase | What | Rules |
 |---|---|---|
-| 1 | Crew health log and integration platform: data, trends, no medical interpretation | Not a medical device |
+| 1 | Crew health log and integration platform: data, trends, no medical interpretation | Research prototype, not a certified medical device; likely outside the MDR if it truly gives no medical interpretation |
 | 2 | The triage engine tested in analog missions | Under ethics approval (Swiss Human Research Act) |
-| 3 | The triage module certified with a clinical partner | Quality system (ISO 13485), software lifecycle (IEC 62304), risk management (ISO 14971); notified-body review takes 12 to 18 months; initial class IIa compliance about EUR 60,000 to 150,000, class IIb more |
+| 3 | The triage module certified with a clinical partner | Quality system (ISO 13485), software lifecycle (IEC 62304), risk management (ISO 14971), usability (IEC 62366-1), health-software security (IEC 81001-5-1); class IIa to IIb, possibly III for cardiac escalation; cost and duration only from notified-body quotes |
 
 Also needed:
 - **EU authorised representative.** Since the EU-Swiss agreement on medical devices lapsed in May 2021, a Swiss maker needs one to sell in the EU.
-- **Data protection.** Health data is sensitive data under the Swiss Data Protection Act and the GDPR, so each site needs an impact assessment and data-processing agreements.
+- **Data protection.** Health data is sensitive data under the Swiss Data Protection Act; research with identifiable health data also falls under the Human Research Act (pseudonymised is not anonymised). The GDPR applies only if people located in the EU are monitored. Each site needs an impact assessment and data-processing agreements.
 
 ---
 
@@ -110,7 +111,7 @@ Also needed:
 
 | Flipchart arrow | Our answer |
 |---|---|
-| **Image** | In January 2026 NASA carried out the first medical evacuation in ISS history (Crew-11, a month early); NASA's chief medical officer said the station lacks the capabilities of a hospital emergency room. An open, checkable tool for early warning is a positive story |
+| **Image** | An open, checkable research and training tool, built by students on NASA open data, is a positive story. (Do not link Demify to the January 2026 Crew-11 medical return: the condition is undisclosed.) |
 | **Value** | Crew time is so scarce that NASA charges commercial users about USD 130,000 per hour of it (2021 price list). Demify must replace parts of existing health checks, not add to them; we will measure the minutes it costs in an analog mission. We do **not** claim savings yet |
 | **Students** | Open source: students can read, use and improve it. We are two students who built it in a weekend |
 | **Cost** | NASA pays nothing and can use it today. With NASA we seek a collaboration without money changing hands (data, feedback from flight surgeons). Paying space customers are on the European side, through Switzerland's ESA membership |
@@ -135,7 +136,7 @@ Price benchmarks: software-only remote monitoring is sold at about USD 5 to 15 p
 | Programme | What it really is | In our plan |
 |---|---|---|
 | **Venture Kick** | Stage 1: CHF 10,000 grant. Stages 2 and 3: CHF 40,000 and CHF 100,000 as convertible loans. A jury at every stage | Stage 1 in the base case; stages 2 and 3 only in the funded case, as financing |
-| **ESA BIC Switzerland** | Up to EUR 200,000 over two years for a Swiss company less than 5 years old with a space connection; 4 to 6 start-ups per round | Funded case only, spread over years 2 and 3 |
+| **ESA BIC Switzerland** | Up to EUR 200,000 over two years for a Swiss company less than 5 years old with a space connection; 4 to 6 start-ups per round | Not counted in the tables below; named separately in EUR (31 Oct 2026 cut-off passed) |
 | **Innosuisse innovation project** | Pays the research partner (university or hospital), not us; we add our own share | The medical validation; not counted as income |
 | **Swiss Polar Institute exploratory grants** | Up to CHF 75,000 for Swiss polar and high-altitude research | For a polar pilot with a research partner |
 
@@ -171,33 +172,33 @@ Assumptions:
 |---|---|---|---|---|---|---|
 | Venture Kick stage 1 (grant) | 10,000 | | | 10,000 | | |
 | Venture Kick stages 2 and 3 (convertible loans) | | | | 40,000 | 100,000 | |
-| ESA BIC Switzerland | | | | | 95,000 | 95,000 |
-| ESA feasibility contract | | | | | 70,000 | |
 | Paid research pilots | | 20,000 | 36,000 | | 20,000 | 36,000 |
 | Integration and support | | | 20,000 | | | 20,000 |
-| **Total** | **10,000** | **20,000** | **56,000** | **50,000** | **285,000** | **151,000** |
+| **Total** | **10,000** | **20,000** | **56,000** | **50,000** | **120,000** | **56,000** |
+
+Not counted: **ESA BIC Switzerland**, up to EUR 200,000 over two years if selected (needs a Swiss company under 5 years; shown in EUR, never converted), and an **ESA Kick-Start** feasibility study (75 % funded, we co-fund 25 %; Swiss participation being checked with SERI).
 
 **Result over three years**
 
 | | Base case | Funded case |
 |---|---|---|
-| Money in | 86,000 | 486,000 |
+| Money in | 86,000 | 226,000 |
 | Costs | 609,300 | 609,300 |
-| **Gap** | **−523,300** | **−123,300** |
+| **Gap** | **−523,300** | **−383,300** |
 
 What this means:
 - **Without the programmes**, Demify cannot pay two people full time. It stays a part-time research project, which is fine for year 1.
-- **With them**, the gap of about CHF 120,000 is closed by a small seed round or by lower salaries in year 3.
+- **With Venture Kick**, the gap is still about CHF 380,000, and CHF 140,000 of the money in is loans. ESA BIC (up to EUR 200,000 if selected) would close a large part; the rest needs a small seed round or lower salaries in year 3.
 - **Sustainable income** starts only after certification, through site licences sold with a remote-medicine provider. We say this openly.
 
 ---
 
 ## 8. Open source, done properly
 
-- **Licence:** move from MIT to **Apache 2.0** now, while there are only two authors. It adds a patent grant, which companies and agencies prefer.
+- **Licence:** keep **MIT** now on every branch (it is already published). Apache 2.0 adds a patent grant that companies and agencies prefer; switch later only with every contributor's consent.
 - **What stays ours:** the name (register "Demify" as a trademark; forks must rename), the validated and documented threshold library, the certified build, and being the maintainers.
 - **Why open:** flight surgeons and agencies can check every rule. That trust is the reason they would use a tool from two students at all.
-- **Precedents:** Libre Space Foundation started with prize money and won a EUR 2 million ESA contract. Tidepool took an open-source insulin app to FDA clearance (to be checked).
+- **Precedents:** Libre Space Foundation started with prize money and won a EUR 2 million ESA contract.
 
 ---
 
@@ -208,7 +209,7 @@ What this means:
 | **Customer segments** | First: research teams running studies of isolated crews (analog missions, polar winter-over research). Next: national polar programmes and their medical contractors. Then: offshore through medical service providers. Space: ESA and commercial operators as research partners |
 | **Users / deciders / payers** | User: crew member and station doctor or medic. Decider: research lead or programme chief medical officer. Payer: research grant or programme budget |
 | **Customer need** | Crews far from a doctor need to notice slow health changes early and know what to do. In space the delay to Earth makes this harder; on Earth a lone doctor needs structured daily data for everyone |
-| **Value proposition** | Each person's own baseline, the likely cause, and who must act given the distance to help; open and checkable; works offline; works with any device; self-hosted |
+| **Value proposition** | Rates each value against sourced thresholds and the person's own baseline, and adapts who to call and when to the distance to help; open and checkable; works offline; any device or gateway that can POST its JSON; self-hosted |
 | **Channels** | Space Apps and its juries; Asclepios and MDRS; Swiss space partners (BIOTESC, UZH Space Hub); ESA; later remote-medicine providers |
 | **Customer relationships** | Close research partnership in pilots; open-source community; support contracts for programmes |
 | **Revenue streams** | Agency and research contracts; paid pilots; integration and support; site licences after certification |
@@ -224,11 +225,11 @@ What this means:
 | Question | Answer |
 |---|---|
 | "Only about 20 to 30 people fly per year. Where is the business?" | Astronauts give us credibility, not revenue. We prove it with analog and polar crews; agencies and research grants fund the first years; remote-medicine providers sell it to Earth sites after certification |
-| "Is it a medical device?" | Its triage functions would be, likely class IIb. Today it is a research prototype that is not on the market. Our plan has a phase without medical interpretation, then pilots under ethics approval, then certification |
+| "Is it a medical device?" | Its triage functions would be, class IIa to IIb, possibly III for cardiac escalation, to be confirmed with a notified body. Today it is a research prototype, not a certified medical device, and not on the market. Our plan has a phase without medical interpretation, then pilots under ethics approval, then certification |
 | "Why would NASA trust two students?" | It is open: every rule names its source and can be checked. And we do not ask for trust first; we start with analog missions |
 | "If it's free, how do you survive?" | Contracts and pilots first, then certified site licences. The code is open; the name, the validated library and the certified build are ours |
 | "Are the vital signs real?" | The NASA data and the space weather are real. Vital signs are simulated until a device is connected, and labelled so |
-| "How are you different from Hexoskin or Oura?" | They are devices. We are the open layer that rates the data against each person's own baseline, explains the likely cause and decides who must act, with any device |
+| "How are you different from Hexoskin or Oura?" | They are devices. We are the open layer that rates the data against sourced thresholds and each person's own baseline and shows who should act; the commander and the crew member decide |
 | "What do you need next?" | A space medicine advisor, a place in Asclepios VII, and a Swiss research partner |
 
 How much time to give this in the pitch: about one slide, around 15 to 20 % of the talk, framed as impact and sustainability. Keep the canvas and the three-year table as backup for questions.

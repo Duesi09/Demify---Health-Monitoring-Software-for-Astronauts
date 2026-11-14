@@ -152,7 +152,7 @@ Research run on 14 November 2026: three researchers (space, extreme places on Ea
 - Do not present 'no veto received' as consent. The packet may have been lost, and during a blackout the plan runs with no oversight. The screen must say so.
 - Do not say 'tested like code' means clinically validated. Replay against the scripted 180-day simulation checks only the logic paths, because the script is the 'truth'.
 - Do not quote 152 against 8 flagged days, or 19 against 17 quiet-day alerts, as accuracy or performance. Both are circular scratch experiments on simulated data.
-- Do not say Demify is a medical device, is cleared, or is on track for EU MDR class IIb or FDA clearance. It is decision support. Say that carrying out clinical protocols would likely raise its classification.
+- Do not say Demify is a certified medical device, is cleared, or is on track for EU MDR class IIb or FDA clearance. Say "research prototype, not a certified medical device" (never "decision support": that phrase is the MDR Rule 11 trigger). Say that carrying out clinical protocols would likely raise its classification.
 - Do not say NASA, ESA or any flight surgeon uses, reviewed or endorsed Demify or its plans.
 - Do not say the Crew-11 return was caused by communication delay, or name a diagnosis. The ISS link has seconds of delay. The condition is undisclosed, Fincke said a heart attack was ruled out, and NASA's J.D. Polk said the capability to diagnose and treat it 'does not live on the ISS'.
 - Do not present unverified landscape entries as fact: EIMO details, CMO-DA's 74 to 88%, ARCHeR real-time data, the Oura edge computing on Ax-4, and Apple, Oura, WHOOP and Biofourmis baseline details.
