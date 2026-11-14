@@ -2,13 +2,14 @@
   "name": "demify",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "snapshots:promote": "node scripts/promote-snapshots.mjs",
     "sensor:demo": "node scripts/sensor-demo.mjs"
   },

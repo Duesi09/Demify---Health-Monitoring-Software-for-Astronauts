@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { config } from "@/lib/config";
+import { isCrossOrigin, isJson, requireAdmin } from "@/lib/http";
 import { INDICATORS } from "@/lib/health/knowledge";
 import { addReadings, getCrew, listReadings } from "@/lib/store/readings";
 import { simulateDaily, simulateLive, simulateSeries } from "@/lib/sources/simulator";
@@ -89,27 +90,6 @@ function takeRateBudget(counts: Map<string, number>, now = Date.now()): number {
   return 0;
 }
 
-/**
- * Blocks cross-site writes: a browser always sends Origin on a cross-origin
- * POST, so if one is present its host must be ours. Devices and curl send no
- * Origin and are unaffected.
- */
-function isCrossOrigin(req: Request): boolean {
-  const origin = req.headers.get("origin");
-  if (origin === null) return false;
-  let originHost: string;
-  try {
-    originHost = new URL(origin).host;
-  } catch {
-    return true; // "null" (sandboxed iframe, file://) or garbage
-  }
-  const hosts = [req.headers.get("x-forwarded-host"), req.headers.get("host")]
-    .flatMap((h) => (h ? h.split(",") : []))
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean);
-  return !hosts.includes(originHost.toLowerCase());
-}
-
 class BodyTooLarge extends Error {}
 
 /** Reads the body with a byte cap, so chunked uploads without Content-Length are bounded too. */
@@ -172,13 +152,16 @@ export async function GET(req: Request) {
  * POST /api/readings — manual check-ins and device ingestion.
  * Body: one reading or an array (max 500). Example:
  *   {"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"}
+ * Needs the admin token (x-demify-admin header or unlock cookie) when
+ * DEMIFY_ADMIN_TOKEN is set (see requireAdmin).
  */
 export async function POST(req: Request) {
   if (isCrossOrigin(req)) {
     return Response.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
   }
-  const mediaType = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-  if (mediaType !== "application/json") {
+  const denied = requireAdmin(req);
+  if (denied) return denied;
+  if (!isJson(req)) {
     return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
   const declared = Number(req.headers.get("content-length"));

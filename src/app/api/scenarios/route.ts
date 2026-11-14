@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isCrossOrigin, isJson } from "@/lib/http";
+import { isCrossOrigin, isJson, requireAdmin } from "@/lib/http";
 import { getCrew } from "@/lib/store/readings";
 import { listScenarios, SCENARIO_TYPES, startScenario, stopScenario } from "@/lib/store/scenarios";
 
@@ -15,9 +15,14 @@ export async function GET() {
   return Response.json({ scenarios: await listScenarios() });
 }
 
-/** POST /api/scenarios {crewId, type} — start an emergency drill for one crew member. */
+/**
+ * POST /api/scenarios {crewId, type} — start an emergency drill for one crew member.
+ * Needs the admin token when DEMIFY_ADMIN_TOKEN is set (see requireAdmin).
+ */
 export async function POST(req: Request) {
   if (isCrossOrigin(req)) return Response.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
+  const denied = requireAdmin(req);
+  if (denied) return denied;
   if (!isJson(req)) return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
   let body: unknown;
   try {
@@ -34,9 +39,14 @@ export async function POST(req: Request) {
   return Response.json({ scenario }, { status: 201 });
 }
 
-/** DELETE /api/scenarios?crewId=cdr — end a drill (no crewId: end all). */
+/**
+ * DELETE /api/scenarios?crewId=cdr — end a drill (no crewId: end all).
+ * Needs the admin token when DEMIFY_ADMIN_TOKEN is set (see requireAdmin).
+ */
 export async function DELETE(req: Request) {
   if (isCrossOrigin(req)) return Response.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
+  const denied = requireAdmin(req);
+  if (denied) return denied;
   const crewId = new URL(req.url).searchParams.get("crewId") ?? undefined;
   await stopScenario(crewId);
   return Response.json({ ok: true });

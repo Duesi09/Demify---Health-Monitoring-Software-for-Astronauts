@@ -1,5 +1,5 @@
 /**
- * Client-safe helpers for the NASA Data (OSDR) page: unit labels, number
+ * Client-safe helpers for the Open data (NASA OSDR) page: unit labels, number
  * formatting and short "why it matters in spaceflight" notes per analyte.
  * Analyte ids are the slugs produced by src/lib/sources/osdr.ts.
  */

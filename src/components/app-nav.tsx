@@ -93,7 +93,7 @@ export function AppNav() {
       <Link
         href="/"
         aria-label="Demify Health Monitoring, overview"
-        className="mr-2 flex shrink-0 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-accent md:mb-6 md:mr-0 md:mt-1 md:justify-center md:px-2"
+        className="mr-2 flex shrink-0 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-accent md:mb-5 md:mr-0 md:mt-1 md:justify-center md:px-2"
       >
         {/* Phones: compact mark in the top bar. Desktop: full logo with wordmark. */}
         <Image src="/brand/demify-mark.png" alt="" width={32} height={32} priority unoptimized className="h-8 w-8 md:hidden" />
@@ -104,7 +104,7 @@ export function AppNav() {
           height={979}
           priority
           unoptimized
-          className="hidden h-auto w-[132px] md:block"
+          className="hidden h-auto w-[100px] md:block"
         />
       </Link>
       {NAV.map((group, gi) => (

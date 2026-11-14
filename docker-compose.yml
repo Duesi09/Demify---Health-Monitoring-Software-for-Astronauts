@@ -5,6 +5,11 @@
 #   docker compose ps               # wait for "healthy"
 #   open http://localhost:${DEMIFY_PORT:-3000}
 #
+# Published ports listen on 127.0.0.1 (this machine only) unless DEMIFY_BIND
+# says otherwise: DEMIFY_BIND=0.0.0.0 opens them to the LAN. On a shared
+# network also set DEMIFY_ADMIN_TOKEN so only unlocked browsers and devices
+# can start drills or post readings (docs/OPERATIONS.md, section 3.7).
+#
 # Air-gapped variant (no outbound network at all, bundled snapshots only):
 #   docker compose --profile offline up -d --build demify-offline
 #
@@ -30,6 +35,11 @@ x-demify-env: &demify-env
   DEMIFY_RETENTION_DAYS: ${DEMIFY_RETENTION_DAYS:-}
   DEMIFY_MAX_READINGS: ${DEMIFY_MAX_READINGS:-}
   DEMIFY_RATE_LIMIT_PER_MIN: ${DEMIFY_RATE_LIMIT_PER_MIN:-}
+  # Optional write protection: when set, POST/DELETE /api/scenarios and
+  # POST /api/readings need this token (x-demify-admin header, or the cookie
+  # from GET /unlock?token=...). Empty = open, as before. DEMIFY_BIND is not
+  # passed in here: it only sets the host address of the published ports below.
+  DEMIFY_ADMIN_TOKEN: ${DEMIFY_ADMIN_TOKEN:-}
   # External data sources (override to point at a mirror / ground relay)
   NASA_API_KEY: ${NASA_API_KEY:-DEMO_KEY}
   OSDR_BASE_URL: ${OSDR_BASE_URL:-https://osdr.nasa.gov}
@@ -97,7 +107,8 @@ services:
     <<: *demify-common
     container_name: demify
     ports:
-      - "${DEMIFY_BIND:-0.0.0.0}:${DEMIFY_PORT:-3000}:3000"
+      # Loopback by default (stage-safe); DEMIFY_BIND=0.0.0.0 for LAN access.
+      - "${DEMIFY_BIND:-127.0.0.1}:${DEMIFY_PORT:-3000}:3000"
     environment:
       <<: *demify-env
     volumes:
@@ -155,7 +166,8 @@ services:
     healthcheck:
       disable: true
     ports:
-      - "${DEMIFY_BIND:-0.0.0.0}:${DEMIFY_OFFLINE_PORT:-3001}:3000"
+      # Loopback by default (stage-safe); DEMIFY_BIND=0.0.0.0 for LAN access.
+      - "${DEMIFY_BIND:-127.0.0.1}:${DEMIFY_OFFLINE_PORT:-3001}:3000"
     networks:
       - airgap
       - default

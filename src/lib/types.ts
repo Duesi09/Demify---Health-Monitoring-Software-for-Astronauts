@@ -107,8 +107,13 @@ export interface MissionProfile {
   name: string;
   /** Typical GCR background dose rate in mSv/day (quiet sun). */
   baselineDoseRate: number;
-  /** One-way light time to Earth in seconds (comms delay hazard). */
+  /**
+   * One-way signal delay to Earth in seconds (comms delay hazard). Not always
+   * straight-line light time: see delayBasis for what the number stands for.
+   */
   commDelaySeconds: number;
+  /** Where commDelaySeconds comes from, e.g. "light time at about 384,400 km". */
+  delayBasis: string;
   /** Gravity relative to Earth. */
   gravity: number;
   durationDays: number;

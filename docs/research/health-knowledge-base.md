@@ -8,7 +8,10 @@ Every value carries one of these source tags:
 - **CLIN**: a standard clinical range, used where NASA publishes nothing specific.
 - **APP**: a band derived for this app. It is not an official limit, and the UI says so.
 
-> Demify is decision support, not a medical device. Flight surgeons remain the authority.
+> Research prototype, not a certified medical device. The ranges below show
+> how published and project-defined thresholds would flag values in a
+> research and training simulation; see the intended purpose in the
+> [README](../../README.md#intended-purpose).
 
 ## The five hazards (NASA HRP, "RIDGE")
 
@@ -16,7 +19,7 @@ Every value carries one of these source tags:
 |---|---|
 | **R**adiation | Cancer risk, effects on the central nervous system and cognition, degenerative disease of the heart, blood vessels and eyes. A solar particle event (SPE) can cause acute effects. Neutrons make up about 30 % of the dose on the ISS (CSA). |
 | **I**solation & confinement | Sleep loss, disrupted circadian rhythm, anxiety and depression, conflict within the crew |
-| **D**istance from Earth | Up to a 20 min one-way communication delay to Mars, so the crew must be medically self-sufficient |
+| **D**istance from Earth | About 3 to 22 minutes one-way signal delay to Mars, depending on planetary positions, so the crew must be medically self-sufficient |
 | **G**ravity fields | Bone loss of 1–1.5 %/month, loss of muscle and fitness, SANS (eye changes from fluid shift), orthostatic intolerance (fainting after return to gravity), kidney stones |
 | Hostile closed **E**nvironment | CO₂, microbes, immune changes, noise and light |
 
@@ -30,8 +33,10 @@ Every value carries one of these source tags:
 | Blood-forming organs | 250 mGy-Eq per 30 days; 500 mGy-Eq per year |
 | Lens of the eye | 1,000 / 2,000 / 4,000 mGy-Eq (30 days / 1 year / career) |
 
-Typical dose rates: ISS about 0.3–0.8 mSv/day, lunar surface about 1.37, Mars
-cruise about 1.8, Mars surface about 0.64. A storm shelter needs about 10 cm of
+Typical dose rates: ISS about 0.3–0.8 mSv/day, lunar surface about 1.4
+(Chang'e-4: 1,369 µSv/day dose equivalent, Zhang et al. 2020, Sci. Adv. 6,
+eaaz1334; the Artemis (Lunar) profile uses 1.4), Mars cruise about 1.8, Mars
+surface about 0.64. A storm shelter needs about 10 cm of
 water-equivalent material. Shielding cuts SPE dose by about 50 % but GCR dose
 by only about 7 %.
 

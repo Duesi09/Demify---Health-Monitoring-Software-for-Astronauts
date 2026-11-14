@@ -19,6 +19,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # `next typegen` writes the generated route types (PageProps, LayoutProps)
+      # that a clean checkout lacks, then `tsc --noEmit` checks the whole app.
+      - run: npm run typecheck
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
       - run: npm run test
       - run: npm run build
         env:

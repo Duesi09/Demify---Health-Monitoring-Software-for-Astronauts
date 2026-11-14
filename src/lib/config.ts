@@ -4,22 +4,32 @@ import type { MissionProfile, MissionProfileId } from "./types";
 
 /**
  * Mission profiles. Dose rates are representative quiet-sun GCR values
- * (see src/lib/health/knowledge.ts for sources).
+ * (see src/lib/health/knowledge.ts for sources). commDelaySeconds is the
+ * one-way signal delay the app uses for timing; delayBasis says where each
+ * number comes from, because they are not all straight-line light time.
  */
 export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
   iss: {
     id: "iss",
     name: "ISS (Low Earth Orbit)",
     baselineDoseRate: 0.5,
+    // Light time from 400 km is only about 1.3 ms; the ISS talks to the
+    // ground through TDRS relays in geostationary orbit (~36,000 km up and
+    // back down) plus ground-network latency, which is what 0.5 s stands for.
     commDelaySeconds: 0.5,
+    delayBasis: "relay through TDRS geostationary satellites plus network latency (illustrative)",
     gravity: 0,
     durationDays: 180,
   },
   "artemis-lunar": {
     id: "artemis-lunar",
     name: "Artemis (Lunar)",
-    baselineDoseRate: 1.3,
+    // Chang'e-4 lander, lunar surface: 1,369 µSv/day dose equivalent
+    // (Zhang et al. 2020, Science Advances 6(39), eaaz1334), about 1.4 mSv/day.
+    baselineDoseRate: 1.4,
+    // 384,400 km / 299,792 km/s = 1.28 s
     commDelaySeconds: 1.3,
+    delayBasis: "light time at about 384,400 km",
     gravity: 0.166,
     durationDays: 30,
   },
@@ -27,7 +37,10 @@ export const MISSION_PROFILES: Record<MissionProfileId, MissionProfile> = {
     id: "mars-transit",
     name: "Mars Transit",
     baselineDoseRate: 1.8,
+    // Earth-Mars light time ranges from about 3 to 22 minutes one way; 12.5
+    // minutes stands for a mid-transit distance.
     commDelaySeconds: 750,
+    delayBasis: "fixed 750 s, mid-range Mars transit (illustrative)",
     gravity: 0,
     durationDays: 900,
   },

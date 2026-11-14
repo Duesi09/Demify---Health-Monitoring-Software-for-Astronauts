@@ -24,12 +24,17 @@ docker compose up -d --build
 docker compose ps                 # wait until STATUS shows "(healthy)"
 open http://localhost:3000        # or the port set by DEMIFY_PORT
 
-# Plain Docker
+# Plain Docker (127.0.0.1: this machine only, like the Compose default)
 docker build -t demify:dev .
-docker run -d --name demify -p 3000:3000 -v demify-data:/data demify:dev
+docker run -d --name demify -p 127.0.0.1:3000:3000 -v demify-data:/data demify:dev
 curl http://localhost:3000/api/health
 # {"status":"ok","mission":"iss","offline":false,"time":"..."}
 ```
+
+Compose publishes the port on `127.0.0.1` unless `DEMIFY_BIND` says otherwise,
+so a fresh install is reachable from the host only. To serve a LAN, set
+`DEMIFY_BIND=0.0.0.0` and an admin token (see section 3,
+`DEMIFY_ADMIN_TOKEN`).
 
 Stop the app with `docker compose down`. Your data stays in the named volume.
 `docker compose down -v` also deletes the volume and all crew readings.
@@ -155,6 +160,7 @@ With Compose, `.env` only fills in the `${...}` placeholders of
 | `DEMIFY_RETENTION_DAYS` | `1100` | Crew readings older than this are pruned from the store on write (keep it longer than the mission) |
 | `DEMIFY_MAX_READINGS` | `50000` | Hard cap on stored readings; oldest sensor readings are evicted first, then oldest manual ones |
 | `DEMIFY_RATE_LIMIT_PER_MIN` | `600` | Readings accepted per crew member per minute on `POST /api/readings` (429 above) |
+| `DEMIFY_ADMIN_TOKEN` | empty (off) | Optional write protection. When set, `POST`/`DELETE /api/scenarios` and `POST /api/readings` answer `401` unless the request sends the header `x-demify-admin: <token>` or the httpOnly `SameSite=Strict` cookie a browser gets from `GET /unlock?token=<token>` (compared in constant time; the cookie holds a value derived from the token, valid 7 days). Pages and `GET` APIs stay open. Use a long random value (`openssl rand -hex 24`); see [`OPERATIONS.md` §3.7](OPERATIONS.md#37-stage-and-shared-networks) |
 | `NASA_API_KEY` | `DEMO_KEY` | Get a key at <https://api.nasa.gov/>. `DEMO_KEY` is heavily rate limited |
 | `OSDR_BASE_URL` | `https://osdr.nasa.gov` | Point at a ground relay or mirror if needed |
 | `OSDR_BIODATA_URL` | `https://visualization.osdr.nasa.gov` | |
@@ -165,6 +171,12 @@ Compose-only variables, which the app does not read: `DEMIFY_PORT`,
 `DEMIFY_OFFLINE_PORT`, `DEMIFY_BIND`, `DEMIFY_IMAGE`, `DEMIFY_CPUS`,
 `DEMIFY_MEMORY`, `DEMIFY_BUILD_CA`, plus the `DEMIFY_*PROXY` and
 `DEMIFY_NODE_EXTRA_CA_CERTS` variables described in the next section.
+
+`DEMIFY_BIND` (default `127.0.0.1`) is the host address of the published
+ports of `demify` and of the air-gapped relay `demify-offline-gateway`. The
+loopback default suits a stage laptop and a host with its own reverse proxy;
+`0.0.0.0` publishes on every interface for LAN clients. Combine `0.0.0.0`
+with `DEMIFY_ADMIN_TOKEN`.
 
 ---
 
@@ -310,8 +322,9 @@ pending writes can finish.
 ## 8. Reverse proxy and TLS
 
 Do not expose the Node server to untrusted networks directly. Put a
-reverse proxy in front for TLS, request limits and authentication. Bind
-the app to loopback with `DEMIFY_BIND=127.0.0.1`, then:
+reverse proxy in front for TLS, request limits and authentication. Compose
+already binds the app to loopback (`DEMIFY_BIND` defaults to `127.0.0.1`),
+so the proxy on the same host reaches it and nothing else does:
 
 **Caddy** (automatic TLS):
 
@@ -343,8 +356,12 @@ server {
 
 On an isolated spacecraft LAN without a public CA, issue certificates from
 the mission's internal CA, or terminate TLS at the vehicle's gateway.
-**Demify has no built-in authentication.** Restrict access at the proxy or
-network layer, because crew health data is sensitive.
+
+**Demify has no user accounts.** The optional `DEMIFY_ADMIN_TOKEN` locks the
+write APIs (drills and device readings) but not the pages, which show crew
+health data. Restrict who can read them at the proxy or network layer. Behind
+TLS, pass `X-Forwarded-Proto` (as above; Caddy does it by default) so the
+unlock cookie is marked `Secure`.
 
 ---
 

@@ -10,8 +10,11 @@ running drills and fixing common problems.
   [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - Every setting with comments: [`.env.example`](../.env.example).
 
-> Demify is decision support, not a medical device. Flight surgeons remain the
-> medical authority.
+> **Research prototype, not a certified medical device.** Demify is research
+> and training software for analog and simulated missions; see the intended
+> purpose in the [README](../README.md#intended-purpose). In a real situation
+> follow your mission's medical procedures and contact your flight surgeon or
+> emergency service.
 
 **Contents**
 
@@ -104,7 +107,8 @@ Design rules behind the target architecture:
   just as fast. Backups are ZFS checksums plus snapshots on the host and a
   copy on the ground.
 - **Earth link over DTN.** The Bundle Protocol stores data and forwards it when
-  a contact window opens, instead of failing on a 20-minute or broken link.
+  a contact window opens, instead of failing on a link with up to about
+  22 minutes of one-way delay, or no link at all.
 
 | Area | What Demify implements today | Target / next step |
 |---|---|---|
@@ -115,8 +119,8 @@ Design rules behind the target architecture:
 | Backup | Manual volume backup with `tar` ([§3.5](#35-backup-and-restore)) | Scheduled snapshots plus a ground copy |
 | Earth link | Live NOAA / NASA fetch with offline snapshots as fallback | DTN Bundle Protocol to and from ground |
 | Deployment | Docker image, Compose, air-gapped `offline` profile | Same image on flight hardware (ARM build is supported) |
-| Alarms and drills | IEC 60601-1-8 style alarms, training drills with auto-end | Unchanged |
-| Access control | None built in; restrict at proxy or network level | Authentication at the station gateway |
+| Alarms and drills | Training alarms styled after IEC 60601-1-8, drills with auto-end | Unchanged |
+| Access control | Compose binds to `127.0.0.1` by default; optional admin token for the write APIs (`DEMIFY_ADMIN_TOKEN`, [§3.7](#37-stage-and-shared-networks)); anything more at proxy or network level | Authentication at the station gateway |
 
 ### How one reading flows through Demify today
 
@@ -128,9 +132,9 @@ sequenceDiagram
     participant M as Crew monitor page
 
     D->>A: POST /api/readings with JSON batch
-    A->>A: Check content type, size, fields, unit, range, crew id
+    A->>A: Check origin, admin token if set, content type, size, fields, unit, range, crew id
     alt something is wrong
-        A-->>D: 400, 403, 413, 415 or 429 with an error message
+        A-->>D: 400, 401, 403, 413, 415 or 429 with an error message
     else all readings valid
         A->>S: Append readings, atomic file replace
         A-->>D: 201 with the created readings
@@ -217,8 +221,9 @@ The first build takes a few minutes. Later starts take seconds.
       `{"status":"ok","mission":"iss","offline":false,"time":"..."}`.
 - [ ] http://localhost:3000 shows the **Overview** with four crew members.
 - [ ] Open a crew member's monitor (**Crew monitor** in the navigation, or a
-      crew card). The waveforms move and the page says **DEMO**; vitals are
-      labelled simulated until a sensor is connected.
+      crew card). The waveforms move, the monitor is labelled **Simulated
+      training monitor**, and vitals are labelled **SIMULATED** until a sensor
+      is connected.
 - [ ] **Enable alarm sound.** Browsers block sound until you interact with
       the page. When an alarm bar appears, click **Enable alarm sound** in it.
       Check that the computer's volume is up.
@@ -364,6 +369,74 @@ the image): `docker compose down -v && docker compose up -d`.
 Local development: stop `npm run dev`, delete `data/demify-db.json` and
 `data/demify-scenarios.json`, start again.
 
+### 3.7 Stage and shared networks
+
+On a stage, at a demo table or on any shared Wi-Fi, assume someone else can
+reach the laptop. Two settings keep strangers from starting drills or
+posting readings.
+
+**1. Loopback binding (default).** Compose publishes the app and the
+air-gapped relay on `${DEMIFY_BIND:-127.0.0.1}`, so only the machine that runs
+Demify can open it. Keep this default on a stage laptop. For crew tablets or a
+sensor hub on a LAN, open it up in `.env`:
+
+```dotenv
+DEMIFY_BIND=0.0.0.0
+DEMIFY_ADMIN_TOKEN=<long random value>
+```
+
+and run `docker compose up -d`. Check what is published with
+`docker compose ps` (the `PORTS` column shows `127.0.0.1:3000->3000/tcp` or
+`0.0.0.0:3000->3000/tcp`). `npm run dev` is not affected by `DEMIFY_BIND`; it
+listens on all interfaces (`next dev -H 127.0.0.1` keeps it local).
+
+**2. Admin token (optional).** Generate a token once, for example with
+`openssl rand -hex 24`, and put it in `.env` as `DEMIFY_ADMIN_TOKEN`. Never
+commit it. With the token set:
+
+| Request | Without the token | With the token |
+|---|---|---|
+| `POST /api/scenarios`, `DELETE /api/scenarios` (start, end drills) | `401` with `{"error":"Admin token required. ..."}` | As before |
+| `POST /api/readings` (devices) | `401` | As before |
+| Pages, `GET` APIs, `/api/health` | Open | Open |
+
+How each client sends the token:
+
+- **Browser** (to start and end drills from the crew monitor): open
+  `http://<host>:3000/unlock?token=<token>` once. Demify compares the token
+  in constant time, sets an httpOnly, `SameSite=Strict` cookie that holds a
+  value derived from the token (not the token itself), valid for 7 days, and
+  redirects to the overview. Behind a TLS proxy that sends
+  `X-Forwarded-Proto: https`, the cookie is also marked `Secure`. A wrong
+  token answers `401` and sets nothing. Without a configured token, `/unlock`
+  only redirects to the overview.
+- **Devices, gateways and scripts:** send the header
+  `x-demify-admin: <token>`:
+
+  ```bash
+  curl -X POST http://localhost:3000/api/readings \
+    -H 'content-type: application/json' \
+    -H "x-demify-admin: $DEMIFY_ADMIN_TOKEN" \
+    -d '{"crewId":"cdr","indicator":"heartRate","value":64,"unit":"bpm","source":"sensor"}'
+  ```
+
+To lock every browser out again, change the token and run
+`docker compose up -d`: cookies issued for the old token stop working. The
+browser shows a drill error starting with `Admin token required` when it is
+not unlocked.
+
+Limits, so nobody is surprised on stage:
+
+- The daily **check-in** form saves through the app itself (a server action),
+  not through `POST /api/readings`, so the token does not cover it. Keep the
+  loopback default wherever check-ins must stay private.
+- `npm run sensor:demo` does not send the token yet. Leave
+  `DEMIFY_ADMIN_TOKEN` empty while you use it, or post with `curl` and the
+  header as shown above.
+- The token is not a user login and does not encrypt anything. On a real
+  network put Demify behind a reverse proxy with TLS
+  ([`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls)).
+
 ---
 
 ## 4. Connecting a sensor
@@ -377,7 +450,9 @@ Demify. There is no driver to install.
 flowchart TD
     req["POST /api/readings"] --> o{"Browser request<br/>from another site?"}
     o -- "yes" --> e403["403 Cross-origin"]
-    o -- "no" --> ct{"Content-Type is<br/>application/json?"}
+    o -- "no" --> tk{"DEMIFY_ADMIN_TOKEN set and<br/>no valid header or cookie?"}
+    tk -- "yes" --> e401["401 Admin token required"]
+    tk -- "no" --> ct{"Content-Type is<br/>application/json?"}
     ct -- "no" --> e415["415"]
     ct -- "yes" --> sz{"Body 1 MB or less?"}
     sz -- "no" --> e413["413"]
@@ -474,6 +549,7 @@ or check the monitor feed with `GET /api/vitals/live?crewId=cdr`.
 |---|---|---|
 | `201` | All readings stored | Continue |
 | `400` | Invalid JSON, empty batch or more than 500 readings, unknown indicator, wrong unit, value out of range, unknown `crewId`, `takenAt` more than 5 minutes ahead | Fix the data. Retrying the same request does not help |
+| `401` | `DEMIFY_ADMIN_TOKEN` is set and the request has no valid `x-demify-admin` header or unlock cookie ([§3.7](#37-stage-and-shared-networks)) | Send the header with the token |
 | `403` | Request carries an `Origin` header from another site (a web page on a different host). Devices and `curl` send no `Origin` | Send from the device, or serve the page from the same host. Behind a reverse proxy, pass the original `Host` header |
 | `413` | Body larger than 1 MB | Send smaller batches |
 | `415` | `Content-Type` is not `application/json` | Set the header |
@@ -569,7 +645,10 @@ sequenceDiagram
 **In the app.** Open **Crew monitor**, pick the crew member, scroll to
 **Emergency drill**, click a drill button and confirm. **End drill** stops it.
 
-**Through the API.**
+**Through the API.** With `DEMIFY_ADMIN_TOKEN` set, add
+`-H "x-demify-admin: $DEMIFY_ADMIN_TOKEN"` to the `POST` and `DELETE` calls
+([§3.7](#37-stage-and-shared-networks)); in the browser, open
+`/unlock?token=<token>` once.
 
 ```bash
 # start (one drill per crew member; starting another replaces it)
@@ -597,8 +676,8 @@ and survive a restart.
 
 Every external source (NOAA SWPC, NASA OSDR) has a snapshot file. When the
 live source cannot be reached, Demify falls back automatically, and each chart
-shows where its data came from (`live`, `cache` or `offline snapshot`) and how
-old it is.
+shows where its data came from: **REAL** with its fetch time (a live fetch or
+an in-memory copy of one), or **SNAPSHOT** with its date (the copy on disk).
 
 ```mermaid
 flowchart LR
@@ -647,11 +726,13 @@ with `DEMIFY_RESEED_SNAPSHOTS=true`. Details:
 | `Cannot connect to the Docker daemon` / `error during connect` | Docker Desktop or the Docker service is not running | Start Docker Desktop and wait until it is running. Linux: `sudo systemctl start docker` |
 | `permission denied ... docker.sock` (Linux) | User not in the `docker` group | `sudo usermod -aG docker "$USER"`, then log out and in |
 | `port is already allocated` / `address already in use` | Another program uses port 3000 | Add `DEMIFY_PORT=3010` to `.env`, run `docker compose up -d`, open http://localhost:3010 |
+| Demify works on the host, but tablets or sensors on the LAN cannot connect | Compose binds to `127.0.0.1` by default | Set `DEMIFY_BIND=0.0.0.0` (and a `DEMIFY_ADMIN_TOKEN`) in `.env`, run `docker compose up -d` ([§3.7](#37-stage-and-shared-networks)) |
+| Starting a drill shows `Admin token required`, or a sensor gets `401` | `DEMIFY_ADMIN_TOKEN` is set | Browser: open `/unlock?token=<token>` once. Device: send `x-demify-admin: <token>`. A changed token needs a new unlock |
 | `/bin/sh^M: bad interpreter` or `exec ... no such file or directory` at container start | Old checkout with Windows line endings | Current `.gitattributes` and `Dockerfile` handle this. Run `git pull`, then re-checkout with LF (stash your changes first): `git rm -r -q --cached . && git reset --hard`, then `docker compose build --no-cache && docker compose up -d` |
 | Container stays `unhealthy` | Server failed to start, or the data volume is not writable | `docker compose logs demify`. For a bind mount, make it owned by uid 1001 ([`DEPLOYMENT.md` §2](DEPLOYMENT.md#2-what-is-in-the-image)) |
 | No alarm sound | The browser blocks audio until you interact, or sound was silenced | Click **Enable alarm sound** in the alarm bar. Check the system volume. A silence lasts 2 minutes |
-| Charts say **offline snapshot** | No internet from the container, `DEMIFY_OFFLINE=true`, a proxy in between, or the air-gapped profile | Expected offline. Otherwise check `DEMIFY_OFFLINE`, set `DEMIFY_HTTPS_PROXY` if you are behind a proxy ([`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca)), and look for `fetch failed` in the logs |
-| `401` from the reverse proxy | The proxy requires a login | Use the credentials of your proxy; Demify itself has no login |
+| Charts say **SNAPSHOT** with a date | No internet from the container, `DEMIFY_OFFLINE=true`, a proxy in between, or the air-gapped profile | Expected offline. Otherwise check `DEMIFY_OFFLINE`, set `DEMIFY_HTTPS_PROXY` if you are behind a proxy ([`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca)), and look for `fetch failed` in the logs |
+| `401` from the reverse proxy | The proxy requires a login | Use the credentials of your proxy. Demify itself has no login; its own `401` says `Admin token required` (see above) |
 | Behind a reverse proxy, starting a drill gives `403 Cross-origin requests are not allowed`, or a check-in does not save (the log mentions `origin` not matching the host) | The proxy does not pass the original `Host` header, so the browser's `Origin` looks foreign | nginx: `proxy_set_header Host $host;` (Caddy does this by default). See [`DEPLOYMENT.md` §8](DEPLOYMENT.md#8-reverse-proxy-and-tls) |
 | `403` / `407` from a corporate proxy during `docker compose build` | Build needs the proxy or its CA | See [`DEPLOYMENT.md` §4](DEPLOYMENT.md#4-behind-a-proxy--custom-ca) |
 | Sensor readings return `400` | Wrong unit, value out of range, unknown crew id or indicator | Read the `error` text; compare with [§4.3](#43-indicator-ids-and-units) |
@@ -671,7 +752,7 @@ All settings are environment variables. Put them in a `.env` file next to
 [`.env.example`](../.env.example), the reference table in
 [`DEPLOYMENT.md` §3](DEPLOYMENT.md#3-configuration-reference).
 
-The eight you are most likely to need:
+The ones you are most likely to need:
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -680,6 +761,7 @@ The eight you are most likely to need:
 | `DEMIFY_SIMULATE` | `true` | Demo telemetry for vital signs. Set `false` when real sensors are connected |
 | `DEMIFY_OFFLINE` | `false` | `true`: never call external APIs, serve snapshots only |
 | `DEMIFY_PORT` | `3000` | Port on the host (Compose only) |
-| `DEMIFY_BIND` | `0.0.0.0` | Host address to listen on. `127.0.0.1` when a reverse proxy runs on the same host (Compose only) |
+| `DEMIFY_BIND` | `127.0.0.1` | Host address the published ports listen on (Compose only). Loopback keeps a stage laptop private; `0.0.0.0` opens Demify to the LAN ([§3.7](#37-stage-and-shared-networks)) |
+| `DEMIFY_ADMIN_TOKEN` | empty (off) | When set, drills and `POST /api/readings` need this token ([§3.7](#37-stage-and-shared-networks)) |
 | `DEMIFY_RATE_LIMIT_PER_MIN` | `600` | Readings accepted per crew member per minute on `POST /api/readings` |
 | `NASA_API_KEY` | `DEMO_KEY` | Key from [api.nasa.gov](https://api.nasa.gov/). `DEMO_KEY` is heavily rate limited |
