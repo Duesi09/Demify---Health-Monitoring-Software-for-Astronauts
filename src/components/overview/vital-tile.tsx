@@ -82,9 +82,9 @@ export function VitalTile({ title, icon: Icon, parts, status, source, chart }: V
         {parts.some((p) => p.source) && new Set(parts.map((p) => p.source)).size > 1
           ? parts.map((p) =>
               p.source === "simulated" ? (
-                <SimulatedTag key={p.id} label={`${INDICATORS[p.id].short.split(" ")[0].toLowerCase()}: simulated`} />
+                <SimulatedTag key={p.id} prefix={INDICATORS[p.id].short.split(" ")[0].toLowerCase()} />
               ) : p.source ? (
-                <SourceTag key={p.id} source={`${INDICATORS[p.id].short.split(" ")[0].toLowerCase()}: ${p.source === "manual" ? "crew entry" : p.source}`} />
+                <SourceTag key={p.id} source={p.source} prefix={INDICATORS[p.id].short.split(" ")[0].toLowerCase()} />
               ) : null,
             )
           : source === "simulated"
@@ -106,7 +106,7 @@ export function VitalTile({ title, icon: Icon, parts, status, source, chart }: V
         />
       </div>
       <p className="mt-1 text-[11px] text-muted">
-        24 h trend · {chart.basis === "simulated" ? "simulated telemetry" : "crew / sensor readings"}
+        24 h trend · {chart.basis === "simulated" ? "SIMULATED telemetry" : "crew entries and DEVICE readings"}
         {chart.band && " · shaded = normal range"}
       </p>
     </section>

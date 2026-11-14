@@ -222,15 +222,40 @@ export function PageHeader({ title, description, children }: { title: string; de
   );
 }
 
+/**
+ * Data label for external data (NOAA SWPC, NASA OSDR):
+ *  - REAL: fetched live, or an in-memory copy of a live fetch; always shown with its fetch time.
+ *  - SNAPSHOT <date>: the offline copy on disk (bundled seed or last saved fetch). Never called "live".
+ * Readings use SIMULATED / DEVICE / crew-entry labels instead (see SOURCE_LABEL in overview/format).
+ */
+export function provenanceLabel(result: Pick<SourceResult<unknown>, "freshness" | "fetchedAt">): {
+  label: string;
+  real: boolean;
+  /** "2026-11-14 09:06 UTC" */
+  time: string;
+} {
+  const t = Date.parse(result.fetchedAt);
+  const iso = Number.isFinite(t) ? new Date(t).toISOString() : null;
+  const time = iso ? `${iso.replace("T", " ").slice(0, 16)} UTC` : "unknown time";
+  if (result.freshness === "snapshot") return { label: `SNAPSHOT ${iso ? iso.slice(0, 10) : "(undated)"}`, real: false, time };
+  return { label: "REAL", real: true, time };
+}
+
 /** Shows where data came from and how fresh it is. Always render this next to external data. */
 export function Provenance({ result }: { result: Pick<SourceResult<unknown>, "source" | "freshness" | "fetchedAt" | "error"> }) {
-  const color =
-    result.freshness === "live" ? "text-nominal" : result.freshness === "cache" ? "text-accent" : "text-caution";
+  const p = provenanceLabel(result);
+  const title = p.real
+    ? `Fetched from ${result.source} at ${p.time}${result.freshness === "cache" ? " (kept in memory since that fetch)" : ""}.${
+        result.error ? ` Latest refresh failed: ${result.error}` : ""
+      }`
+    : `Offline copy saved ${p.time}. No fresh copy could be fetched${result.error ? ` (${result.error})` : ""}.`;
   return (
-    <p className="text-[11px] text-muted" title={result.error}>
+    <p className="text-[11px] text-muted" title={title}>
       Source: {result.source} ·{" "}
-      <span className={color}>{result.freshness === "snapshot" ? "offline snapshot" : result.freshness}</span> ·{" "}
-      {new Date(result.fetchedAt).toISOString().replace("T", " ").slice(0, 16)} UTC
+      <Tag size="xs" className={`align-[1px] ${p.real ? "text-fg" : "border-caution/50 text-caution"}`}>
+        {p.label}
+      </Tag>
+      {p.real && <span className="whitespace-nowrap"> · fetched {p.time}</span>}
     </p>
   );
 }

@@ -147,7 +147,9 @@ export default async function OverviewPage() {
             <h2 id="crew-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
               Heart and blood pressure, live.
             </h2>
-            <p className="mt-1 text-sm text-muted">Demo monitors with simulated telemetry unless a sensor is connected.</p>
+            <p className="mt-1 text-sm text-muted">
+              Simulated training monitors: SIMULATED telemetry unless a sensor or gateway posts DEVICE readings.
+            </p>
           </div>
         </div>
         <CrewGrid crew={crew} initialVitals={initialVitals} />
@@ -180,7 +182,7 @@ export default async function OverviewPage() {
           label="Radiation"
           icon={<ShieldCheck size={16} aria-hidden />}
           value={sLevel != null ? `S${sLevel}` : "—"}
-          unit={`${dose.rate.toFixed(2)} mSv/day est.`}
+          unit={`${dose.rate.toFixed(2)} mSv/day, illustrative`}
         >
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={sLevel != null ? dose.status : "unknown"} />
@@ -209,15 +211,15 @@ export default async function OverviewPage() {
               "No readings in the last 7 days yet. Charts fill in as the crew and devices report."
             ) : trends.allSimulated ? (
               <>
-                <SimulatedTag label="simulated" />
+                <SimulatedTag />
                 All values are demo data from the simulator. Shading marks the nominal range; training scenarios are not
                 plotted.
               </>
             ) : (
               <>
-                <SimulatedTag label="simulated" />
-                Demo data from the simulator, except values entered by crew or devices (marked * in tables). Shading
-                marks the nominal range; training scenarios are not plotted.
+                <SimulatedTag />
+                Demo data from the simulator, except crew entries and DEVICE readings (marked * and † in tables).
+                Shading marks the nominal range; training scenarios are not plotted.
               </>
             )}
           </p>
@@ -225,19 +227,15 @@ export default async function OverviewPage() {
         <CrewTrends data={trends} />
       </section>
 
-      <footer className="space-y-2 border-t border-border/60 pt-6 text-xs leading-relaxed text-muted">
+      <section aria-label="About the data" className="border-t border-border/60 pt-6 text-xs leading-relaxed text-muted">
         <p>
           Heart rate, blood pressure, SpO₂, temperature and respiration come from a deterministic demo telemetry
-          generator (marked <SimulatedTag label="simulated" />) because no public real-time astronaut vitals exist.
-          Monitor waveforms are synthesised from those numbers. Training scenarios (drills) only change simulated
-          telemetry and are always labelled. Daily check-in values are simulated until the crew enters real ones;
-          crew entries and devices posting to /api/readings always override simulated values.
+          generator (marked <SimulatedTag />) because no public real-time astronaut vitals exist. Monitor waveforms are
+          synthesised from those numbers. Training scenarios (drills) only change simulated telemetry and are always
+          labelled. Daily check-in values are simulated until the crew enters real ones; crew entries and DEVICE
+          readings posted to /api/readings always override simulated values.
         </p>
-        <p>
-          Demo software, not a medical device. Decision support only: flight surgeons remain the medical authority.
-          Data: NASA OSDR · NOAA SWPC.
-        </p>
-      </footer>
+      </section>
     </div>
   );
 }

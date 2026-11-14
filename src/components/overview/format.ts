@@ -31,10 +31,15 @@ export function nominalBand(id: IndicatorId): { from: number; to: number } | nul
   return def.top === "nominal" ? { from: lower, to: def.inputRange[1] } : null;
 }
 
+/**
+ * Data label per reading source, shown wherever a value appears: SIMULATED
+ * (demo generator), DEVICE (posted by a sensor or gateway), REAL for crew
+ * entries. External feeds use REAL / SNAPSHOT <date> via Provenance.
+ */
 export const SOURCE_LABEL: Record<ReadingSource, string> = {
-  manual: "crew entry",
-  sensor: "sensor",
-  simulated: "simulated",
+  manual: "REAL · crew entry",
+  sensor: "DEVICE",
+  simulated: "SIMULATED",
   osdr: "NASA OSDR",
   "noaa-swpc": "NOAA SWPC",
 };

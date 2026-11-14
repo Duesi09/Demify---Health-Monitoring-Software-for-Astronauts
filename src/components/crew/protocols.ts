@@ -2,11 +2,13 @@ import { INDICATORS } from "@/lib/health/knowledge";
 import type { LiveVitals, MonitorAlarm, ScenarioType } from "@/lib/types";
 
 /**
- * Emergency-response checklists for the crew page (client-safe data).
+ * Emergency-response checklists for the crew page (client-safe data): a
+ * training simulation of how pre-approved procedures are timed under signal
+ * delay.
  *
  * Wording is deliberately procedural, not prescriptive: every clinical step
- * defers to the onboard medical checklist and the flight surgeon. No dosing
- * beyond what src/lib/health/knowledge.ts already states.
+ * defers to the onboard medical checklist and the flight surgeon. No drug
+ * names, doses or amounts (guarded by tests/clinical-safety.test.ts).
  */
 
 export type ProtocolId = ScenarioType | "general";
@@ -80,8 +82,12 @@ export function buildProtocol(
         steps: [
           { id: "rest", text: st[0], detail: "Note the time symptoms began (chest pain, breathlessness, sweating, nausea)." },
           { id: "ecg", text: st[1] },
-          { id: "checklist", text: st[2], detail: "Medication only per the onboard medical checklist / flight surgeon direction." },
-          { id: "aed", text: st[3], detail: "Keep pads within reach: STEMI can deteriorate into ventricular fibrillation." },
+          { id: "checklist", text: st[2], detail: "Any medication only as the onboard medical checklist or the flight surgeon directs." },
+          {
+            id: "aed",
+            text: "Have the defibrillator (AED) ready per the onboard procedure.",
+            detail: "Keep the pads within reach: STEMI can deteriorate into ventricular fibrillation.",
+          },
           surgeon,
           { id: "monitor", text: "Keep continuous ECG, blood pressure and SpO₂ monitoring; record vitals every 5 minutes." },
         ],

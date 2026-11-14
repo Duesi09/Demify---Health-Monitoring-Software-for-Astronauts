@@ -28,7 +28,7 @@ const CELL_TONE: Record<Status, string> = {
  */
 const SOURCE_MARK: Record<Exclude<ReadingSource, "simulated">, { mark: string; label: string }> = {
   manual: { mark: "*", label: "crew entry" },
-  sensor: { mark: "†", label: "sensor reading" },
+  sensor: { mark: "†", label: "DEVICE reading" },
   osdr: { mark: "†", label: "NASA OSDR data" },
   "noaa-swpc": { mark: "†", label: "NOAA SWPC data" },
 };
@@ -118,7 +118,7 @@ export function DailyGrid({ days, rows }: { days: string[]; rows: DailyRow[] }) 
           <span className="text-accent" aria-hidden>
             †
           </span>{" "}
-          Bold values marked † are device (sensor) or data-feed readings, not crew entries.
+          Bold values marked † are DEVICE (posted by a sensor or gateway) or data-feed readings, not crew entries.
         </p>
       )}
     </>

@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useId, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowUpRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, PhoneCall, Search, X } from "lucide-react";
-import { BODY_REGIONS, HAZARDS, INDICATORS, type IndicatorDef } from "@/lib/health/knowledge";
+import { BODY_REGIONS, HAZARDS, INDICATORS, escalationFlags, type IndicatorDef } from "@/lib/health/knowledge";
 import type { BodyRegionId, HazardId, IndicatorId } from "@/lib/types";
 import { BASIS_INFO, BasisTag } from "./basis";
-import { escalationThreshold } from "./format";
 import { HAZARD_ICON, HAZARD_ORDER } from "./hazards";
 import { StatusBadge, TAG_SELECTED, tagClass } from "@/components/ui";
 import "@/components/body/body-map.css";
@@ -178,7 +177,7 @@ export function IndicatorReference() {
           {shown.map((def) => {
             const open = isOpen(def.id);
             const panelId = `${uid}-${def.id}`;
-            const threshold = escalationThreshold(def);
+            const flags = escalationFlags(def);
             return (
               <li
                 key={def.id}
@@ -254,7 +253,7 @@ export function IndicatorReference() {
                           <PhoneCall size={12} aria-hidden /> When to escalate
                         </h4>
                         <p className="mt-1 text-sm">{def.escalation}</p>
-                        {threshold && <p className="mt-1 text-xs text-muted">Automatic flag: {threshold}</p>}
+                        {flags.length > 0 && <p className="mt-1 text-xs text-muted">Automatic flag: {flags.join("; ")}</p>}
                       </div>
                     </div>
 

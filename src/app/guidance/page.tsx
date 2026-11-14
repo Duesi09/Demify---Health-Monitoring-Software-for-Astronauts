@@ -5,6 +5,7 @@ import { HazardCards } from "@/components/guidance/hazards";
 import { IndicatorReference } from "@/components/guidance/indicator-reference";
 import { PageHeader, tagClass } from "@/components/ui";
 import { MISSION_PROFILES, currentMission } from "@/lib/config";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 
 export const metadata: Metadata = { title: "Guidance" };
 export const dynamic = "force-dynamic";
@@ -32,21 +33,21 @@ export default function GuidancePage() {
     <div className="space-y-12">
       <div>
         <PageHeader
-          title="Guidance & Reference"
+          title="Guidance and reference"
           description="What threatens crew health in space, what every Demify indicator means, how it is measured on board, what to do about it and when to involve the ground."
         />
         <aside
           role="note"
-          aria-label="Medical disclaimer"
+          aria-label="Disclaimer"
           className="flex gap-3 rounded-xl border border-caution/50 bg-caution/10 p-4"
         >
           <ShieldAlert size={22} className="mt-0.5 shrink-0 text-caution" aria-hidden />
           <div className="text-sm">
-            <p className="font-semibold text-caution">Decision support, not a medical device.</p>
+            <p className="font-semibold text-caution">{DISCLAIMER_SHORT}</p>
             <p className="mt-1 text-fg/90">
-              Demify helps crews notice changes early and act on published guidance. It does not diagnose or treat.
-              Flight surgeons are the medical authority: when in doubt, contact them, and always follow the onboard
-              medical procedures and their instructions over anything shown here.
+              This reference shows how published and project-defined ranges would flag values in a training
+              simulation, and how pre-approved procedures would be timed under signal delay. In a real situation
+              follow your mission&apos;s medical procedures and contact your flight surgeon or emergency service.
             </p>
           </div>
         </aside>

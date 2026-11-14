@@ -136,7 +136,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
                 <span className="min-w-0">
                   {f.drill && <DrillTag label="Drill" className="mr-1.5 align-[1px]" />}
                   {f.finding}
-                  {!f.drill && f.source === "simulated" && <span className="text-muted"> (simulated)</span>}
+                  {!f.drill && f.source === "simulated" && <span className="text-muted"> (SIMULATED)</span>}
                 </span>
               </li>
             ))}

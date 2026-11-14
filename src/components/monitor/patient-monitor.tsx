@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Heart, Volume2, VolumeX } from "lucide-react";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import type { LiveVitals, MonitorAlarm, Rhythm } from "@/lib/types";
 import { ALARM_LIMITS } from "@/lib/monitor/alarms";
 import "./monitor.css";
@@ -11,6 +12,7 @@ import {
   DemoTag,
   DrillTag,
   MONITOR_COLOR,
+  MONITOR_NAME,
   SourceTag,
   activityLimits,
   alarmFor,
@@ -46,9 +48,9 @@ const ACTIVITY_SR: Record<LiveVitals["activity"], string> = {
 };
 
 const CAPTION_SOURCE: Record<LiveVitals["source"], string> = {
-  simulated: "simulated data",
-  sensor: "sensor data",
-  mixed: "sensor + simulated data",
+  simulated: "SIMULATED data",
+  sensor: "DEVICE data",
+  mixed: "DEVICE + SIMULATED data",
 };
 
 function seedFor(id: string): number {
@@ -243,7 +245,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
   const abpText = `${fmt(v.sys)}/${fmt(v.dia)}`;
 
   const summary =
-    `Demo patient monitor for ${v.crewName}${v.scenario ? `, training scenario ${v.scenario.label}` : ""}. ` +
+    `${MONITOR_NAME} for ${v.crewName}${v.scenario ? `, training scenario ${v.scenario.label}` : ""}. ` +
     ACTIVITY_SR[v.activity] +
     `Heart rate ${v.hr ?? "not measurable"}${v.hr != null ? " beats per minute" : ""}, ${RHYTHM_LABEL[v.rhythm]}. ` +
     `ST ${st} millimetres. Arterial pressure ${v.sys != null ? `${v.sys} over ${v.dia}, mean ${v.map}` : "not measurable"}. ` +
@@ -261,6 +263,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
             <DemoTag />
             <div className="min-w-0">
               <div className="truncate text-[15px] font-medium tracking-[-0.01em] text-white/95 @3xl:text-[17px]">{v.crewName}</div>
+              <div className="truncate text-[11px] text-white/50">{MONITOR_NAME}</div>
             </div>
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -473,7 +476,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
         </div>
       </div>
       <figcaption className="mt-2 px-1 text-[11px] text-muted">
-        Demo monitor · not a medical device · Waveforms synthesised from telemetry · {CAPTION_SOURCE[v.source]}
+        {MONITOR_NAME} · {DISCLAIMER_SHORT} Waveforms synthesised from {CAPTION_SOURCE[v.source]}
         {v.scenario && <> · Training scenario (drill), not a real emergency</>}
       </figcaption>
     </figure>

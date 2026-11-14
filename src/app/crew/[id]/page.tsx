@@ -21,6 +21,7 @@ import { PatientMonitor } from "@/components/monitor/patient-monitor";
 import { formatDelay } from "@/components/overview/format";
 import { StatusBadge } from "@/components/ui";
 import { currentMission } from "@/lib/config";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import { assessAllCrew, readingsFor } from "@/lib/health/assess";
 import { getLiveVitals } from "@/lib/monitor/live";
 import { getCrew } from "@/lib/store/readings";
@@ -32,7 +33,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(props: PageProps<"/crew/[id]">): Promise<Metadata> {
   const { id } = await props.params;
   const crew = await getCrew(id);
-  return { title: crew ? `${crew.name} · Crew Monitor` : "Crew Monitor" };
+  return { title: crew ? `${crew.name} · Crew monitor` : "Crew monitor" };
 }
 
 /** Request time. Server component rendered per request (force-dynamic), so reading the clock is intended. */
@@ -41,9 +42,9 @@ function requestTime() {
 }
 
 const TELEMETRY_CAPTION: Record<LiveVitals["source"], string> = {
-  simulated: "Simulated telemetry",
-  sensor: "Sensor telemetry",
-  mixed: "Sensor + simulated telemetry",
+  simulated: "SIMULATED telemetry",
+  sensor: "DEVICE telemetry (posted by a sensor or gateway)",
+  mixed: "DEVICE + SIMULATED telemetry",
 };
 
 function SectionTitle({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
@@ -129,8 +130,8 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
               Vital signs, beat by beat.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-white/60 md:text-base">
-              ECG, arterial pressure, pleth and respiration for {crew.name}. {TELEMETRY_CAPTION[live.source]}; waveforms
-              synthesised from telemetry.
+              Simulated training monitor for {crew.name}: ECG, arterial pressure, pleth and respiration.{" "}
+              {TELEMETRY_CAPTION[live.source]}; waveforms synthesised from telemetry.
             </p>
           </div>
           <div className="relative mx-auto mt-10 max-w-[1240px] md:mt-14">
@@ -176,8 +177,8 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
           <HealthRecord rows={rows} />
           <p className="mt-3 text-[11px] text-muted">
             Trends: continuous signals over 24 h, daily check-ins over 7 days; shaded strip = normal range. Values marked
-            simulated come from the demo telemetry generator until crew entries or sensors replace them. Decision support
-            only: flight surgeons remain the medical authority.
+            SIMULATED come from the demo telemetry generator until crew entries or DEVICE readings replace them.{" "}
+            {DISCLAIMER_SHORT}
           </p>
         </section>
 

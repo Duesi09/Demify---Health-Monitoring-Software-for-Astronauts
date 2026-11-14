@@ -7,7 +7,7 @@ import { assessAllCrew } from "@/lib/health/assess";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
 import type { BodyRegionId } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Body Map" };
+export const metadata: Metadata = { title: "Body map" };
 export const dynamic = "force-dynamic";
 
 function first(v: string | string[] | undefined): string | undefined {
@@ -26,7 +26,7 @@ export default async function BodyPage(props: PageProps<"/body">) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Body Map"
+        title="Body map"
         description="Each body system is coloured by the worst of its health indicators. Select a region to see what it does, how spaceflight affects it, the latest readings and what to do about them."
       >
         {all.length > 0 && (

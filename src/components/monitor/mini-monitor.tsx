@@ -8,6 +8,7 @@ import {
   DemoTag,
   DrillTag,
   MONITOR_COLOR,
+  MONITOR_NAME,
   Val,
   fmt,
   topAlarm,
@@ -38,7 +39,7 @@ export function MiniMonitor({ vitals: v }: { vitals: LiveVitals }) {
   const more = v.alarms.length - (top ? 1 : 0);
   const stageAlarm = top?.priority === "high" ? "dm-alarm-high" : top ? "dm-alarm-medium" : "";
   const label =
-    `Demo monitor, ${v.crewName}${v.scenario ? `, training scenario ${v.scenario.label}` : ""}` +
+    `${MONITOR_NAME}, ${v.crewName}${v.scenario ? `, training scenario ${v.scenario.label}` : ""}` +
     (v.activity === "rest" ? "" : `, ${v.activity === "exercise" ? "during exercise" : "asleep"}`) +
     `: HR ${v.hr ?? "not measurable"}, ABP ${v.sys != null ? `${v.sys}/${v.dia}` : "not measurable"}, ` +
     `SpO2 ${v.spo2 ?? "not measurable"}` +

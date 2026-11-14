@@ -138,14 +138,16 @@ describe("#3/#4 shared evaluation", () => {
   it("rounds before classifying, like the stored value", () => {
     expect(evaluateValue("spo2", 90.6)).toMatchObject({ value: 91, status: "caution", escalate: false });
     expect(evaluateValue("spo2", 90.4)).toMatchObject({ value: 90, status: "critical", escalate: true });
-    expect(evaluateValue("bodyTemp", 37.95)).toMatchObject({ value: 38, status: "critical" });
+    expect(evaluateValue("bodyTemp", 37.95)).toMatchObject({ value: 38, status: "nominal" });
+    expect(evaluateValue("bodyTemp", 39.06)).toMatchObject({ value: 39.1, status: "critical", escalate: true });
     expect(evaluateValue("bodyMassChange", -5.04)).toMatchObject({ value: -5, status: "caution", escalate: false });
   });
 
-  it("applies the baseline rule and critical => escalate", () => {
+  it("applies the baseline rule and escalates only beyond an escalation limit", () => {
     expect(evaluateValue("heartRate", 75, 58)).toMatchObject({ status: "caution", baselineShift: true });
     expect(evaluateValue("heartRate", 75)).toMatchObject({ status: "nominal", baselineShift: false });
-    expect(evaluateValue("systolicBP", 150, 118)).toMatchObject({ status: "critical", escalate: true });
+    expect(evaluateValue("systolicBP", 150, 118)).toMatchObject({ status: "caution", escalate: false });
+    expect(evaluateValue("systolicBP", 185, 118)).toMatchObject({ status: "critical", escalate: true });
     // discrete indicators ignore baselines
     expect(evaluateValue("glucose", 99, 60).status).toBe("nominal");
   });
@@ -189,11 +191,16 @@ describe("#5 trend rules", () => {
     const a = await assessmentOf("sleepHours");
     expect(a.status).toBe("critical");
     expect(a.escalate).toBe(true);
+    expect(a.finding).toContain("sleep debt");
+    expect(a.finding).toContain("contact the flight surgeon");
   });
 
-  it("sleep under 6 h on only 6 of 7 days stays caution", async () => {
+  it("sleep under 6 h on only 6 of 7 days stays caution without escalation", async () => {
     state.readings = series("sleepHours", [6.5, 5.8, 5.2, 5.9, 5.5, 5.6, 5.5]);
-    expect((await assessmentOf("sleepHours")).status).toBe("caution");
+    const a = await assessmentOf("sleepHours");
+    expect(a.status).toBe("caution");
+    expect(a.escalate).toBe(false);
+    expect(a.finding).toContain("6 days in a row so far; repeated values escalate");
   });
 });
 

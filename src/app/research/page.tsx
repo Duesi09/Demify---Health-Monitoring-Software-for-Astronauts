@@ -5,10 +5,12 @@ import { ChangeSummary } from "@/components/research/change-summary";
 import { IssDoseChart } from "@/components/research/iss-dose-chart";
 import { StudySearch } from "@/components/research/study-search";
 import { Card, PageHeader, Provenance, Tag, tagClass } from "@/components/ui";
+import { config } from "@/lib/config";
 import { getIssDoseReference } from "@/lib/sources/eda";
 import {
   DEFAULT_SEARCH,
   I4_MISSION,
+  SEEDED_SEARCHES,
   I4_SUBJECTS,
   TIMEPOINTS,
   getInspiration4,
@@ -20,7 +22,7 @@ import {
 } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
 
-export const metadata: Metadata = { title: "NASA Data" };
+export const metadata: Metadata = { title: "Open data (NASA OSDR)" };
 export const dynamic = "force-dynamic";
 
 function meta<T>(r: SourceResult<T>) {
@@ -48,8 +50,8 @@ export default async function ResearchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="NASA Data"
-        description="Real, public astronaut and spaceflight data from NASA's Open Science Data Repository (OSDR), downloaded server-side, cached and bundled for offline use on board."
+        title="Open data (NASA OSDR)"
+        description="Public astronaut and spaceflight data from NASA's Open Science Data Repository (OSDR), downloaded server-side and bundled as a snapshot for offline use. Each block is labelled REAL with its fetch time, or SNAPSHOT with its date."
       />
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -73,7 +75,7 @@ export default async function ResearchPage() {
             </div>
           </div>
         </Card>
-        <Card title="SpaceX Inspiration4" subtitle="First all-civilian orbital mission">
+        <Card title="SpaceX Inspiration4" subtitle="All-civilian orbital mission, September 2021">
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <Fact icon={<Rocket size={14} aria-hidden />} label="Flight" value={`${I4_MISSION.launch.slice(5)} → ${I4_MISSION.splashdown.slice(5)}.2021`} />
             <Fact icon={<Orbit size={14} aria-hidden />} label="Orbit" value={`${I4_MISSION.orbitKm} km · ${I4_MISSION.durationDays} days`} />
@@ -139,7 +141,7 @@ export default async function ResearchPage() {
         <Card
           className="xl:col-span-3"
           title="Measured ISS radiation dose"
-          subtitle="Daily absorbed dose inside the ISS during rodent-research missions (area dosimetry, not personal crew badges)"
+          subtitle="Daily absorbed dose inside the ISS during Rodent Research missions: ISS area dosimetry (OSDR), not crew dose"
         >
           {"error" in dose ? (
             <p className="text-sm text-critical">Dosimetry unavailable: {dose.error}</p>
@@ -165,8 +167,8 @@ export default async function ResearchPage() {
               <p className="mt-3 text-xs text-muted">
                 Absorbed dose (mGy) from {dose.data.missions.length} missions, {dose.data.missions[0].start.slice(0, 4)}–
                 {dose.data.missions.at(-1)!.start.slice(0, 4)}. The cosmic-ray share is higher near solar minimum (2019–2020), when
-                the weaker solar wind lets more galactic cosmic rays in. Multiply by a quality factor of roughly 2 for an
-                approximate dose equivalent in mSv.
+                the weaker solar wind lets more galactic cosmic rays in. Values are absorbed dose (mGy) measured by area
+                dosimeters, not personal crew dose.
               </p>
               <div className="mt-2">
                 <Provenance result={dose} />
@@ -215,7 +217,7 @@ export default async function ResearchPage() {
         subtitle="Find spaceflight studies by topic, organism, tissue or mission. Results open on osdr.nasa.gov."
         action={<Database size={16} className="text-muted" aria-hidden />}
       >
-        <StudySearch initial={search ? { data: search.data, meta: meta(search) } : null} />
+        <StudySearch initial={search ? { data: search.data, meta: meta(search) } : null} offlineMode={config.offline} seeded={SEEDED_SEARCHES} />
       </Card>
     </div>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowUpRight, BellOff, BellRing, ChevronDown, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import type { LiveVitals, MonitorAlarm } from "@/lib/types";
 import "./alarm-center.css";
 import { AlarmAudio, BURST_INTERVAL_S, audioSupported } from "./alarm-audio";
@@ -110,7 +111,7 @@ async function fetchLive(outer: AbortSignal): Promise<LiveVitals[]> {
  * style while any alarm is active: red and flashing for a high-priority
  * alarm, yellow for medium only. Alarms are grouped per crew member with a
  * link to that member's monitor; drills are tagged "Training scenario" and
- * alarms from the demo telemetry generator "Simulated". On phones the list
+ * alarms from the demo telemetry generator "SIMULATED". On phones the list
  * collapses to a one-line summary that can be expanded.
  *
  * Audio follows IEC 60601-1-8 behaviour: "Silence 2 min" pauses sound only
@@ -333,7 +334,7 @@ export function AlarmCenter() {
 
       {level && (
         <section
-          aria-label={`Active alarms: ${alarms.length}${anyDrill ? ", training scenario" : ""}`}
+          aria-label={`Active training alarms: ${alarms.length}${anyDrill ? ", training scenario" : ""}`}
           className={`ac-bar ${level === "high" ? "ac-high" : "ac-medium"}${expanded ? " ac-expanded" : ""}`}
         >
           <div className="px-4 py-1.5 md:px-8">
@@ -344,8 +345,8 @@ export function AlarmCenter() {
                 {level === "high" ? "Alarm" : "Warning"}
                 <span className="ml-1.5 font-light tabular-nums opacity-80">{alarms.length}</span>
               </span>
-              <span className="ac-tag ac-demo shrink-0" title="Demo monitor alarms, not a medical device">
-                Demo
+              <span className="ac-tag ac-demo shrink-0" title={`Training alarms from the simulated training monitor. ${DISCLAIMER_SHORT}`}>
+                Training alarms
               </span>
               {top && (
                 <p className="ac-line min-w-0 flex-1 truncate text-[13px] leading-snug md:text-[14px]">
@@ -474,7 +475,7 @@ export function AlarmCenter() {
                       {sim && (
                         <span
                           className="ac-tag ac-sim"
-                          title="Values come from the demo telemetry generator, not from a sensor"
+                          title="SIMULATED: values from the demo telemetry generator, not from a DEVICE"
                         >
                           {sim}
                         </span>

@@ -5,6 +5,7 @@ import { formatDelay } from "@/components/overview/format";
 import { CrewSwitcher } from "@/components/crew-switcher";
 import { Card, PageHeader, StatusBadge } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import { listCrew, listReadings } from "@/lib/store/readings";
 import { submitCheckIn } from "./actions";
 
@@ -32,7 +33,7 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
     <div className="space-y-6">
       <PageHeader
         title="Daily check-in"
-        description={`Your self-assessment for mission day ${missionDay()}. Enter what you measured; every value is checked against NASA and clinical ranges as you type, and saved values replace the simulated demo data. With a ${formatDelay(mission.commDelaySeconds)} one-way signal delay, you are the first responder for your own health.`}
+        description={`Your self-assessment for mission day ${missionDay()}. Enter what you measured; every value is checked against tagged reference ranges as you type, and saved values replace the SIMULATED demo data. With a ${formatDelay(mission.commDelaySeconds)} one-way signal delay, you are the first responder for your own health.`}
       >
         <CrewSwitcher crew={crew} active={member?.id ?? ""} basePath="/check-in" />
       </PageHeader>
@@ -65,11 +66,11 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
                 </li>
                 <li className="flex items-start gap-2">
                   <StatusBadge status="critical" size="xs" className="mt-px w-[74px]" />
-                  <span>Act now and contact the flight surgeon.</span>
+                  <span>Past an escalation limit. In a real mission, act now and contact the flight surgeon.</span>
                 </li>
                 <li>
-                  Ranges come from NASA-STD-3001, NASA OCHMO technical briefs and standard clinical guidance (see
-                  Guidance). This is decision support; flight surgeons remain the medical authority.
+                  Ranges come from NASA standards, clinical guidelines or our own project rules, and each carries its
+                  source tag (see Guidance). {DISCLAIMER_SHORT}
                 </li>
               </ul>
             </Card>

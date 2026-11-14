@@ -6,7 +6,7 @@ export const BASIS_INFO: Record<Basis, { tag: string; name: string; description:
   NASA: {
     tag: "NASA",
     name: "NASA / CSA standard",
-    description: "Taken from a NASA or CSA primary source: NASA-STD-3001, OCHMO technical briefs or Human Research Program evidence.",
+    description: "Taken from a NASA or CSA primary source (a standard, an OCHMO technical brief or Human Research Program evidence). Each indicator names its own source.",
   },
   CLIN: {
     tag: "Clinical",
@@ -20,11 +20,15 @@ export const BASIS_INFO: Record<Basis, { tag: string; name: string; description:
   },
 };
 
-/** Neutral squared tag: where a range comes from is provenance, not status, so it carries no colour. */
-export function BasisTag({ basis, className = "" }: { basis: Basis; className?: string }) {
+/**
+ * Neutral squared tag: where a range comes from is provenance, not status, so it carries no colour.
+ * Pass `source` (the indicator's first source, INDICATORS[id].sources[0].label) so the tooltip names
+ * that source instead of a generic description.
+ */
+export function BasisTag({ basis, source, className = "" }: { basis: Basis; source?: string; className?: string }) {
   const info = BASIS_INFO[basis];
   return (
-    <Tag size="xs" title={`${info.name}: ${info.description}`} className={className}>
+    <Tag size="xs" title={source ? `${info.name}: ${source}` : `${info.name}: ${info.description}`} className={className}>
       {info.tag}
     </Tag>
   );

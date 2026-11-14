@@ -52,12 +52,23 @@ const NAV: { id: string; title: string; items: NavItem[] }[] = [
     id: "reference",
     title: "Reference",
     items: [
-      { href: "/research", label: "NASA data", icon: Database },
+      { href: "/research", label: "Open data (NASA OSDR)", icon: Database },
       { href: "/guidance", label: "Guidance", icon: BookOpen },
       { href: "/help", label: "Help", icon: CircleHelp },
     ],
   },
 ];
+
+/** A trailing parenthetical (the data source, e.g. "(NASA OSDR)") is set smaller so the label stays on one line. */
+function NavLabel({ label }: { label: string }) {
+  const m = /^(.+?)\s+(\(.+\))$/.exec(label);
+  if (!m) return label;
+  return (
+    <span className="whitespace-nowrap">
+      {m[1]} <span className="text-[12px]">{m[2]}</span>
+    </span>
+  );
+}
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -123,7 +134,7 @@ export function AppNav() {
                 }`}
               >
                 <Icon size={16} aria-hidden />
-                {label}
+                <NavLabel label={label} />
               </Link>
             );
           })}

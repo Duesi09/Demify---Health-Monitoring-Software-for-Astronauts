@@ -4,7 +4,9 @@ import { BODY_REGIONS, HAZARDS, INDICATORS } from "@/lib/health/knowledge";
 import type { Assessment, BodyRegionId, IndicatorId, Reading, Status } from "@/lib/types";
 import { StatusBadge, STATUS_TEXT, tagClass } from "@/components/ui";
 import { BasisTag } from "@/components/guidance/basis";
-import { REGION_ICON, SOURCE_LABEL, STATUS_RANK } from "./regions";
+import { SOURCE_LABEL } from "@/components/overview/format";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { REGION_ICON, STATUS_RANK } from "./regions";
 
 function formatValue(a: Assessment): string {
   if (a.value == null) return "—";
@@ -130,7 +132,7 @@ export function RegionDetail({
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="text-sm font-medium">{ind.label}</span>
-                      <BasisTag basis={ind.basis} />
+                      <BasisTag basis={ind.basis} source={ind.sources[0]?.label} />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-lg font-semibold tabular ${a.value == null ? "text-muted" : STATUS_TEXT[a.status]}`}>
@@ -196,9 +198,7 @@ export function RegionDetail({
           </ul>
         </div>
 
-        <p className="border-t border-border pt-3 text-[11px] leading-relaxed text-muted">
-          Decision support only, not a medical device. Flight surgeons remain the medical authority.
-        </p>
+        <p className="border-t border-border pt-3 text-[11px] leading-relaxed text-muted">{DISCLAIMER_SHORT}</p>
       </div>
     </section>
   );

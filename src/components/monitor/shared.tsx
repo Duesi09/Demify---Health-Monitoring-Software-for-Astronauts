@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { ALARM_LIMITS } from "@/lib/monitor/alarms";
+import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
 import type { IndicatorId, LiveVitals, MonitorAlarm } from "@/lib/types";
 import { mmss } from "./waveform";
 
@@ -18,11 +19,21 @@ export const MONITOR_COLOR = {
 export const KEYNOTE_FONT =
   '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", system-ui, sans-serif';
 
+/** Data labels: SIMULATED (demo generator) or DEVICE (posted by a sensor or gateway). */
 const SOURCE_LABEL: Record<LiveVitals["source"], string> = {
-  simulated: "Simulated telemetry",
-  sensor: "Sensor",
-  mixed: "Mixed · sensor + simulated",
+  simulated: "SIMULATED",
+  sensor: "DEVICE",
+  mixed: "DEVICE + SIMULATED",
 };
+
+const SOURCE_TITLE: Record<LiveVitals["source"], string> = {
+  simulated: "SIMULATED: numbers from the demo telemetry generator, not measured",
+  sensor: "DEVICE: numbers posted by a sensor or gateway in the last two minutes",
+  mixed: "DEVICE + SIMULATED: some numbers posted by a sensor or gateway, the rest from the demo generator",
+};
+
+/** Name of the monitor everywhere it is shown (tags, captions, screen-reader summaries). */
+export const MONITOR_NAME = "Simulated training monitor";
 
 /* ------------------------------------------------------------------------- */
 /* Hooks                                                                      */
@@ -110,7 +121,7 @@ const TAG = "inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 tex
 /** Solid, permanent DEMO tag (like a bedside monitor in demo mode). */
 export function DemoTag({ className = "" }: { className?: string }) {
   return (
-    <span className={`${TAG} bg-white text-black ${className}`} title="Demo monitor: not a medical device">
+    <span className={`${TAG} bg-white text-black ${className}`} title={`${MONITOR_NAME}. ${DISCLAIMER_SHORT}`}>
       Demo
     </span>
   );
@@ -144,15 +155,15 @@ export function activityLimits(activity: LiveVitals["activity"]) {
 }
 
 const SOURCE_SHORT: Record<LiveVitals["source"], string> = {
-  simulated: "Simulated",
-  sensor: "Sensor",
-  mixed: "Sensor + sim",
+  simulated: "SIMULATED",
+  sensor: "DEVICE",
+  mixed: "DEVICE + SIM",
 };
 
 /** Data-source tag; shortened when its @container (the monitor stage) is narrow. */
 export function SourceTag({ source, className = "" }: { source: LiveVitals["source"]; className?: string }) {
   return (
-    <span className={`${TAG} text-white/60 ring-1 ring-inset ring-white/15 ${className}`} title={SOURCE_LABEL[source]}>
+    <span className={`${TAG} text-white/60 ring-1 ring-inset ring-white/15 ${className}`} title={SOURCE_TITLE[source]}>
       <span className="@md:hidden">{SOURCE_SHORT[source]}</span>
       <span className="hidden @md:inline">{SOURCE_LABEL[source]}</span>
     </span>

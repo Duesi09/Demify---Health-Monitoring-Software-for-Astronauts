@@ -54,10 +54,10 @@ export function groupByCrew(alarms: MonitorAlarm[]): CrewAlarmGroup[] {
   return groups.sort((x, y) => (x.level === y.level ? 0 : x.level === "high" ? -1 : 1));
 }
 
-/** Short honesty label for a crew member's telemetry, or null for real sensor data. */
+/** Data label for a crew member's telemetry (SIMULATED / DEVICE + SIMULATED), or null for DEVICE data. */
 export function telemetryLabel(source: TelemetrySource | undefined): string | null {
-  if (source === "simulated") return "Simulated";
-  if (source === "mixed") return "Partly simulated";
+  if (source === "simulated") return "SIMULATED";
+  if (source === "mixed") return "DEVICE + SIMULATED";
   return null;
 }
 

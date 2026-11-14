@@ -5,9 +5,9 @@ import { cached, fetchJson } from "./cache";
 
 /**
  * NOAA Space Weather Prediction Center (SWPC) live feeds.
- * Real-time GOES proton flux is the operational trigger for crew radiation
- * shelter decisions (solar particle events), so this is our live radiation
- * environment source. Docs: https://www.swpc.noaa.gov/products
+ * GOES proton flux is what space-weather operations watch for solar particle
+ * events, so this is our radiation environment source (REAL when fetched,
+ * SNAPSHOT when served from the offline copy). Docs: https://www.swpc.noaa.gov/products
  */
 
 interface RawProton {
@@ -179,8 +179,9 @@ export async function getSpaceWeather(): Promise<SourceResult<SpaceWeather>> {
 }
 
 /**
- * Indicative crew dose-rate estimate (mSv/day) = mission GCR baseline +
- * solar-particle contribution scaled from >=10 MeV flux.
+ * Illustrative crew dose-rate estimate (mSv/day, basis "App (illustrative)")
+ * = mission GCR baseline + solar-particle contribution scaled from >=10 MeV
+ * flux. GOES measures at geosynchronous orbit, not at the crew's location.
  *
  * HEURISTIC, NOT A DOSIMETER: real crews read personal/area dosimeters
  * (e.g. ISS TEPC, Orion HERA, CSA's Bio-Monitor). We scale 0.01 mSv/day per

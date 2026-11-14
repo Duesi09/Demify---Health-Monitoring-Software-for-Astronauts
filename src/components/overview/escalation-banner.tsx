@@ -3,7 +3,7 @@ import { ArrowUpRight, Stethoscope } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { IndicatorId, ReadingSource } from "@/lib/types";
 import { formatDelay } from "./format";
-import { DrillTag, StatusIcon } from "./status-icon";
+import { DrillTag, SimulatedTag, StatusIcon } from "./status-icon";
 
 export interface EscalationItem {
   crewId: string;
@@ -26,6 +26,11 @@ function drillOnly(it: EscalationItem): boolean {
   return it.findings.length > 0 && it.findings.every((f) => f.drill);
 }
 
+/** Every finding comes from SIMULATED telemetry or a drill: no crew entry or DEVICE reading among them. */
+function simulatedOnly(it: EscalationItem): boolean {
+  return it.findings.length > 0 && it.findings.every((f) => f.drill || f.source === "simulated");
+}
+
 /**
  * Top-of-page alert listing every crew member whose data warrants contacting
  * the flight surgeon. With long signal delays the crew acts first.
@@ -33,12 +38,16 @@ function drillOnly(it: EscalationItem): boolean {
  * Findings driven by a training scenario are tagged DRILL. When every listed
  * finding comes from a drill, the whole banner is framed as a rehearsal
  * ("Training scenario · not a real emergency") and never tells the crew to
- * act now without that label.
+ * act now without that label. When the findings come from SIMULATED
+ * telemetry (no drill, no crew entry or DEVICE reading), the banner says it
+ * is training: in a real mission this prompts a call to the flight surgeon.
  */
 export function EscalationBanner({ items, commDelaySeconds }: { items: EscalationItem[]; commDelaySeconds: number }) {
   if (!items.length) return null;
   const longDelay = commDelaySeconds >= 60;
   const allDrill = items.every(drillOnly);
+  // Escalations raised from simulated data: show what would happen, framed as training.
+  const training = !allDrill && items.every(simulatedOnly);
   const anyDrill = items.some((it) => it.scenarioLabel || it.findings.some((f) => f.drill));
   const n = items.length;
   const crewText = `${n} crew member${n > 1 ? "s" : ""}`;
@@ -52,17 +61,20 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
           <Stethoscope size={20} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          {anyDrill && (
-            <div className="mb-1.5">
-              <DrillTag label={allDrill ? "Training scenario · drill" : "Includes a drill"} />
+          {(anyDrill || training) && (
+            <div className="mb-1.5 flex flex-wrap gap-1.5">
+              {anyDrill && <DrillTag label={allDrill ? "Training scenario · drill" : "Includes a drill"} />}
+              {training && <SimulatedTag />}
             </div>
           )}
           <h2 id="escalation-heading" className="text-xl font-semibold tracking-tight md:text-2xl">
             {allDrill ? (
               <>Drill: rehearse contacting the flight surgeon for {crewText}</>
+            ) : training ? (
+              <>Training: in a real mission this prompts a call to the flight surgeon</>
             ) : (
               <>
-                Contact the flight surgeon: {crewText} need{n > 1 ? "" : "s"} medical review
+                Contact the flight surgeon: {crewText} {n > 1 ? "are" : "is"} past an escalation limit
               </>
             )}
           </h2>
@@ -72,12 +84,19 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
               the response below as you would for real.
             </p>
           )}
+          {training && (
+            <p className="mt-2 max-w-3xl text-sm font-medium text-fg md:text-[15px]">
+              {crewText} {n > 1 ? "are" : "is"} past an escalation limit on SIMULATED telemetry. Practise the steps
+              below as you would in a real mission.
+            </p>
+          )}
           <p className="mt-2 max-w-3xl text-sm text-fg/85 md:text-[15px]">
             {allDrill && <strong className="font-semibold">In the drill: </strong>}
+            {training && <strong className="font-semibold">In a real mission: </strong>}
             {longDelay ? (
               <>
                 One-way signal delay is <strong>{formatDelay(commDelaySeconds)}</strong>. Do not wait for a reply: start
-                the crew actions on the Body Map now, then send the data and your notes to the ground.
+                the crew actions on the Body map now, then send the data and your notes to the ground.
               </>
             ) : (
               <>
@@ -130,7 +149,7 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
                         {f.finding}{" "}
                         <span className="text-muted">
                           Escalate when: {INDICATORS[f.indicator].escalation}
-                          {f.drill ? " (training scenario value)" : f.source === "simulated" && " (simulated demo data)"}
+                          {f.drill ? " (training scenario value)" : f.source === "simulated" && " (SIMULATED data)"}
                         </span>
                       </span>
                     </li>

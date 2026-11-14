@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { BODY_REGIONS, CHECK_IN_INDICATORS, INDICATORS, classify, needsEscalation } from "@/lib/health/knowledge";
+import {
+  BODY_REGIONS,
+  CHECK_IN_INDICATORS,
+  INDICATORS,
+  classify,
+  escalationFlags,
+  evaluateValue,
+  needsEscalation,
+} from "@/lib/health/knowledge";
 import type { IndicatorId } from "@/lib/types";
 
 describe("knowledge base integrity", () => {
@@ -28,14 +36,22 @@ describe("classify", () => {
     ["heartRate", 140, "critical"],
     ["systolicBP", 118, "nominal"],
     ["systolicBP", 135, "caution"],
-    ["systolicBP", 145, "critical"],
+    // AHA stage 2 (140-180) is caution: re-check in 15 minutes.
+    ["systolicBP", 145, "caution"],
+    ["systolicBP", 180, "caution"],
+    ["systolicBP", 181, "critical"],
     ["systolicBP", 85, "caution"],
+    ["diastolicBP", 95, "caution"],
+    ["diastolicBP", 120, "caution"],
+    ["diastolicBP", 121, "critical"],
     ["spo2", 98, "nominal"],
     ["spo2", 93, "caution"],
     ["spo2", 89, "critical"],
+    // NEWS2 bands
     ["bodyTemp", 36.8, "nominal"],
-    ["bodyTemp", 37.5, "caution"],
-    ["bodyTemp", 38.4, "critical"],
+    ["bodyTemp", 37.5, "nominal"],
+    ["bodyTemp", 38.4, "caution"],
+    ["bodyTemp", 39.5, "critical"],
     ["glucose", 85, "nominal"],
     ["glucose", 60, "caution"],
     ["glucose", 50, "critical"],
@@ -73,5 +89,25 @@ describe("needsEscalation", () => {
     expect(needsEscalation("systolicBP", 150)).toBe(false);
     expect(needsEscalation("glucose", 50)).toBe(true);
     expect(needsEscalation("spo2", 89)).toBe(true);
+  });
+
+  it("does not escalate on a critical band alone", () => {
+    expect(evaluateValue("stress", 9)).toMatchObject({ status: "critical", escalate: false });
+    expect(evaluateValue("mood", 1)).toMatchObject({ status: "critical", escalate: false });
+    expect(evaluateValue("sleepHours", 4)).toMatchObject({ status: "critical", escalate: false });
+    expect(evaluateValue("hydration", 1)).toMatchObject({ status: "critical", escalate: false });
+    expect(evaluateValue("exerciseMinutes", 10)).toMatchObject({ status: "critical", escalate: false });
+    expect(evaluateValue("glucose", 300)).toMatchObject({ status: "critical", escalate: false });
+  });
+});
+
+describe("escalationFlags", () => {
+  it("describes every automatic rule from the rule fields", () => {
+    expect(escalationFlags(INDICATORS.systolicBP)).toEqual(["< 80 mmHg", "> 180 mmHg"]);
+    expect(escalationFlags(INDICATORS.bodyTemp)).toEqual(["< 35 °C", "> 39 °C", "≥ 38.1 °C persisting 24 h"]);
+    expect(escalationFlags(INDICATORS.stress)).toEqual(["≥ 8 /10 on 2 days in a row"]);
+    expect(escalationFlags(INDICATORS.spo2)).toEqual(["Any value ≤ 90 %"]);
+    expect(escalationFlags(INDICATORS.visionChange)).toEqual(["Any caution or critical value"]);
+    expect(escalationFlags(INDICATORS.hydration)).toEqual([]);
   });
 });

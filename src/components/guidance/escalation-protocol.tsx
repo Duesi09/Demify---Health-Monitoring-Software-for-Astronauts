@@ -1,8 +1,7 @@
 import { CircleCheck, Lock, PhoneCall, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
-import { INDICATORS } from "@/lib/health/knowledge";
+import { INDICATORS, escalationFlags } from "@/lib/health/knowledge";
 import type { MissionProfile, Status } from "@/lib/types";
 import { StatusBadge, Tag } from "@/components/ui";
-import { escalationThreshold } from "./format";
 
 interface Tier {
   status: Status;
@@ -25,14 +24,14 @@ const TIERS: Tier[] = [
     icon: PhoneCall,
     when: "Now",
     title: "Contact the flight surgeon",
-    body: "Any indicator Demify marks Critical, or any value crossing an escalation threshold in the table below. The Body Map shows a red “Contact the flight surgeon” callout when this applies.",
+    body: "Any value that meets an automatic flag in the table below: one value beyond an escalation limit, any critical ST segment, SpO₂ or vision value, or a value repeated for the stated days or hours. The Body Map shows a red “Contact the flight surgeon” callout when this applies.",
   },
   {
     status: "caution",
     icon: Stethoscope,
     when: "Next conference",
     title: "Report at the next private medical conference",
-    body: "A Caution that persists for more than a day after the crew actions, several Cautions in the same body system, or a steady trend away from your pre-flight baseline. Mood or stress concerns go to a private psychological conference.",
+    body: "A Critical value without an automatic flag that stays there after re-checking, a Caution that persists for more than a day after the crew actions, several Cautions in the same body system, or a steady trend away from your pre-flight baseline. Mood or stress concerns go to a private psychological conference.",
   },
   {
     status: "nominal",
@@ -44,6 +43,20 @@ const TIERS: Tier[] = [
 ];
 
 const ICON_TILE = "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-fg";
+
+/** Automatic flags of one indicator, one per line ("—" when it has none). */
+function FlagList({ flags }: { flags: string[] }) {
+  if (!flags.length) return <span className="text-muted">—</span>;
+  return (
+    <ul className="space-y-0.5">
+      {flags.map((f) => (
+        <li key={f} className="text-balance">
+          {f}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function formatDelay(seconds: number): string {
   if (seconds < 60) return `${seconds.toLocaleString("en-US", { maximumFractionDigits: 1 })} s`;
@@ -74,8 +87,9 @@ export function EscalationProtocol() {
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
         <table className="w-full min-w-[560px] text-left text-sm">
           <caption className="border-b border-border px-4 py-3 text-left text-xs text-muted">
-            Escalation rules per indicator. “Automatic flag” values make Demify mark the reading for escalation; the
-            rule text also covers symptoms and trends that only you can judge.
+            Escalation rules per indicator. “Automatic flag” values make Demify mark the reading for escalation; a
+            Critical band alone does not. Rules with days or hours need repeated values. The rule text also covers
+            symptoms that only you can judge.
           </caption>
           <thead className="text-xs text-muted">
             <tr>
@@ -92,7 +106,9 @@ export function EscalationProtocol() {
                     {d.short}
                   </a>
                 </th>
-                <td className="whitespace-nowrap px-4 py-2 tabular text-critical">{escalationThreshold(d) ?? "—"}</td>
+                <td className="px-4 py-2 tabular text-critical">
+                  <FlagList flags={escalationFlags(d)} />
+                </td>
                 <td className="px-4 py-2 text-muted">{d.escalation}</td>
               </tr>
             ))}
@@ -102,25 +118,25 @@ export function EscalationProtocol() {
 
       <div className="rounded-xl border border-border bg-surface md:hidden">
         <p className="border-b border-border px-4 py-3 text-xs text-muted">
-          Escalation rules per indicator. Values marked “Flag” are automatic flags; the rule text also covers symptoms
-          and trends that only you can judge.
+          Escalation rules per indicator. Values marked “Flag” are automatic flags; a Critical band alone is not.
+          Rules with days or hours need repeated values. The rule text also covers symptoms that only you can judge.
         </p>
         <ul>
           {Object.values(INDICATORS).map((d) => {
-            const flag = escalationThreshold(d);
+            const flags = escalationFlags(d);
             return (
               <li key={d.id} className="border-t border-border px-4 py-2.5 first:border-t-0">
-                <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                <p className="text-sm">
                   <a href={`#ind-${d.id}`} className="font-medium hover:text-accent">
                     {d.short}
                   </a>
-                  {flag && (
-                    <span className="tabular text-xs text-critical">
-                      <span className="font-medium text-muted">Flag </span>
-                      {flag}
-                    </span>
-                  )}
                 </p>
+                {flags.length > 0 && (
+                  <p className="mt-0.5 tabular text-xs text-critical">
+                    <span className="font-medium text-muted">Flag </span>
+                    {flags.join("; ")}
+                  </p>
+                )}
                 <p className="mt-0.5 text-sm text-muted">{d.escalation}</p>
               </li>
             );
@@ -222,7 +238,8 @@ export function PrivateConferences() {
           <span className="font-medium">Private Psychological Conference (PPC):</span>{" "}
           <span className="text-muted">
             a private session with behavioural health specialists. Use it for low mood, high stress, sleep trouble or
-            crew conflict; a mood score of 2 or less, or any thought of self-harm, warrants requesting one now.
+            crew conflict; a mood score of 2 or less on two days in a row, or any thought of self-harm, warrants
+            requesting one now.
           </span>
         </p>
         <p className="text-xs text-muted">

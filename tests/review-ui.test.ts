@@ -24,10 +24,10 @@ describe("DailyGrid provenance (#25)", () => {
   ];
   const html = grid(rows);
 
-  it("labels a sensor reading as a sensor reading, not a crew entry", () => {
-    expect(html).toMatch(/title="[^"]*2026-11-14[^"]*sensor reading"/);
+  it("labels a sensor reading as a DEVICE reading, not a crew entry", () => {
+    expect(html).toMatch(/title="[^"]*2026-11-14[^"]*DEVICE reading"/);
     expect(html).not.toMatch(/title="[^"]*2026-11-14[^"]*crew entry"/);
-    expect(html).toContain('<span class="sr-only">, sensor reading</span>');
+    expect(html).toContain('<span class="sr-only">, DEVICE reading</span>');
   });
 
   it("still labels manual entries as crew entries", () => {

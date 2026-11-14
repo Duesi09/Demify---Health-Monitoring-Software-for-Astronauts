@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AlertTriangle, ShieldCheck, Sun, Zap } from "lucide-react";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { CrewSwitcher } from "@/components/crew-switcher";
-import { Card, PageHeader, Provenance, StatusBadge } from "@/components/ui";
+import { Card, PageHeader, Provenance, StatusBadge, Tag } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
 import { getIssDoseReference } from "@/lib/sources/eda";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
@@ -12,7 +12,7 @@ import type { Status } from "@/lib/types";
 export const metadata: Metadata = { title: "Radiation" };
 export const dynamic = "force-dynamic";
 
-/** NASA-STD-3001 Vol. 1 Rev. B: career effective dose limit. */
+/** NASA-STD-3001 Vol. 1 Rev C: career effective dose limit. */
 const CAREER_LIMIT_MSV = 600;
 
 const S_LEVEL_TEXT: Record<number, { name: string; action: string }> = {
@@ -71,8 +71,8 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Radiation Environment"
-        description={`Live solar particle conditions from NOAA's GOES satellites and an estimate of crew exposure for the ${mission.name} profile. Space radiation is the first of NASA's five hazards of human spaceflight: it raises long-term cancer risk and can damage the central nervous system, heart and eyes.`}
+        title="Radiation environment"
+        description={`Solar particle conditions from NOAA's GOES satellites, labelled REAL with the fetch time or SNAPSHOT with its date, and an illustrative dose estimate for the ${mission.name} profile. Space radiation is one of NASA's five hazards of human spaceflight: it raises long-term cancer risk and can damage the central nervous system, heart and eyes.`}
       >
         {crew.length > 0 && activeCrew && <CrewSwitcher crew={crew} active={activeCrew.id} basePath="/radiation" />}
       </PageHeader>
@@ -113,12 +113,23 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
             <Sun size={16} className="text-muted" aria-hidden />
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">{sw?.data.flareClass ?? "—"}</p>
-          <p className="mt-1 text-xs text-muted">M/X-class flares can precede particle events</p>
+          <p className="mt-1 text-xs text-muted">
+            A flare is a warning sign, not a dose. After an M- or X-class flare, protons, if any, may follow, sometimes
+            within minutes.
+          </p>
         </Card>
         <Card>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted">Est. crew dose rate</span>
-            <ShieldCheck size={16} className="text-muted" aria-hidden />
+            <span className="flex items-center gap-2">
+              <Tag
+                size="xs"
+                title="Derived by Demify for illustration: a mission GCR baseline plus a heuristic scaled from GOES proton flux. Not an official NASA or clinical value."
+              >
+                App (illustrative)
+              </Tag>
+              <ShieldCheck size={16} className="text-muted" aria-hidden />
+            </span>
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">
             {dose.rate.toFixed(2)}
@@ -126,7 +137,11 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
           </p>
           <p className="mt-1 text-xs text-muted">
             GCR baseline {mission.baselineDoseRate} +{" "}
-            {level != null ? `solar ${dose.sepContribution.toFixed(2)}` : "solar unknown (not included)"} · indicative estimate
+            {level != null ? `solar ${dose.sepContribution.toFixed(2)}` : "solar unknown (not included)"}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Estimate from GOES flux at geosynchronous orbit, not a measurement at your location. Your dosimeter is the
+            reference.
           </p>
         </Card>
       </div>
@@ -213,7 +228,7 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
               <dd className="text-right">
                 {dosimeter
                   ? `${activeCrew?.name ?? "Crew"} dosimeter log (${dosimeter.takenAt.slice(0, 10)})`
-                  : "Estimate: days × GCR rate"}
+                  : "Illustrative estimate: days × GCR rate"}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -237,28 +252,23 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         <Card
           className="xl:col-span-2"
           title="Measured ISS dose (NASA OSDR)"
-          subtitle="Daily absorbed dose inside the ISS from area dosimeters, Rodent Research missions. Cross-check for the estimate above."
+          subtitle={`About ${issRef ? issRef.data.meanTotal.toFixed(2) : "0.31"} mGy/day absorbed dose, ISS area dosimetry (OSDR, Rodent Research missions), not crew dose. Shown as measured, in mGy; not converted to mSv.`}
           action={issRef && <Provenance result={issRef} />}
         >
           {issRef ? (
             <>
-              <dl className="mb-3 grid grid-cols-3 gap-3 text-sm">
+              <dl className="mb-3 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <dt className="text-xs text-muted">Mean, {issRef.data.missions.length} missions</dt>
+                  <dt className="text-xs text-muted">Mean absorbed dose, {issRef.data.missions.length} missions</dt>
                   <dd className="text-xl font-semibold tabular">
                     {issRef.data.meanTotal.toFixed(2)} <span className="text-xs font-normal text-muted">mGy/day</span>
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">≈ dose equivalent (Q ≈ 2)</dt>
-                  <dd className="text-xl font-semibold tabular">
-                    {(issRef.data.meanTotal * 2).toFixed(2)} <span className="text-xs font-normal text-muted">mSv/day</span>
-                  </dd>
-                </div>
-                <div>
                   <dt className="text-xs text-muted">Range across missions</dt>
                   <dd className="text-xl font-semibold tabular">
-                    {issRef.data.min.toFixed(2)}–{issRef.data.max.toFixed(2)}
+                    {issRef.data.min.toFixed(2)}–{issRef.data.max.toFixed(2)}{" "}
+                    <span className="text-xs font-normal text-muted">mGy/day</span>
                   </dd>
                 </div>
               </dl>
@@ -287,12 +297,12 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
         <Card title="NASA exposure limits" subtitle="NASA-STD-3001 Vol. 1 Rev C">
           <table className="w-full text-left text-sm">
             <tbody className="[&_td]:py-1.5 [&_tr]:border-t [&_tr]:border-border [&_tr:first-child]:border-0">
-              <tr><td className="pr-3 text-muted">Career effective dose</td><td className="tabular">&lt; 600 mSv</td></tr>
-              <tr><td className="pr-3 text-muted">Per solar particle event (design)</td><td className="tabular">&lt; 250 mSv</td></tr>
-              <tr><td className="pr-3 text-muted">Blood-forming organs</td><td className="tabular">250 mGy-Eq / 30 d</td></tr>
-              <tr><td className="pr-3 text-muted">Lens of the eye</td><td className="tabular">1,000 mGy-Eq / 30 d</td></tr>
-              <tr><td className="pr-3 text-muted">Habitat GCR rate, free space</td><td className="tabular">&lt; 1.3 mSv/day</td></tr>
-              <tr><td className="pr-3 text-muted">Habitat GCR rate, surface</td><td className="tabular">&lt; 0.9 mSv/day</td></tr>
+              <tr><td className="pr-3 text-muted">Career effective dose</td><td className="tabular whitespace-nowrap">&lt; 600 mSv</td></tr>
+              <tr><td className="pr-3 text-muted">Per solar particle event (design)</td><td className="tabular whitespace-nowrap">&lt; 250 mSv</td></tr>
+              <tr><td className="pr-3 text-muted">Blood-forming organs</td><td className="tabular whitespace-nowrap">250 mGy-Eq / 30 d</td></tr>
+              <tr><td className="pr-3 text-muted">Lens of the eye</td><td className="tabular whitespace-nowrap">1,000 mGy-Eq / 30 d</td></tr>
+              <tr><td className="pr-3 text-muted">Habitat GCR rate, free space</td><td className="tabular whitespace-nowrap">&lt; 1.3 mSv/day</td></tr>
+              <tr><td className="pr-3 text-muted">Habitat GCR rate, surface</td><td className="tabular whitespace-nowrap">&lt; 0.9 mSv/day</td></tr>
             </tbody>
           </table>
           <p className="mt-3 text-xs text-muted">

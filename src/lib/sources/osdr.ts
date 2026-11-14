@@ -731,16 +731,40 @@ const SEARCH_SRC = "NASA OSDR study search";
 const searchMemory = new Map<string, { at: number; value: StudySearch }>();
 
 /**
- * Full-text search over OSDR studies. Only the default query is snapshotted
- * (so arbitrary user queries never create files); other queries use a small
- * in-memory cache (1 h).
+ * Example queries that ship with a snapshot (data/snapshots/osdr-search-<slug>.json),
+ * so the matching suggestion chips still answer offline. Lower case; first page only.
+ */
+export const SEEDED_SEARCHES = ["inspiration4", "bone loss", "space radiation"] as const;
+
+/** Snapshot key of a seeded query, e.g. "bone loss" -> "osdr-search-bone-loss". */
+export function seededSearchKey(query: string): string | null {
+  const q = query.trim().toLowerCase();
+  if (q === DEFAULT_SEARCH) return "osdr-search-default";
+  if (!(SEEDED_SEARCHES as readonly string[]).includes(q)) return null;
+  return `osdr-search-${q.replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+/** Thrown when a query needs OSDR but the app runs with DEMIFY_OFFLINE=true. */
+export class SearchOfflineError extends Error {
+  constructor() {
+    super("Study search needs a network connection (offline mode)");
+    this.name = "SearchOfflineError";
+  }
+}
+
+/**
+ * Full-text search over OSDR studies. The default query and the seeded
+ * example queries (first page) are snapshotted; other queries never create
+ * files and use a small in-memory cache (1 h) instead.
  */
 export async function searchStudies(q: string, size = 10, from = 0): Promise<SourceResult<StudySearch>> {
   const query = q.trim().slice(0, 120) || DEFAULT_SEARCH;
   const n = Math.min(25, Math.max(1, Math.floor(size)));
   const start = Math.min(500, Math.max(0, Math.floor(from)));
-  if (query.toLowerCase() === DEFAULT_SEARCH && n === 10 && start === 0) {
-    return cached("osdr-search-default", SEARCH_SRC, () => loadSearch(DEFAULT_SEARCH, 10, 0), HOUR);
+  const seedKey = n === 10 && start === 0 ? seededSearchKey(query) : null;
+  if (seedKey) {
+    const term = query.toLowerCase() === DEFAULT_SEARCH ? DEFAULT_SEARCH : query;
+    return cached(seedKey, SEARCH_SRC, () => loadSearch(term, 10, 0), HOUR);
   }
   const key = `${query.toLowerCase()}|${n}|${start}`;
   const hit = searchMemory.get(key);
@@ -748,11 +772,66 @@ export async function searchStudies(q: string, size = 10, from = 0): Promise<Sou
   if (hit && now - hit.at < HOUR * 1000) {
     return { data: hit.value, source: SEARCH_SRC, freshness: "cache", fetchedAt: new Date(hit.at).toISOString() };
   }
-  if (config.offline) throw new Error("Study search needs a network connection (offline mode)");
+  if (config.offline) throw new SearchOfflineError();
   const value = await loadSearch(query, n, start);
   if (searchMemory.size >= 50) searchMemory.delete(searchMemory.keys().next().value!);
   searchMemory.set(key, { at: now, value });
   return { data: value, source: SEARCH_SRC, freshness: "live", fetchedAt: new Date(now).toISOString() };
+}
+
+/** Shown when a query cannot reach OSDR and the cached default list is returned instead. */
+export const SEARCH_OFFLINE_MESSAGE = "Search needs a connection; showing the cached default list";
+
+/** Body of GET /api/osdr/search. */
+export type StudySearchResponse =
+  | (StudySearch & {
+      provenance: Omit<SourceResult<unknown>, "data">;
+      /** Set when the query could not reach OSDR and this is the cached default list instead. */
+      offline?: {
+        /** "offline-mode": DEMIFY_OFFLINE=true, search stays off; "unreachable": OSDR failed, retry later. */
+        reason: "offline-mode" | "unreachable";
+        /** The query the user asked for. */
+        requested: string;
+        message: string;
+      };
+    })
+  | { error: string; query: string; offline?: true };
+
+/**
+ * Study search with an offline fallback, for the API route. A query that
+ * cannot reach OSDR (offline mode, or the live request failed with no cached
+ * copy) answers 200 with the cached default list and `offline` set, instead
+ * of an error. Only when even the default list is missing does it answer 503.
+ */
+export async function searchStudiesOrDefault(
+  q: string,
+  size = 10,
+  from = 0,
+): Promise<{ status: number; body: StudySearchResponse }> {
+  const prov = (r: SourceResult<unknown>) => ({ source: r.source, freshness: r.freshness, fetchedAt: r.fetchedAt, error: r.error });
+  try {
+    const r = await searchStudies(q, size, from);
+    return { status: 200, body: { ...r.data, provenance: prov(r) } };
+  } catch (e) {
+    const reason = e instanceof SearchOfflineError || config.offline ? "offline-mode" : "unreachable";
+    const error = e instanceof Error ? e.message : String(e);
+    try {
+      const d = await searchStudies(DEFAULT_SEARCH);
+      return {
+        status: 200,
+        body: {
+          ...d.data,
+          provenance: { ...prov(d), error: d.error ?? error },
+          offline: { reason, requested: q.trim().slice(0, 120), message: SEARCH_OFFLINE_MESSAGE },
+        },
+      };
+    } catch {
+      return {
+        status: 503,
+        body: { error: "Search needs a connection, and no cached list is available yet.", query: q, offline: true },
+      };
+    }
+  }
 }
 
 // ------------------------------------------------------------ mission studies

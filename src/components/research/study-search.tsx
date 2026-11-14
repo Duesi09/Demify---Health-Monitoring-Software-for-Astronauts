@@ -1,23 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ExternalLink, Loader2, Search } from "lucide-react";
-import type { StudySearch as StudySearchData } from "@/lib/sources/osdr";
+import { ExternalLink, Loader2, Search, WifiOff } from "lucide-react";
+import type { StudySearch as StudySearchData, StudySearchResponse } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
 import { Provenance, Tag, tagClass } from "@/components/ui";
 
 type Meta = Omit<SourceResult<unknown>, "data">;
 type Result = { data: StudySearchData; meta: Meta };
+type OfflineInfo = NonNullable<Extract<StudySearchResponse, { provenance: unknown }>["offline"]>;
 
 const SUGGESTIONS = ["Inspiration4", "bone loss", "muscle atrophy", "space radiation", "immune", "cardiovascular", "astronaut"];
 const PAGE = 10;
 
-/** OSDR full-text study search; queries go through our server (/api/osdr/search) because OSDR has no CORS. */
-export function StudySearch({ initial }: { initial: Result | null }) {
+/**
+ * OSDR full-text study search; queries go through our server (/api/osdr/search)
+ * because OSDR has no CORS. Without a connection the server answers with the
+ * cached default list and an `offline` note instead of an error: in offline
+ * mode (DEMIFY_OFFLINE) the search box is disabled and only the example
+ * queries that ship with a snapshot (`seeded`) stay clickable.
+ */
+export function StudySearch({
+  initial,
+  offlineMode = false,
+  seeded = [],
+}: {
+  initial: Result | null;
+  /** Server runs with DEMIFY_OFFLINE=true. */
+  offlineMode?: boolean;
+  /** Lower-case example queries that have a bundled snapshot. */
+  seeded?: readonly string[];
+}) {
   const [q, setQ] = useState(initial?.data.query ?? "");
   const [result, setResult] = useState<Result | null>(initial);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [offline, setOffline] = useState<OfflineInfo | null>(null);
+  // Offline mode, as configured or as the server reported it on the last search.
+  const searchOff = offlineMode || offline?.reason === "offline-mode";
   // Latest-wins: each run aborts the previous request, and a response that is
   // no longer the latest never touches state (so an older query can't overwrite
   // a newer one, or clear `loading` while the newer one is still in flight).
@@ -36,11 +56,18 @@ export function StudySearch({ initial }: { initial: Result | null }) {
     setError(null);
     try {
       const res = await fetch(`/api/osdr/search?q=${encodeURIComponent(term)}&size=${PAGE}&from=${from}`, { signal: ctrl.signal });
-      const body = await res.json();
+      const body = (await res.json()) as StudySearchResponse;
       if (!isLatest()) return;
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      const { provenance, ...data } = body;
-      setResult({ data: data as StudySearchData, meta: provenance as Meta });
+      if (!res.ok || "error" in body) {
+        if ("error" in body && body.offline) {
+          setOffline({ reason: "unreachable", requested: term, message: body.error });
+          return;
+        }
+        throw new Error("error" in body ? body.error : `HTTP ${res.status}`);
+      }
+      const { provenance, offline: off, ...data } = body;
+      setOffline(off ?? null);
+      setResult({ data, meta: provenance });
     } catch (e) {
       if (!isLatest()) return;
       setError(e instanceof Error ? e.message : String(e));
@@ -72,14 +99,16 @@ export function StudySearch({ initial }: { initial: Result | null }) {
             id="osdr-q"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="e.g. bone loss, Inspiration4, radiation…"
+            placeholder={searchOff ? "Search needs a connection" : "e.g. bone loss, Inspiration4, radiation…"}
             maxLength={120}
-            className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            disabled={searchOff}
+            aria-describedby={offline || searchOff ? "osdr-offline" : undefined}
+            className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           />
         </div>
         <button
           type="submit"
-          disabled={loading || !q.trim()}
+          disabled={searchOff || loading || !q.trim()}
           className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-accent px-4 py-2 text-[12px] font-semibold text-bg disabled:opacity-50"
         >
           {loading && <Loader2 size={14} className="animate-spin" aria-hidden />}
@@ -87,21 +116,44 @@ export function StudySearch({ initial }: { initial: Result | null }) {
         </button>
       </form>
       <div className="flex flex-wrap gap-1.5" aria-label="Example searches">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => {
-              setQ(s);
-              void run(s);
-            }}
-            className={tagClass("md", true)}
-          >
-            {s}
-          </button>
-        ))}
+        {SUGGESTIONS.map((s) => {
+          // Offline, only the examples with a bundled snapshot can answer.
+          const off = searchOff && !seeded.includes(s.toLowerCase());
+          return (
+            <button
+              key={s}
+              type="button"
+              disabled={off}
+              onClick={() => {
+                setQ(s);
+                void run(s);
+              }}
+              className={`${tagClass("md", true)} disabled:pointer-events-none disabled:opacity-40`}
+            >
+              {s}
+            </button>
+          );
+        })}
       </div>
 
+      {(offline || searchOff) && (
+        <p id="osdr-offline" role="status" className="flex items-start gap-2 text-sm text-muted">
+          <WifiOff size={15} className="mt-0.5 shrink-0" aria-hidden />
+          <span>
+            {offline ? (
+              <>
+                {offline.message}
+                {offline.requested && offline.requested.toLowerCase() !== data?.query.toLowerCase() && (
+                  <> (“{offline.requested}” can be searched when the connection is back)</>
+                )}
+                .
+              </>
+            ) : (
+              "Search needs a connection; showing the cached default list. Example searches that are not greyed out also work offline."
+            )}
+          </span>
+        </p>
+      )}
       {error && <p className="text-sm text-critical">Search failed: {error}</p>}
 
       {data && (
@@ -151,7 +203,8 @@ export function StudySearch({ initial }: { initial: Result | null }) {
               ))}
             </ul>
           )}
-          {data.total > PAGE && (
+          {/* Paging needs OSDR; offline only the first page of a snapshot exists. */}
+          {data.total > PAGE && !searchOff && !offline && (
             <div className="mt-3 flex items-center justify-end gap-2">
               <button
                 type="button"

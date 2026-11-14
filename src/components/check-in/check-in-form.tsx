@@ -21,6 +21,8 @@ interface Live {
   status?: Status;
   escalate?: boolean;
   baselineShift?: boolean;
+  /** Persistence rule this value counts toward (repeated values escalate). */
+  repeatRule?: string | null;
 }
 
 /** Same evaluation as the server action (evaluateValue), so preview and saved result agree. */
@@ -37,6 +39,7 @@ function evaluate(id: IndicatorId, raw: string | undefined, baseline?: number): 
     status: ev.status,
     escalate: ev.escalate,
     baselineShift: ev.baselineShift,
+    repeatRule: ev.repeatRule,
   };
 }
 
@@ -75,8 +78,12 @@ function Feedback({ id, live, serverError }: { id: IndicatorId; live: Live; serv
           Saved as {live.value!.toFixed(def.decimals)} {def.unit}.
         </p>
       )}
-      {live.escalate && (
+      {live.escalate ? (
         <p className="font-medium text-critical">Escalation threshold: contact the flight surgeon after saving.</p>
+      ) : live.repeatRule ? (
+        <p className="text-fg/90">Single value; repeated values escalate: {live.repeatRule}.</p>
+      ) : (
+        s === "critical" && <p className="text-fg/90">No escalation threshold: re-check and log.</p>
       )}
     </div>
   );
@@ -408,7 +415,8 @@ function ResultPanel({
     );
   }
   const items = [...result.items].sort(bySeverity);
-  const escalate = items.filter((i) => i.escalate || i.status === "critical");
+  // Only a met escalation rule asks for the flight surgeon; a critical band alone does not.
+  const escalate = items.filter((i) => i.escalate);
   const longDelay = commDelaySeconds >= 60;
   return (
     <section aria-labelledby="ci-result" className="space-y-4 rounded-xl border border-fg/25 bg-surface p-4 md:p-6">

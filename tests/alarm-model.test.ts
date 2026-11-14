@@ -210,8 +210,8 @@ describe("display helpers", () => {
   });
 
   it("telemetryLabel marks simulated and mixed telemetry, not sensor data", () => {
-    expect(telemetryLabel("simulated")).toBe("Simulated");
-    expect(telemetryLabel("mixed")).toBe("Partly simulated");
+    expect(telemetryLabel("simulated")).toBe("SIMULATED");
+    expect(telemetryLabel("mixed")).toBe("DEVICE + SIMULATED");
     expect(telemetryLabel("sensor")).toBeNull();
     expect(telemetryLabel(undefined)).toBeNull();
   });
@@ -263,7 +263,7 @@ describe("EscalationBanner drill labelling", () => {
 
   it("keeps the real escalation wording for real findings and tags the drill item", () => {
     const t = text(html([realItem, drillItem]));
-    expect(t).toMatch(/Contact the flight surgeon: 2 crew members need medical review/);
+    expect(t).toMatch(/Contact the flight surgeon: 2 crew members are past an escalation limit/);
     expect(t).toMatch(/Includes a drill/);
     expect(t).toMatch(/Drill ST segment/);
     expect(t).not.toMatch(/Drill Systolic BP/);
@@ -271,5 +271,18 @@ describe("EscalationBanner drill labelling", () => {
 
   it("shows no drill label without a drill", () => {
     expect(text(html([realItem]))).not.toMatch(/drill/i);
+  });
+
+  it("frames escalations from simulated telemetry as training", () => {
+    const simItem: EscalationItem = {
+      ...realItem,
+      findings: [{ ...realItem.findings[0], source: "simulated" }],
+    };
+    const t = text(html([simItem]));
+    expect(t).toMatch(/Training: in a real mission this prompts a call to the flight surgeon/);
+    expect(t).toMatch(/SIMULATED/);
+    expect(t).not.toMatch(/Contact the flight surgeon:/);
+    // A crew entry or DEVICE reading among the findings keeps the direct wording.
+    expect(text(html([simItem, realItem]))).toMatch(/Contact the flight surgeon: 2 crew members/);
   });
 });

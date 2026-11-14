@@ -11,14 +11,14 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./globals.css";
 import { AlarmCenter } from "@/components/alarms/alarm-center";
 import { AppNav } from "@/components/app-nav";
+import { ATTRIBUTION, DISCLAIMER_LONG, DISCLAIMER_SHORT } from "@/lib/disclaimer";
 
 export const metadata: Metadata = {
   title: {
     default: "Demify · Astronaut Health Monitor",
     template: "%s · Demify",
   },
-  description:
-    "Self-assessment health monitoring for astronauts on long-duration missions, built on NASA OSDR and NOAA SWPC data.",
+  description: `Research and training software for analog and simulated space missions, with public NASA OSDR and NOAA SWPC data. ${DISCLAIMER_SHORT}`,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -30,6 +30,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {/* Global patient-monitor alarms: sticky bar above the page content, beside the nav on desktop. */}
           <AlarmCenter />
           <main className="flex-1 min-w-0 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          <footer className="border-t border-border px-4 py-5 text-[11.5px] leading-relaxed text-muted md:px-8">
+            <div className="max-w-4xl space-y-1.5">
+              <p>{DISCLAIMER_LONG}</p>
+              <p>{ATTRIBUTION}</p>
+            </div>
+          </footer>
         </div>
       </body>
     </html>

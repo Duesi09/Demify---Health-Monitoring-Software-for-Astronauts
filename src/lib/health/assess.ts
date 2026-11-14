@@ -13,11 +13,22 @@ import type {
   Scenario,
   Status,
 } from "../types";
-import { BODY_REGIONS, INDICATORS, evaluateValue, type ValueEvaluation } from "./knowledge";
+import {
+  BODY_REGIONS,
+  INDICATORS,
+  evaluateValue,
+  judgement,
+  meetsPersistence,
+  persistenceLabel,
+  type ValueEvaluation,
+} from "./knowledge";
 
 /**
  * Assessment engine: turns raw readings into per-indicator status, findings,
  * actions and escalation flags, then rolls them up per body region and crew.
+ * Escalation follows the explicit rules in knowledge.ts (single-value limits,
+ * symptom bands) plus the persistence rules below; a critical band alone
+ * never pages the flight surgeon.
  */
 
 const RANK: Record<Status, number> = { unknown: 0, nominal: 1, caution: 2, critical: 3 };
@@ -32,6 +43,8 @@ export const FUTURE_SKEW_MS = 5 * 60_000;
 /** Space-weather data older than this is labelled stale in the finding. */
 const SPACE_WEATHER_STALE_MS = 3 * 3_600_000;
 const DAY_MS = 86_400_000;
+/** Daily check-ins are rarely exactly 24 h apart: allow this much slack on hour-based persistence rules. */
+const PERSIST_GRACE_MS = 3_600_000;
 
 /** False for unparseable timestamps and for readings dated in the future. */
 function notInFuture(r: Reading, now: number): boolean {
@@ -129,11 +142,11 @@ export interface TrendFlag {
 }
 
 /**
- * Multi-day rules stated in the indicator ranges (knowledge.ts), evaluated on
- * one value per day relative to the day of the current value:
- *  - mood:   a drop of >= 2 within the previous 3 days -> caution
- *  - stress: a rise of >= 2 within the previous 3 days -> caution
- *  - sleep:  < 6 h on each of the last 7 days          -> critical
+ * Multi-day trend rules stated in the indicator ranges (knowledge.ts),
+ * evaluated on one value per day relative to the day of the current value.
+ * They raise the status to caution and never escalate on their own:
+ *  - mood:   a drop of >= 2 within the previous 3 days
+ *  - stress: a rise of >= 2 within the previous 3 days
  */
 export function trendFlag(
   id: IndicatorId,
@@ -141,7 +154,7 @@ export function trendFlag(
   rs: Reading[],
   now: number = Date.now(),
 ): TrendFlag | null {
-  if (id !== "mood" && id !== "stress" && id !== "sleepHours") return null;
+  if (id !== "mood" && id !== "stress") return null;
   const days = dailyValues(id, rs, now);
   const today = Math.floor(Date.parse(cur.takenAt) / DAY_MS);
   if (!Number.isFinite(today)) return null;
@@ -155,16 +168,82 @@ export function trendFlag(
     const rise = cur.value - Math.min(...before);
     if (rise >= 2) return { status: "caution", detail: `stress up ${rise} points over 3 days` };
   }
-  if (id === "sleepHours") {
-    const week = Array.from({ length: 7 }, (_, k) => days.get(today - k));
-    if (week.every((v) => v != null && v < 6)) {
-      return { status: "critical", detail: "under 6 h on each of the last 7 days (sleep debt)" };
+  return null;
+}
+
+export interface PersistenceFlag {
+  /** The rule is met: escalate. */
+  met: boolean;
+  /** History counted so far, e.g. "3 days in a row so far"; null for a single value. */
+  progress: string | null;
+}
+
+/**
+ * Persistence rules from knowledge.ts (IndicatorDef.persistence), evaluated
+ * only when the current value itself meets the rule's condition:
+ *  - days:  one value per UTC day (real entries win), the condition holds on
+ *           N consecutive days ending with the current value's day
+ *           (stress >= 8 on 2 days, mood <= 2 on 2 days, sleep < 6 h on 7 days)
+ *  - hours: the condition holds on every at-rest reading back to at least N h
+ *           before the current value (temperature >= 38.1 °C for 24 h), with
+ *           a 1 h slack for daily check-in timing. Crew/sensor values are
+ *           judged on their own, simulated telemetry on its own.
+ */
+export function persistenceFlag(
+  id: IndicatorId,
+  cur: { value: number; takenAt: string; source: Reading["source"] },
+  rs: Reading[],
+  now: number = Date.now(),
+): PersistenceFlag | null {
+  const rule = INDICATORS[id].persistence;
+  if (!rule || !meetsPersistence(id, cur.value)) return null;
+  const curT = Date.parse(cur.takenAt);
+  if (!Number.isFinite(curT)) return null;
+  if (rule.days) {
+    const days = dailyValues(id, rs, now);
+    const today = Math.floor(curT / DAY_MS);
+    days.set(today, cur.value);
+    let run = 0;
+    while (run < rule.days) {
+      const v = days.get(today - run);
+      if (v == null || !meetsPersistence(id, v)) break;
+      run++;
     }
+    return { met: run >= rule.days, progress: run > 1 ? `${run} days in a row so far` : null };
+  }
+  if (rule.hours) {
+    const real = cur.source !== "simulated";
+    const pool = rs
+      .filter(
+        (r) =>
+          r.indicator === id &&
+          notInFuture(r, now) &&
+          r.note !== "exercise" &&
+          (r.source !== "simulated") === real &&
+          Date.parse(r.takenAt) <= curT,
+      )
+      .sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+    let start = curT;
+    for (let i = pool.length - 1; i >= 0; i--) {
+      if (!meetsPersistence(id, pool[i].value)) break;
+      start = Math.min(start, Date.parse(pool[i].takenAt));
+    }
+    const span = curT - start;
+    return {
+      met: span >= rule.hours * 3_600_000 - PERSIST_GRACE_MS,
+      progress: span >= 3_600_000 ? `${Math.floor(span / 3_600_000)} h so far` : null,
+    };
   }
   return null;
 }
 
-function finding(id: IndicatorId, ev: ValueEvaluation, crew: CrewMember, detail?: string): string {
+function finding(
+  id: IndicatorId,
+  ev: ValueEvaluation,
+  crew: CrewMember,
+  detail?: string,
+  progress?: string | null,
+): string {
   const def = INDICATORS[id];
   const { value, status } = ev;
   const v = `${value.toFixed(def.decimals)} ${def.unit}`;
@@ -174,16 +253,16 @@ function finding(id: IndicatorId, ev: ValueEvaluation, crew: CrewMember, detail?
     const pct = ((value - base) / base) * 100;
     if (Math.abs(pct) >= 5) delta = ` (${pct > 0 ? "+" : ""}${pct.toFixed(0)} % vs pre-flight baseline)`;
   }
-  const urgency = status === "critical" ? "critical, act now" : "monitor closely";
-  const word = detail
-    ? `${detail}, ${urgency}`
-    : status === "nominal"
-      ? "within normal range"
-      : status === "caution"
-        ? ev.baselineShift
-          ? "large change from your baseline, monitor closely"
-          : "outside normal range, monitor closely"
-        : "critical, act now";
+  // The wording follows `escalate`, not the band: "contact the flight
+  // surgeon" only when an escalation rule is met.
+  const urgency = ev.escalate
+    ? status === "critical"
+      ? "critical: contact the flight surgeon"
+      : "contact the flight surgeon"
+    : status === "critical"
+      ? "re-check and log"
+      : "monitor closely";
+  const word = detail ? `${detail}, ${urgency}` : judgement(def, ev, progress);
   return `${def.short} ${v}${delta}: ${word}.`;
 }
 
@@ -273,19 +352,33 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
       });
       continue;
     }
-    // Bands + personal-baseline rule, shared with the check-in form and action.
+    // Bands, single-value escalation and personal-baseline rule, shared with
+    // the check-in form and action.
     const ev = evaluateValue(id, cur.value, crew.baseline[id]);
     let detail: string | undefined;
+    let progress: string | null = null;
     let note = "";
 
     const trend = trendFlag(id, cur, rs, now);
     if (trend && RANK[trend.status] > RANK[ev.status]) {
       ev.status = trend.status;
-      ev.escalate = ev.escalate || trend.status === "critical";
       detail = trend.detail;
     }
 
-    if (id === "radiationDoseRate" && rad) {
+    // Repeated values: escalate once the rule is met, otherwise say how much
+    // of it the history already shows.
+    const persist = persistenceFlag(id, cur, rs, now);
+    if (persist?.met) {
+      const rule = def.persistence!;
+      ev.escalate = true;
+      ev.repeatRule = null;
+      if (rule.status && RANK[rule.status] > RANK[ev.status]) ev.status = rule.status;
+      detail = `${persistenceLabel(def)}${rule.name ? ` (${rule.name})` : ""}`;
+    } else if (persist) {
+      progress = persist.progress;
+    }
+
+    if (def.stormAlert && rad) {
       const fromNoaa = cur.source === "noaa-swpc";
       // "Any SPE alert" (knowledge.ts): S1-S2 at least caution, S3+ critical,
       // and every S >= 1 escalates. A stale snapshot does not override a dosimeter.
@@ -310,7 +403,7 @@ export async function assessCrewMember(crewId: string): Promise<CrewAssessment |
       value: ev.value,
       unit: def.unit,
       takenAt: cur.takenAt,
-      finding: finding(id, ev, crew, detail) + note,
+      finding: finding(id, ev, crew, detail, progress) + note,
       actions: ev.status === "nominal" ? [] : def.actions,
       escalate: ev.escalate,
       ...(cur.note?.startsWith("scenario:") ? { drill: true } : {}),

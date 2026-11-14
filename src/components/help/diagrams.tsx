@@ -178,22 +178,22 @@ function SvgTag({ x, y, label, simulated }: { x: number; y: number; label: strin
 export function DataFlowDiagram() {
   const id = "dg-data";
   const sources = [
-    { title: "Wearables and devices", line: "heart rate, BP, SpO₂, temperature", tag: "Simulated until a device is connected", simulated: true, edge: "device API" },
-    { title: "Daily check-in", line: "sleep, mood, stress, exercise", tag: "Simulated until you enter your own", simulated: true, edge: "check-in form" },
-    { title: "NOAA SWPC", line: "solar protons, flares, Kp index", tag: "Real · live", simulated: false, edge: "live or snapshot" },
-    { title: "NASA OSDR", line: "ISS dose, Inspiration4 blood data", tag: "Real · published data", simulated: false, edge: "live or snapshot" },
+    { title: "Wearables and devices", line: "heart rate, BP, SpO₂, temperature", tag: "SIMULATED until a DEVICE posts", simulated: true, edge: "device API" },
+    { title: "Daily check-in", line: "sleep, mood, stress, exercise", tag: "SIMULATED until you enter your own", simulated: true, edge: "check-in form" },
+    { title: "NOAA SWPC", line: "solar protons, flares, Kp index", tag: "REAL or SNAPSHOT", simulated: false, edge: "fetch or snapshot" },
+    { title: "NASA OSDR", line: "ISS dose, Inspiration4 blood data", tag: "REAL or SNAPSHOT", simulated: false, edge: "fetch or snapshot" },
   ];
   const screens = [
-    { title: "Overview, Crew monitor", lines: ["vital-sign charts and the", "live monitor (Demo)"], edge: "vitals" },
+    { title: "Overview, Crew monitor", lines: ["vital-sign charts and the", "training monitor (Demo)"], edge: "vitals" },
     { title: "Check-in, Body map", lines: ["ratings, actions and", "body-system status"], edge: "ratings" },
     { title: "Radiation", lines: ["storm level, dose rate", "and mission dose budget"], edge: "dose rate" },
-    { title: "NASA data, Radiation", lines: ["Inspiration4 biomarkers,", "ISS dose cross-check"], edge: "reference" },
+    { title: "Open data, Radiation", lines: ["Inspiration4 biomarkers,", "ISS dose cross-check"], edge: "reference" },
   ];
   const steps: { n: number; head: string; sub?: string }[] = [
     { n: 1, head: "Checks every reading", sub: "(unit, plausible range)" },
     { n: 2, head: "Rates it: NASA, clinical", sub: "and personal baseline" },
-    { n: 3, head: "Falls back live → cache", sub: "→ offline snapshot" },
-    { n: 4, head: "Labels simulated values" },
+    { n: 3, head: "Falls back from a fetch", sub: "(REAL) to a SNAPSHOT" },
+    { n: 4, head: "Labels SIMULATED values" },
   ];
   return (
     <DiagramFrame
@@ -216,7 +216,7 @@ export function DataFlowDiagram() {
         viewBox="0 0 1000 412"
         width="100%"
         role="img"
-        aria-label="Where the data comes from. Wearables and devices send vital signs through the device API; these are simulated until a device is connected. The daily check-in sends sleep, mood, stress and exercise; simulated until you enter your own. NOAA SWPC provides real live space weather. NASA OSDR provides real published ISS dose and Inspiration4 blood data. Demify checks every reading, rates it against NASA and clinical ranges and the personal baseline, falls back from live data to cache to an offline snapshot, and labels simulated values. The results appear on Overview and Crew monitor, Check-in and Body map, Radiation, and NASA data."
+        aria-label="Where the data comes from. Wearables and devices send vital signs through the device API; these are SIMULATED until a device posts readings, which are labelled DEVICE. The daily check-in sends sleep, mood, stress and exercise; SIMULATED until you enter your own. NOAA SWPC provides space weather and NASA OSDR provides published ISS dose and Inspiration4 blood data, labelled REAL with the fetch time, or SNAPSHOT with its date when served from the offline copy. Demify checks every reading, rates it against tagged reference ranges and the personal baseline, and labels SIMULATED values. The results appear on Overview and Crew monitor, Check-in and Body map, Radiation, and Open data."
       >
         <ArrowDefs id={id} />
 

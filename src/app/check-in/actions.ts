@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import type { CheckInItem, CheckInResult } from "@/components/check-in/types";
 import { assessCrewMember } from "@/lib/health/assess";
-import { CHECK_IN_INDICATORS, INDICATORS, evaluateValue, roundToIndicator } from "@/lib/health/knowledge";
+import { CHECK_IN_INDICATORS, INDICATORS, evaluateValue, judgement, roundToIndicator } from "@/lib/health/knowledge";
 import { addReadings, getCrew } from "@/lib/store/readings";
 import type { IndicatorId } from "@/lib/types";
 
@@ -25,8 +25,11 @@ const CheckInSchema = z.object({
 
 /**
  * Stores a daily self-assessment as source="manual" readings, then returns the
- * per-value assessment so the astronaut sees status, actions and whether to
- * escalate to the flight surgeon.
+ * per-value assessment so the astronaut sees status, actions and whether an
+ * escalation rule is met. The assessment engine judges repeated values with
+ * the stored history; a single value that only counts toward a persistence
+ * rule says so ("single value; repeated values escalate") instead of
+ * escalating.
  */
 export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
   const parsed = CheckInSchema.safeParse(input);
@@ -72,16 +75,17 @@ export async function submitCheckIn(input: unknown): Promise<CheckInResult> {
     if (a && a.value === value && a.takenAt === takenAt) {
       return { indicator: id, value, unit: def.unit, status: a.status, finding: a.finding, actions: a.actions, escalate: a.escalate };
     }
-    // Same evaluation as the live preview (bands + personal baseline + escalation).
-    const { status, escalate } = evaluateValue(id, value, crew.baseline[id]);
+    // Same evaluation as the live preview (bands + personal baseline +
+    // single-value escalation); without history a persistence rule cannot be met.
+    const ev = evaluateValue(id, value, crew.baseline[id]);
     return {
       indicator: id,
       value,
       unit: def.unit,
-      status,
-      finding: `${def.short} ${value.toFixed(def.decimals)} ${def.unit}.`,
-      actions: status === "nominal" ? [] : def.actions,
-      escalate,
+      status: ev.status,
+      finding: `${def.short} ${value.toFixed(def.decimals)} ${def.unit}: ${judgement(def, ev)}.`,
+      actions: ev.status === "nominal" ? [] : def.actions,
+      escalate: ev.escalate,
     };
   });
 
