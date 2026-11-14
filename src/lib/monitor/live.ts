@@ -1,5 +1,5 @@
 import "server-only";
-import { isSensorOnly, simulatesTelemetry } from "../crew-mode";
+import { SENSOR_ONLY_FRESH_MS, isSensorOnly, simulatesTelemetry } from "../crew-mode";
 import { physioAt, SCENARIO_LABEL } from "../sources/simulator";
 import { getCrew, listCrew, listReadings } from "../store/readings";
 import { listScenarios } from "../store/scenarios";
@@ -40,7 +40,8 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
   };
   let sensorCount = 0;
   if (!scenario) {
-    const since = new Date(now - SENSOR_FRESH_MS).toISOString();
+    const fresh = isSensorOnly(crew) ? SENSOR_ONLY_FRESH_MS : SENSOR_FRESH_MS;
+    const since = new Date(now - fresh).toISOString();
     const recent = await listReadings({ crewId: crew.id, since });
     for (const [indicator, key] of SENSOR_FIELDS) {
       const r = recent.filter((x) => x.indicator === indicator && x.source === "sensor").at(-1);

@@ -31,7 +31,7 @@ const SOURCE_TITLE: Record<LiveVitals["source"], string> = {
   simulated: "SIMULATED: numbers from the demo telemetry generator, not measured",
   sensor: "DEVICE: numbers posted by a sensor or gateway in the last two minutes",
   mixed: "DEVICE + SIMULATED: some numbers posted by a sensor or gateway, the rest from the demo generator",
-  none: "NO SIGNAL: no sensor or gateway has posted in the last two minutes (this crew member is never simulated)",
+  none: "NO SIGNAL: no recent value from a sensor or gateway (this crew member is never simulated)",
 };
 
 /** Name of the monitor everywhere it is shown (tags, captions, screen-reader summaries). */

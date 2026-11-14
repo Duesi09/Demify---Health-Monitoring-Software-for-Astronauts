@@ -59,13 +59,24 @@ describe("sensor-only test crew member", () => {
     expect(v!.spo2).toBeNull();
   });
 
-  it("goes back to no signal when the sensor data is older than two minutes", async () => {
+  it("goes back to no signal a few seconds after the sensor stops (no pulse detected)", async () => {
     const { addReadings } = await store();
-    const old = new Date(Date.now() - 3 * 60_000).toISOString();
+    const { SENSOR_ONLY_FRESH_MS } = await import("@/lib/crew-mode");
+    expect(SENSOR_ONLY_FRESH_MS).toBeLessThanOrEqual(10_000);
+    const old = new Date(Date.now() - SENSOR_ONLY_FRESH_MS - 2_000).toISOString();
     await addReadings([{ crewId: "test", indicator: "heartRate", value: 80, unit: "bpm", takenAt: old, source: "sensor" }]);
     const v = await (await live()).getLiveVitals("test");
     expect(v!.hr).toBeNull();
     expect(v!.source).toBe("none");
+  });
+
+  it("keeps the two-minute freshness for everyone else", async () => {
+    const { addReadings } = await store();
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    await addReadings([{ crewId: "cdr", indicator: "heartRate", value: 91, unit: "bpm", takenAt: recent, source: "sensor" }]);
+    const v = await (await live()).getLiveVitals("cdr");
+    expect(v!.hr).toBe(91);
+    expect(v!.source).toBe("mixed");
   });
 
   it("leaves the other crew members simulated", async () => {
