@@ -6,6 +6,7 @@ import { regionForMetric, type RegionId } from '@/domain/bodyRegions'
 import { evaluateIndexed, indexReadings, missionStatuses } from '@/domain/engine'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
+import { AppNav } from './AppNav'
 import { BodyMap } from './BodyMap'
 import { FindingsList } from './FindingsList'
 import { HazardRow } from './HazardRow'
@@ -98,14 +99,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
       data-playing={playing || undefined}
       className="mx-auto flex w-full max-w-[2200px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8"
     >
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-4xl font-semibold tracking-tight">
-          Demify <span className="text-ink-2">Crew Health Monitor</span>
-        </h1>
-        <p className="rounded-full bg-white/[0.06] px-4 py-1.5 text-sm text-ink-2 ring-1 ring-edge">
-          Flight Engineer A. Morgan | simulated crew member
-        </p>
-      </header>
+      <AppNav current="today" day={day} />
 
       <MissionTimeline
         day={day}
