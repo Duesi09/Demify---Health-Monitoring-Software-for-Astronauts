@@ -1,0 +1,238 @@
+{
+  "title": "Medical kit inventory",
+  "updated": "2026-11-14",
+  "notice": "Representative training inventory, not the real ISS kit. Devices and supplies only; no medicines.",
+  "items": [
+    {
+      "id": "pulse-oximeter",
+      "name": "Pulse oximeter, fingertip",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 2",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "bp-cuff-automated",
+      "name": "Blood pressure cuff, automated",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 1",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "bp-cuff-manual",
+      "name": "Blood pressure cuff, manual, with stethoscope",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 1",
+      "quantity": 1,
+      "unit": "set",
+      "notes": "Representative training inventory, not the real ISS kit. Backup when the automated cuff is unavailable."
+    },
+    {
+      "id": "thermometer",
+      "name": "Thermometer, digital",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 2",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "glucose-meter",
+      "name": "Glucose meter (point-of-care, finger stick)",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 3",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "glucose-test-strips",
+      "name": "Glucose test strips",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 3",
+      "quantity": 2,
+      "unit": "packs",
+      "expiresOn": "2027-06-30",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "fundoscope",
+      "name": "Fundoscope",
+      "category": "monitoring devices",
+      "location": "Medical kit A, pouch 4",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "ecg-monitor",
+      "name": "ECG monitor, 12-lead capable",
+      "category": "cardiac",
+      "location": "Medical kit B, front compartment",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "ecg-electrodes",
+      "name": "ECG electrodes, single use",
+      "category": "cardiac",
+      "location": "Medical kit B, pouch 1",
+      "quantity": 60,
+      "unit": "each",
+      "expiresOn": "2027-08-31",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "aed",
+      "name": "Automated external defibrillator (AED)",
+      "category": "cardiac",
+      "location": "Medical kit B, outer bracket",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "aed-pads",
+      "name": "AED electrode pads, adult",
+      "category": "cardiac",
+      "location": "Medical kit B, outer bracket",
+      "quantity": 2,
+      "unit": "pairs",
+      "expiresOn": "2027-05-31",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "cpr-restraints",
+      "name": "CPR restraint straps (patient and rescuer)",
+      "category": "cardiac",
+      "location": "Medical kit B, pouch 2",
+      "quantity": 1,
+      "unit": "set",
+      "notes": "Representative training inventory, not the real ISS kit. Used for the microgravity CPR position."
+    },
+    {
+      "id": "bag-valve-mask",
+      "name": "Bag-valve mask, adult",
+      "category": "airway and breathing",
+      "location": "Medical kit C, pouch 1",
+      "quantity": 1,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "oxygen-mask",
+      "name": "Oxygen mask with tubing",
+      "category": "airway and breathing",
+      "location": "Medical kit C, pouch 1",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "oropharyngeal-airways",
+      "name": "Oropharyngeal airway set (airway adjuncts, assorted sizes)",
+      "category": "airway and breathing",
+      "location": "Medical kit C, pouch 2",
+      "quantity": 1,
+      "unit": "set",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "nasopharyngeal-airways",
+      "name": "Nasopharyngeal airway set (airway adjuncts, assorted sizes)",
+      "category": "airway and breathing",
+      "location": "Medical kit C, pouch 2",
+      "quantity": 1,
+      "unit": "set",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "iv-start-kit",
+      "name": "IV start kit (catheters, tourniquet, dressings)",
+      "category": "IV access",
+      "location": "Medical kit D, pouch 1",
+      "quantity": 4,
+      "unit": "kits",
+      "expiresOn": "2027-11-30",
+      "notes": "Representative training inventory, not the real ISS kit. Supplies only, no fluids."
+    },
+    {
+      "id": "wound-dressings",
+      "name": "Wound dressings, assorted",
+      "category": "wound care",
+      "location": "Medical kit E, pouch 1",
+      "quantity": 20,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "gauze-pads",
+      "name": "Gauze pads, sterile",
+      "category": "wound care",
+      "location": "Medical kit E, pouch 1",
+      "quantity": 40,
+      "unit": "each",
+      "expiresOn": "2028-01-31",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "wound-closure-strips",
+      "name": "Wound closure strips",
+      "category": "wound care",
+      "location": "Medical kit E, pouch 2",
+      "quantity": 30,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "elastic-bandages",
+      "name": "Elastic bandages",
+      "category": "wound care",
+      "location": "Medical kit E, pouch 2",
+      "quantity": 4,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "splints",
+      "name": "Splints, malleable, padded",
+      "category": "immobilisation",
+      "location": "Medical kit F, pouch 1",
+      "quantity": 2,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "eye-wash",
+      "name": "Eye wash bottle",
+      "category": "eye care",
+      "location": "Medical kit E, pouch 3",
+      "quantity": 2,
+      "unit": "each",
+      "expiresOn": "2027-02-28",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "exam-gloves",
+      "name": "Examination gloves, nitrile",
+      "category": "protective equipment",
+      "location": "Medical kit A, pouch 5",
+      "quantity": 50,
+      "unit": "pairs",
+      "notes": "Representative training inventory, not the real ISS kit."
+    },
+    {
+      "id": "personal-dosimeters",
+      "name": "Personal dosimeters (one per crew member)",
+      "category": "radiation monitoring",
+      "location": "Radiation monitoring kit, pouch 1",
+      "quantity": 4,
+      "unit": "each",
+      "notes": "Representative training inventory, not the real ISS kit. Worn at all times; log readings in the daily check-in."
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { config } from "../config";
+import { groundLinkUpNow } from "../onboard/ground-link";
 import type { SourceResult } from "../types";
 
 /**
@@ -20,6 +21,10 @@ import type { SourceResult } from "../types";
  * stale memory or the snapshot instead of waiting out the fetch timeout again
  * on every request. Concurrent callers for the same key share one in-flight
  * load.
+ *
+ * While the simulated ground link is down (src/lib/onboard/ground-link.ts)
+ * there is no live fetch at all: requests are served from memory or the
+ * snapshots, with the error GROUND_LINK_DOWN.
  */
 
 interface Entry {
@@ -35,6 +40,9 @@ const inflight = new Map<string, Promise<SourceResult<unknown>>>();
 
 /** Longest time a failed source is left alone before the next live attempt. */
 const MAX_FAILURE_BACKOFF_MS = 60_000;
+
+/** Error reported with fallback data while the ground link switch is off. */
+export const GROUND_LINK_DOWN = "ground link down (simulated blackout)";
 
 /** The source answered, but with an HTTP error status (as opposed to a network failure or timeout). */
 export class HttpStatusError extends Error {
@@ -139,8 +147,16 @@ async function load<T>(
   let error: string | undefined;
   const failed = failures.get(key);
   const backoffMs = Math.min(ttlSeconds * 1000, MAX_FAILURE_BACKOFF_MS);
+  // Usually answered synchronously (cached or file-backed); awaited only
+  // when it has to ask the database, so the common path adds no extra tick.
+  const link = config.offline ? false : groundLinkUpNow();
+  const linkUp = typeof link === "boolean" ? link : await link;
   if (config.offline) {
     error = "offline mode";
+  } else if (!linkUp) {
+    // Simulated blackout: no live fetch, and no failure recorded, so the
+    // first request after the link comes back goes live again.
+    error = GROUND_LINK_DOWN;
   } else if (failed && now - failed.at < backoffMs) {
     // Failed moments ago: don't block this request on another timeout.
     error = failed.error;
