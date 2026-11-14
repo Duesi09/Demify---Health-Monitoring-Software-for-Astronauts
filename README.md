@@ -17,7 +17,8 @@ On long missions astronauts are exposed to space radiation, isolation, altered g
 | **Check-in** `/check-in` | Daily self-assessment: vitals, sleep, mood, stress, hydration, exercise, body mass, vision symptoms and dosimeter. Each value is rated as you type. After saving you get concrete actions and a flight-surgeon alert when needed. |
 | **Radiation** `/radiation` | Live solar radiation storm level and proton flux from NOAA GOES satellites, solar flare class, an estimated crew dose rate and a mission dose budget against NASA's 600 mSv career limit. Measured ISS dosimetry from NASA OSDR serves as a cross-check, alongside the NASA-STD-3001 limits and the NOAA 3-day outlook. |
 | **NASA Data** `/research` | Real blood biomarkers of the SpaceX Inspiration4 crew from NASA OSDR: blood counts, metabolic panel, inflammation and cytokines. You can view them before, during and after flight, with a "what changed after flight" summary and a search over all OSDR studies. |
-| **Guidance** `/guidance` | NASA's five hazards of spaceflight, a searchable reference for all 19 indicators (ranges, effects in space, how each is measured on the ISS, actions and sources) and the escalation protocol. |
+| **Guidance** `/guidance` | NASA's five hazards of spaceflight, a searchable reference for all 20 indicators (ranges, effects in space, how each is measured on the ISS, actions and sources) and the escalation protocol. |
+| **Help** `/help` | How to use Demify, with diagrams: the daily routine, what the colours and badges mean, what to do when an alarm sounds, running a drill, where the data comes from and how to connect a sensor. |
 
 ### How the assessment works
 
@@ -41,11 +42,24 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 
 **Offline-first.** Spacecraft networks are intermittent or air-gapped. Each external data source ships a snapshot in [`data/snapshots/`](data/snapshots/). The app falls back from live data to cached data to that snapshot automatically, and every chart shows where its data came from and how fresh it is.
 
+## Documentation
+
+| Document | For whom | What is in it |
+|---|---|---|
+| **Help page** `/help` in the app | Crew and anyone using the app | Daily routine, colours and badges, alarms, drills, data sources, with diagrams |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Team and station operators | Architecture diagrams (today and target), quick start for Windows and Linux, start/stop/update, backup and restore, connecting sensors, drills, offline mode, troubleshooting |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Whoever deploys the container | Image layout, full configuration reference, proxies and custom CAs, air-gapped operation, ARM builds, TLS, scaling |
+| [`docs/research/health-knowledge-base.md`](docs/research/health-knowledge-base.md) | Reviewers, flight-surgeon liaison | Thresholds, actions and sources behind every indicator |
+| [`docs/research/data-sources.md`](docs/research/data-sources.md) | Developers | Every external data source, what is real and what is simulated |
+| [`.env.example`](.env.example) | Operators | Every setting, with comments |
+
+To try the device API without hardware, run `npm run sensor:demo` while Demify is up. It posts demo vital signs as a wearable would (see [`docs/OPERATIONS.md` §4.6](docs/OPERATIONS.md#46-sensor-demo-script)).
+
 ## Quick start
 
-**Docker** (recommended). You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows/macOS (on Windows with the WSL 2 backend) or Docker Engine on Linux. Check that it works with `docker --version`.
+Step-by-step instructions for Windows (Git Bash) and Linux, with a first-run checklist, are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md#2-quick-start-in-3-steps).
 
-**Docker** (recommended):
+**Docker** (recommended). You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows/macOS (on Windows with the WSL 2 backend) or Docker Engine on Linux. Check that it works with `docker --version`, then:
 
 ```bash
 docker compose up -d --build
@@ -98,7 +112,13 @@ curl -X POST http://localhost:3000/api/readings \
        {"crewId":"cdr","indicator":"systolicBP","value":118,"unit":"mmHg","source":"sensor"}]'
 ```
 
-`unit` must match the indicator's unit exactly, and `value` must lie in the indicator's plausible range (otherwise 400). Requests must be `application/json`, at most 1 MB, and readings dated more than 5 minutes in the future are rejected.
+`unit` must match the indicator's unit exactly, and `value` must lie in the indicator's plausible range (otherwise 400). Requests must be `application/json`, at most 1 MB, and readings dated more than 5 minutes in the future are rejected. Each crew member can receive up to 600 readings per minute (`DEMIFY_RATE_LIMIT_PER_MIN`, 429 with `Retry-After` above). Request fields, all error codes and a step-by-step guide: [`docs/OPERATIONS.md` §4](docs/OPERATIONS.md#4-connecting-a-sensor).
+
+Demo wearable without hardware (Node 20+, no packages):
+
+```bash
+npm run sensor:demo -- --crew cdr --interval 5
+```
 
 <details><summary>Indicator ids and units</summary>
 
@@ -123,11 +143,13 @@ curl -X POST http://localhost:3000/api/readings \
 | `wbc` | White blood cell count | `×10⁹/L` |
 | `cabinCO2` | Cabin CO₂ partial pressure | `mmHg` |
 | `visionChange` | Vision symptoms (0 none – 3 severe) | `/3` |
+| `stDeviation` | ST segment deviation (ECG) | `mm` |
 
 </details>
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /api/crew` | Crew members (ids `cdr`, `plt`, `ms1`, `ms2` by default) with their pre-flight baselines |
 | `GET /api/readings?crewId=&indicator=&hours=` | Readings (stored and simulated) |
 | `POST /api/readings` | Ingest one reading or up to 500 (zod-validated) |
 | `GET /api/assessment[?crewId=]` | Status, findings, actions and escalations per crew member |
@@ -151,12 +173,13 @@ src/
     sources/           NOAA SWPC, NASA OSDR, OSDR EDA, simulator, cache with offline fallback
     store/             JSON-file readings store (swap for a DB in production)
 data/snapshots/        bundled offline data
-docs/                  research notes and deployment guide
+docs/                  operations handbook, deployment guide, research notes
+scripts/               snapshot promotion, sensor demo
 docker/, Dockerfile, docker-compose.yml
 tests/                 vitest suite
 ```
 
-**Tech stack:** Next.js 16 (App Router, standalone output), React 19, TypeScript, Tailwind CSS 4, Recharts, Zod, Vitest, Docker.
+**Tech stack:** Next.js 16 (App Router, standalone output), React 19, TypeScript, Tailwind CSS 4, Recharts, Zod, Vitest, Docker. Typeface: IBM Plex Sans and IBM Plex Mono, bundled with the app (no font CDN, so it works offline).
 
 ## References
 

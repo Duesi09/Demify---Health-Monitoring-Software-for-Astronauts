@@ -2,12 +2,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, CalendarDays, ClipboardPlus, Orbit, RadioTower, ShieldCheck } from "lucide-react";
 import { CrewGrid, type CrewGridItem } from "@/components/overview/crew-grid";
+import { CrewTrends } from "@/components/overview/crew-trends";
 import { EscalationBanner, type EscalationItem } from "@/components/overview/escalation-banner";
 import { bySeverity, formatDelay } from "@/components/overview/format";
 import { SimulatedTag } from "@/components/overview/status-icon";
+import { buildCrewTrends } from "@/components/overview/trends-data";
 import { Provenance, StatusBadge } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
-import { assessAllCrew } from "@/lib/health/assess";
+import { assessAllCrew, readingsFor } from "@/lib/health/assess";
 import { getAllLiveVitals } from "@/lib/monitor/live";
 import { estimateDoseRate, getSpaceWeather } from "@/lib/sources/swpc";
 
@@ -18,7 +20,7 @@ function requestTime() {
   return Date.now();
 }
 
-/** Keynote-style stat tile: small eyebrow, one large light numeral, a quiet caption. */
+/** Mission stat card: a plain sentence-case title, one large light numeral, a quiet caption. */
 function Stat({
   label,
   icon,
@@ -35,7 +37,7 @@ function Stat({
   return (
     <section className="flex min-w-0 flex-col rounded-[24px] border border-border/70 bg-surface p-5 md:p-6">
       <div className="flex items-center justify-between gap-2 text-muted">
-        <h2 className="text-[11px] font-medium">{label}</h2>
+        <h2 className="text-sm font-medium">{label}</h2>
         {icon}
       </div>
       <p className="mt-4 text-4xl font-light leading-none tracking-[-0.03em] tabular md:text-5xl">
@@ -53,6 +55,15 @@ export default async function OverviewPage() {
   const day = missionDay(now);
 
   const [all, initialVitals] = await Promise.all([assessAllCrew(), getAllLiveVitals(now)]);
+
+  // Crew trends: 7 days of readings per crew member, downsampled server-side
+  // (hourly medians / one value per day) so the client gets a few rows only.
+  const trendReadings = await Promise.all(all.map((a) => readingsFor(a.crew, 24 * 7)));
+  const trends = buildCrewTrends(
+    all.map((a) => ({ id: a.crew.id, name: a.crew.name })),
+    Object.fromEntries(all.map((a, i) => [a.crew.id, trendReadings[i]])),
+    now,
+  );
 
   let sw: Awaited<ReturnType<typeof getSpaceWeather>> | null = null;
   try {
@@ -184,6 +195,33 @@ export default async function OverviewPage() {
           </div>
         </div>
         <CrewGrid crew={crew} initialVitals={initialVitals} />
+      </section>
+
+      {/* Crew trends: small multiples, one chart per indicator, one line per crew member */}
+      <section aria-labelledby="trends-heading">
+        <div className="mb-6">
+          <h2 id="trends-heading" className="text-2xl font-semibold tracking-tight md:text-3xl">
+            Crew trends.
+          </h2>
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+            {!trends.hasData ? (
+              "No readings in the last 7 days yet. Charts fill in as the crew and devices report."
+            ) : trends.allSimulated ? (
+              <>
+                <SimulatedTag label="simulated" />
+                All values are demo data from the simulator. Shading marks the nominal range; training scenarios are not
+                plotted.
+              </>
+            ) : (
+              <>
+                <SimulatedTag label="simulated" />
+                Demo data from the simulator, except values entered by crew or devices (marked * in tables). Shading
+                marks the nominal range; training scenarios are not plotted.
+              </>
+            )}
+          </p>
+        </div>
+        <CrewTrends data={trends} />
       </section>
 
       <footer className="space-y-2 border-t border-border/60 pt-6 text-xs leading-relaxed text-muted">
