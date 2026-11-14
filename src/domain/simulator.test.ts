@@ -45,13 +45,12 @@ describe('simulateMission', () => {
   })
 
   it('reaches the highest triage level during the life-support fault', () => {
-    const result = evaluate(readings, 167)
+    const result = evaluate(readings, 56)
     expect(result.status).toBe('critical')
     expect(result.findings[0].id).toBe('pattern:atmosphere')
-    for (const day of [166, 168]) expect(evaluate(readings, day).status, `day ${day}`).toBe('critical')
-    for (let day = 172; day <= MISSION_DAYS; day++) {
-      expect(idsOn(day).filter((id) => id.startsWith('pattern:')), `day ${day}`).toEqual([])
-    }
+    for (const day of [55, 57]) expect(evaluate(readings, day).status, `day ${day}`).toBe('critical')
+    // The cabin air is blamed, not the heart.
+    for (let day = 54; day <= 58; day++) expect(idsOn(day), `day ${day}`).not.toContain('pattern:cardiac')
   })
 
   it('does not mistake the tail of the infection for deconditioning', () => {
@@ -60,9 +59,17 @@ describe('simulateMission', () => {
     }
   })
 
+  it('does not call the recovery from a heart attack deconditioning', () => {
+    for (const attack of HEART_ATTACK_DAYS) {
+      for (let day = attack; day <= Math.min(attack + 13, MISSION_DAYS); day++) {
+        expect(idsOn(day), `day ${day}`).not.toContain('pattern:deconditioning')
+      }
+    }
+    expect(idsOn(130)).toContain('pattern:deconditioning')
+  })
+
   it('recovers after each event', () => {
-    // Day 67 lies between the recovery from the first heart attack and the infection.
-    expect(idsOn(67).filter((id) => id.startsWith('pattern:'))).toEqual([])
+    expect(idsOn(60).filter((id) => id.startsWith('pattern:'))).toEqual([])
     expect(idsOn(95).filter((id) => id.startsWith('pattern:'))).toEqual([])
     expect(idsOn(MISSION_DAYS).filter((id) => id.startsWith('pattern:'))).toEqual([])
   })

@@ -44,11 +44,8 @@ function bump(day: number, start: number, end: number, ramp: number): number {
   return Math.min(1, (day - start + 1) / ramp, (end - day + 1) / ramp)
 }
 
-/**
- * Mission days on which the crew member has a heart attack. The second one and
- * its after-effects (days 158 to 163) end before the life-support fault begins.
- */
-export const HEART_ATTACK_DAYS = [55, 97]
+/** Mission days on which the crew member has a heart attack. */
+export const HEART_ATTACK_DAYS = [97, 168]
 /** Days the after-effects of a heart attack last. */
 const RECOVERY_DAYS = 6
 
@@ -74,12 +71,12 @@ function scenarioOffset(metric: MetricId, day: number): number {
   // Days 105 to 140: the exercise device is out of service; the heart deconditions.
   const noExercise = bump(day, 105, 140, 4)
   const deconditioning = bump(day, 108, 146, 18)
-  // Days 55 and 97: a heart attack. The heart races, blood pressure shoots up and
+  // Days 54 to 58: the degraded scrubber fails; CO₂ removal and oxygen supply drop.
+  const airFault = bump(day, 54, 58, 2)
+  // Days 97 and 168: a heart attack. The heart races, blood pressure shoots up and
   // blood oxygen drops. In the days after, the heart stays fast and pressure runs low.
   const attack = HEART_ATTACK_DAYS.includes(day) ? 1 : 0
   const afterAttack = afterHeartAttack(day)
-  // Days 165 to 169: a life-support fault; CO₂ removal and oxygen supply degrade.
-  const airFault = bump(day, 165, 169, 2)
 
   switch (metric) {
     case 'sleepHours':
@@ -90,18 +87,16 @@ function scenarioOffset(metric: MetricId, day: number): number {
       return 1.5 * scrubber + 3.8 * airFault
     case 'bodyTemp':
       return 1.5 * infection + 0.3 * attack
-    case 'spo2':
-      return -6 * attack - 2 * afterAttack - 9.5 * airFault
     case 'restingHr':
-      return (
-        16 * infection + 12 * deconditioning + 3 * overload + 68 * attack + 30 * afterAttack + 8 * airFault
-      )
+      return 16 * infection + 12 * deconditioning + 3 * overload + 8 * airFault + 68 * attack + 30 * afterAttack
     case 'exerciseMin':
       return -90 * infection - 88 * noExercise - 125 * attack - 110 * afterAttack
     case 'systolic':
       return 12 * deconditioning + 52 * attack - 14 * afterAttack
     case 'diastolic':
       return 6 * deconditioning + 27 * attack - 8 * afterAttack
+    case 'spo2':
+      return -9.5 * airFault - 6 * attack - 2 * afterAttack
     case 'glucose':
       // Day 153: a missed meal before the morning measurement.
       return day === 153 ? -36 : 0

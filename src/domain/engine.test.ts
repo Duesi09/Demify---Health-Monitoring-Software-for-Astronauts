@@ -229,21 +229,6 @@ describe('patterns across indicators', () => {
     expect(highCo2.findings[0].status).toBe('critical')
   })
 
-  it('does not read the recovery after a racing heart as deconditioning', () => {
-    // Day 11: the heart races. Afterwards exercise stays low and the pulse raised.
-    const readings = [
-      ...log('exerciseMin', 60, [...days(10, 120), ...days(12, 20)]),
-      ...log('restingHr', 58, [...days(10, 58), 128, ...days(11, 80)]),
-    ]
-    expect(evaluate(readings, 22).findings.map((f) => f.id)).not.toContain('pattern:deconditioning')
-    // Three weeks later the same picture is no longer explained by that event.
-    const later = [
-      ...log('exerciseMin', 60, [...days(10, 120), ...days(30, 20)]),
-      ...log('restingHr', 58, [...days(10, 58), 128, ...days(29, 80)]),
-    ]
-    expect(evaluate(later, 40).findings.map((f) => f.id)).toContain('pattern:deconditioning')
-  })
-
   it('does not read a few days of raised heart rate as deconditioning', () => {
     const readings = [
       ...log('exerciseMin', 60, [...days(10, 120), ...days(7, 20)]),
@@ -251,6 +236,16 @@ describe('patterns across indicators', () => {
     ]
     const ids = evaluate(readings, 17).findings.map((f) => f.id)
     expect(ids).not.toContain('pattern:deconditioning')
+  })
+
+  it('does not advise exercise in the two weeks after a racing heart', () => {
+    const readings = [
+      ...log('exerciseMin', 110, [...days(5, 110), ...days(9, 20)]),
+      ...log('restingHr', 58, [...days(5, 60), 128, ...days(8, 80)]),
+    ]
+    const ids = evaluate(readings, 14).findings.map((f) => f.id)
+    expect(ids).not.toContain('pattern:deconditioning')
+    expect(ids).toContain('drift:restingHr')
   })
 
   it('links low exercise and a climbing heart rate as deconditioning', () => {

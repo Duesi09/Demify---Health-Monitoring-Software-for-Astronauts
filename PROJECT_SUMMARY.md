@@ -26,20 +26,20 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 | Körperkarte | Anatomische Figur mit neun Körpersystemen in ihrer Statusfarbe (Gehirn, Augen, Gleichgewicht, Immunsystem, Lunge, Herz, Stoffwechsel, Nieren, Knochen und Muskeln). Die Auswahl erklärt Funktion, Wirkung der Raumfahrt, Schutzmaßnahmen und die zugehörigen Messwerte |
 | Triage | Vier Stufen: Nominal, Watch (selbst handeln), Act (Crew Medical Officer), Critical (Flight Surgeon). Jede Stufe hat eigene Farbe und eigene Icon-Form |
 | Baseline-Drift | 7-Tage-Durchschnitt gegen den Vor-Flug-Wert, inklusive Dauer („seit 6 Tagen") |
-| Muster | Möglicher Herzinfarkt (rasender Puls plus Blutdruckspitze oder niedriger Sauerstoff), niedriger Blutsauerstoff plus hohes Kabinen-CO₂ (Störung der Lebenserhaltung), möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, Herz-Kreislauf-Abbau bei Trainingsausfall |
+| Muster | Möglicher Herzinfarkt (rasender Puls plus Blutdruckspitze oder niedriger Sauerstoff), möglicher Infekt (Fieber plus Puls), Schlafmangel plus Stimmungstief, CO₂ als Ursache schlechten Schlafs, niedriger Blutsauerstoff plus hohes Kabinen-CO₂ (Störung der Lebenserhaltung), Herz-Kreislauf-Abbau bei Trainingsausfall |
 | Erinnerungen | Veraltete Messwerte werden nicht bewertet; die App fordert zur neuen Messung auf und zeigt den Gesamtstatus so lange nicht als „nominal“ |
 | Eingabe | Werte von Hand eintragen, Prüfung im Browser und auf dem Server, Speicherung serverseitig |
 | Verlauf | Mini-Kurve pro Kachel, Detail-Chart mit Normbereich und Baseline, Tabellenansicht |
 | Demo | Simulierte 180-Tage-Mission mit eingebauten Ereignissen und Zeitraffer |
 | Quellen | Jede Messgröße verlinkt auf die NASA-Seite ihres Hazards und auf die NASA-Seite ihres Risikos |
 
-Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 74 (Infekt), 90 (fällige Messung), 55 und 97 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker), 167 (Störung der Lebenserhaltung).
+Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 56 (Störung der Lebenserhaltung), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker).
 
 ## Technik
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
-- **Tests:** Vitest, Unit-Tests für Regel-Engine, Simulator und Körperkarte.
+- **Tests:** Vitest, 51 Unit-Tests für Regel-Engine, Simulator, Körperkarte und Datenspeicher.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |

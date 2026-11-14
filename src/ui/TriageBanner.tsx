@@ -22,6 +22,7 @@ export function TriageBanner({ evaluation }: { evaluation: Evaluation }) {
     .filter(Boolean)
     .join(' | ')
 
+  // With readings overdue, the next step names them instead of the daily routine.
   const next = first
     ? first.action
     : incomplete

@@ -22,6 +22,9 @@
   --color-series-1: #3987e5;
   --color-series-2: #d95926;
 
+  /* Filled buttons: dark enough for white text to pass WCAG AA (4.9 to 1). */
+  --color-action: #2a6fd0;
+
   --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }

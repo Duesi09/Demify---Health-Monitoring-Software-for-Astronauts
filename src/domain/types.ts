@@ -99,6 +99,8 @@ export interface MetricAssessment {
   driftStatus: Status
   /** Consecutive days, ending today, the 7-day average has been off baseline. */
   driftDays: number
+  /** Highest reading of the last two weeks, to recognise a recent acute event. */
+  recentPeak: number | null
 }
 
 export interface Finding {

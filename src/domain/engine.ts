@@ -20,10 +20,10 @@ const MIN_WINDOW_READINGS = 2
 const MIN_BASELINE_READINGS = 3
 /** Resting heart rate above which the heart counts as racing. */
 const RACING_HEART_BPM = 120
-/** How long after a racing heart its after-effects are not read as deconditioning. */
-const ACUTE_EVENT_LOOKBACK_DAYS = 14
 /** Days the heart rate must stay raised before it counts as deconditioning. */
 const DECONDITIONING_MIN_DAYS = 7
+/** Days after an acute event during which its after-effects are still expected. */
+const RECOVERY_DAYS = 14
 /** How far back to look when counting how long a drift has lasted. */
 const MAX_DRIFT_LOOKBACK = 90
 
@@ -68,6 +68,15 @@ function baselineOf(series: Series): number | null {
   return count >= MIN_BASELINE_READINGS ? sum / count : null
 }
 
+function peakOf(series: Series, endDay: number): number | null {
+  let peak: number | null = null
+  for (let day = endDay - RECOVERY_DAYS + 1; day <= endDay; day++) {
+    const v = series.get(day)
+    if (v !== undefined && (peak === null || v > peak)) peak = v
+  }
+  return peak
+}
+
 function latestUpTo(series: Series, today: number): { day: number; value: number } | null {
   let best: { day: number; value: number } | null = null
   for (const [day, value] of series) {
@@ -107,6 +116,7 @@ function assessMetric(metric: MetricId, series: Series, today: number): MetricAs
     delta: null,
     driftStatus: 'nominal',
     driftDays: 0,
+    recentPeak: peakOf(series, today),
   }
   // Out-of-date data says nothing about today, so it is not judged.
   if (!latest || stale) return assessment
@@ -188,7 +198,7 @@ function aboveOrBelow(delta: number): string {
  * Patterns across several indicators. A combination often says more than any
  * single value, and can point at the cause instead of the symptom.
  */
-function patternFindings(a: Record<MetricId, MetricAssessment>, racedRecently: boolean): Finding[] {
+function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
   const findings: Finding[] = []
   const fresh = (id: MetricId) => !a[id].stale
   const delta = (id: MetricId) => a[id].delta ?? 0
@@ -198,9 +208,8 @@ function patternFindings(a: Record<MetricId, MetricAssessment>, racedRecently: b
   const urgent = (id: MetricId) =>
     fresh(id) && (a[id].band?.status === 'act' || a[id].band?.status === 'critical')
   const racing = fresh('restingHr') && a.restingHr.value !== null && a.restingHr.value > RACING_HEART_BPM
-  // An acute event shows in today's reading; a slow drift of the average does not count here.
-  const oxygenLowToday = fresh('spo2') && a.spo2.band !== null && a.spo2.band.status !== 'nominal'
-  if (racing && (urgent('systolic') || urgent('diastolic') || oxygenLowToday)) {
+  const oxygenLow = fresh('spo2') && a.spo2.band !== null && a.spo2.band.status !== 'nominal'
+  if (racing && (urgent('systolic') || urgent('diastolic') || oxygenLow)) {
     findings.push({
       id: 'pattern:cardiac',
       kind: 'pattern',
@@ -241,11 +250,11 @@ function patternFindings(a: Record<MetricId, MetricAssessment>, racedRecently: b
   const moodLow = fresh('mood') && (a.mood.status !== 'nominal' || delta('mood') <= -0.75)
 
   const co2High = fresh('cabinCo2') && a.cabinCo2.status !== 'nominal'
-  // Low today or running below the personal baseline: either can come from the air.
-  const oxygenLow = fresh('spo2') && a.spo2.status !== 'nominal'
+  // Counts a drop against the personal baseline as well as a low reading.
+  const oxygenDown = fresh('spo2') && a.spo2.status !== 'nominal'
 
   // Low blood oxygen while cabin CO₂ is raised: the air is failing, not the person.
-  if (co2High && oxygenLow) {
+  if (co2High && oxygenDown) {
     const status = worst(a.cabinCo2.status, a.spo2.status) as Finding['status']
     findings.push({
       id: 'pattern:atmosphere',
@@ -296,13 +305,13 @@ function patternFindings(a: Record<MetricId, MetricAssessment>, racedRecently: b
 
   // A recent fever already explains both the missed exercise and the raised pulse.
   const feverish = fresh('bodyTemp') && a.bodyTemp.status !== 'nominal'
+  // After a racing heart, rest is the treatment; advising exercise would be wrong.
+  const heartRecovering = a.restingHr.recentPeak !== null && a.restingHr.recentPeak > RACING_HEART_BPM
 
   // Too little exercise together with a rising heart rate: deconditioning.
   if (
     !feverish &&
-    // A racing heart in the last two weeks was an acute event. The raised pulse
-    // and missed exercise that follow it are recovery, not slow deconditioning.
-    !racedRecently &&
+    !heartRecovering &&
     fresh('exerciseMin') &&
     fresh('restingHr') &&
     a.exerciseMin.status !== 'nominal' &&
@@ -337,11 +346,7 @@ export function evaluateIndexed(index: Record<MetricId, Series>, today: number):
     METRIC_IDS.map((id) => [id, assessMetric(id, index[id], today)]),
   ) as Record<MetricId, MetricAssessment>
 
-  let racedRecently = false
-  for (let day = today - ACUTE_EVENT_LOOKBACK_DAYS; day <= today; day++) {
-    if ((index.restingHr.get(day) ?? 0) > RACING_HEART_BPM) racedRecently = true
-  }
-  const patterns = patternFindings(assessments, racedRecently)
+  const patterns = patternFindings(assessments)
   // A pattern already explains its indicators, so a single-indicator finding
   // is only listed when it is more urgent than every pattern covering it.
   const explained = (f: Finding) =>
