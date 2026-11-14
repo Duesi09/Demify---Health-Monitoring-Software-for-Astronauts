@@ -79,7 +79,7 @@ export function DailyGrid({ days, rows }: { days: string[]; rows: DailyRow[] }) 
                   {row.cells.map((c, i) => {
                     if (!c) {
                       return (
-                        <td key={i} className="rounded-md border border-dashed border-border py-1.5 text-center text-xs text-muted">
+                        <td key={i} className="rounded-[4px] border border-dashed border-border py-1.5 text-center text-xs text-muted">
                           <span aria-hidden>—</span>
                           <span className="sr-only">no entry</span>
                         </td>
@@ -90,7 +90,7 @@ export function DailyGrid({ days, rows }: { days: string[]; rows: DailyRow[] }) 
                     return (
                       <td
                         key={i}
-                        className={`rounded-md border py-1.5 text-center text-xs ${CELL_TONE[s]} ${real ? "font-semibold" : ""}`}
+                        className={`rounded-[4px] border py-1.5 text-center text-xs ${CELL_TONE[s]} ${real ? "font-semibold" : ""}`}
                         title={`${def.short} ${days[i]}: ${formatValue(row.id, c.value)} · ${STATUS_LABEL[s]} · ${real ? real.label : "simulated"}`}
                       >
                         <span className={`inline-flex items-center justify-center gap-1 ${s === "nominal" ? "" : STATUS_TEXT[s]}`}>

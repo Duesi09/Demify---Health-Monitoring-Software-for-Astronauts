@@ -64,6 +64,12 @@ export class AlarmAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private wave: PeriodicWave | null = null;
+  private listener: ((running: boolean) => void) | null = null;
+
+  /** Called whenever the context starts or gets suspended (e.g. by the OS). */
+  onRunningChange(cb: ((running: boolean) => void) | null): void {
+    this.listener = cb;
+  }
 
   /** True once an AudioContext exists and is running. */
   get running(): boolean {
@@ -80,6 +86,7 @@ export class AlarmAudio {
         const C = audioCtor();
         if (!C) return false;
         this.ctx = new C();
+        this.ctx.onstatechange = () => this.listener?.(this.ctx?.state === "running");
         const master = this.ctx.createGain();
         master.gain.value = 0.16;
         // Gentle low-pass so the harmonics are present but not harsh.
@@ -138,6 +145,7 @@ export class AlarmAudio {
   }
 
   close(): void {
+    this.listener = null;
     try {
       void this.ctx?.close();
     } catch {

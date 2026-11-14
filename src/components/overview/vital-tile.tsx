@@ -53,20 +53,20 @@ export function VitalTile({ title, icon: Icon, parts, status, source, chart }: V
   return (
     <section
       aria-labelledby={`vital-${parts[0].id}`}
-      className="flex min-w-0 flex-col rounded-xl border border-border bg-surface p-4"
+      className="flex min-w-0 flex-col rounded-[22px] border border-border/70 bg-surface/80 p-5"
     >
       <header className="flex items-start justify-between gap-2">
-        <h3 id={`vital-${parts[0].id}`} className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted">
+        <h3 id={`vital-${parts[0].id}`} className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
           <Icon size={15} aria-hidden />
           {title}
         </h3>
         <StatusBadge status={status} />
       </header>
-      <p className="mt-2 text-3xl font-semibold tabular">
+      <p className="mt-3 text-4xl font-light leading-none tracking-[-0.03em] tabular">
         {valueText}
-        <span className="ml-1 text-sm font-normal text-muted">{unit}</span>
+        <span className="ml-1.5 text-sm font-normal tracking-normal text-muted">{unit}</span>
       </p>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
         {hasBaseline && (
           <span>
             vs pre-flight{" "}

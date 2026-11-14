@@ -1,0 +1,223 @@
+/*
+ * Global alarm bar (classes prefixed ac-). Keynote look: system font, glassy
+ * depth, generous type; alarm colours stay unmistakable. High priority
+ * flashes ~1.4 Hz (IEC 60601-1-8: 1.4-2.8 Hz), medium ~0.6 Hz (0.4-0.8 Hz).
+ * With prefers-reduced-motion both are solid.
+ * Reds/yellows are chosen so white (on red) and near-black (on yellow) text
+ * keeps >= 4.5:1 contrast in both flash phases.
+ */
+
+.ac-wrap {
+  position: sticky;
+  top: var(--ac-top, 0px);
+  z-index: 30;
+}
+
+.ac-bar {
+  position: relative;
+  isolation: isolate;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.18) inset,
+    0 18px 40px -18px rgb(0 0 0 / 0.75);
+}
+.ac-bar::after {
+  /* soft top sheen */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0) 55%);
+}
+
+.ac-high {
+  color: #fff;
+  background: #c9150c;
+  animation: ac-flash-high 0.72s steps(1, end) infinite;
+}
+@keyframes ac-flash-high {
+  0%,
+  54% {
+    background: #c9150c;
+  }
+  55%,
+  100% {
+    background: #6e0c07;
+  }
+}
+
+.ac-medium {
+  color: #1c1400;
+  background: #ffcc00;
+  animation: ac-flash-medium 1.66s steps(1, end) infinite;
+}
+@keyframes ac-flash-medium {
+  0%,
+  69% {
+    background: #ffcc00;
+  }
+  70%,
+  100% {
+    background: #e0ad00;
+  }
+}
+
+.ac-tech {
+  color: #e8f6ff;
+  background: #0b3a5c;
+}
+
+/* Capsule buttons on the alarm colour. */
+.ac-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+.ac-btn:active {
+  transform: scale(0.97);
+}
+.ac-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.ac-high .ac-btn,
+.ac-tech .ac-btn {
+  background: rgb(0 0 0 / 0.28);
+  color: #fff;
+}
+.ac-high .ac-btn:hover,
+.ac-tech .ac-btn:hover {
+  background: rgb(0 0 0 / 0.42);
+}
+.ac-medium .ac-btn {
+  background: rgb(0 0 0 / 0.1);
+  color: #1c1400;
+}
+.ac-medium .ac-btn:hover {
+  background: rgb(0 0 0 / 0.18);
+}
+.ac-btn[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* Primary action: solid white on red, solid black on yellow. */
+.ac-high .ac-primary {
+  background: #fff;
+  color: #a1110a;
+}
+.ac-high .ac-primary:hover {
+  background: #ffe9e7;
+}
+.ac-medium .ac-primary {
+  background: #1c1400;
+  color: #ffd84d;
+}
+.ac-medium .ac-primary:hover {
+  background: #000;
+}
+
+/* Squared tags (never pills). */
+.ac-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.125rem;
+  padding: 0 0.375rem;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ac-high .ac-drill {
+  background: #ffcc00;
+  color: #1c1400;
+}
+.ac-medium .ac-drill {
+  background: #1c1400;
+  color: #ffcc00;
+}
+.ac-demo {
+  background: #fff;
+  color: #000;
+}
+.ac-medium .ac-demo {
+  background: #1c1400;
+  color: #fff;
+}
+
+.ac-line {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ac-group + .ac-group {
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+}
+.ac-medium .ac-group + .ac-group {
+  border-top-color: rgb(0 0 0 / 0.14);
+}
+
+/* Overview crew cards (shared global classes). */
+.ac-card-high {
+  border-color: rgb(255 59 48 / 0.85) !important;
+  animation: ac-card-glow 1.4s ease-in-out infinite;
+}
+@keyframes ac-card-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgb(255 59 48 / 0.55),
+      0 0 32px -6px rgb(255 59 48 / 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(255 59 48 / 0.95),
+      0 0 64px 0 rgb(255 59 48 / 0.55);
+  }
+}
+.ac-card-medium {
+  border-color: rgb(255 204 0 / 0.6) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 204 0 / 0.3),
+    0 0 40px -10px rgb(255 204 0 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-high {
+    animation: none;
+    background: #b3120a;
+  }
+  .ac-medium {
+    animation: none;
+    background: #ffcc00;
+  }
+  .ac-btn {
+    transition: none;
+  }
+  .ac-btn:active {
+    transform: none;
+  }
+  .ac-card-high {
+    animation: none;
+    box-shadow:
+      0 0 0 1px rgb(255 59 48 / 0.9),
+      0 0 48px -4px rgb(255 59 48 / 0.5);
+  }
+}

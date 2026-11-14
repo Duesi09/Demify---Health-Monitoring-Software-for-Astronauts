@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Stethoscope } from "lucide-react";
+import { ArrowUpRight, Stethoscope } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { IndicatorId, ReadingSource } from "@/lib/types";
 import { formatDelay } from "./format";
@@ -27,16 +27,19 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
   return (
     <section
       aria-labelledby="escalation-heading"
-      className="rounded-xl border border-critical/60 bg-critical/10 p-4 md:p-5"
+      className="rounded-[26px] border border-critical/50 bg-critical/[0.07] p-5 md:p-7"
     >
-      <div className="flex items-start gap-3">
-        <Stethoscope size={22} className="mt-0.5 shrink-0 text-critical" aria-hidden />
+      <div className="flex items-start gap-4">
+        <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-critical-fill text-on-critical">
+          <Stethoscope size={20} aria-hidden />
+        </span>
         <div className="min-w-0 flex-1">
-          <h2 id="escalation-heading" className="text-base font-semibold text-critical">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-critical">Escalation</p>
+          <h2 id="escalation-heading" className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">
             Contact the flight surgeon: {items.length} crew member{items.length > 1 ? "s" : ""} need
             {items.length > 1 ? "" : "s"} medical review
           </h2>
-          <p className="mt-1 text-sm">
+          <p className="mt-2 max-w-3xl text-sm text-fg/85 md:text-[15px]">
             {longDelay ? (
               <>
                 One-way signal delay is <strong>{formatDelay(commDelaySeconds)}</strong>. Do not wait for a reply: start
@@ -49,19 +52,28 @@ export function EscalationBanner({ items, commDelaySeconds }: { items: Escalatio
               </>
             )}
           </p>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-5 grid gap-3 xl:grid-cols-2">
             {items.map((it) => (
-              <li key={it.crewId} className="rounded-lg border border-critical/30 bg-surface/60 p-3">
+              <li key={it.crewId} className="rounded-2xl border border-critical/25 bg-surface/70 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <h3 className="text-sm font-semibold">
                     {it.crewName} <span className="font-normal text-muted">· {it.role}</span>
                   </h3>
-                  <Link
-                    href={`/body?crew=${it.crewId}`}
-                    className="text-xs text-accent underline-offset-2 hover:underline focus-visible:underline"
-                  >
-                    Open actions for {it.crewName}
-                  </Link>
+                  <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <Link
+                      href={`/crew/${it.crewId}`}
+                      className="inline-flex items-center gap-0.5 text-accent underline-offset-2 hover:underline focus-visible:underline"
+                    >
+                      Open monitor<span className="sr-only"> for {it.crewName}</span>
+                      <ArrowUpRight size={12} aria-hidden />
+                    </Link>
+                    <Link
+                      href={`/body?crew=${it.crewId}`}
+                      className="text-accent underline-offset-2 hover:underline focus-visible:underline"
+                    >
+                      Open actions for {it.crewName}
+                    </Link>
+                  </span>
                 </div>
                 <ul className="mt-2 space-y-1.5 text-sm">
                   {it.findings.map((f) => (
