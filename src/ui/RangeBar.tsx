@@ -54,7 +54,9 @@ export function RangeBar({ metric, value, detailed = false }: Props) {
             <span
               key={s.from}
               className="rounded-full opacity-55"
-              style={{ flex: `${place(s.to) - place(s.from)} 0 0`, background: TONE[s.tone].color }}
+              // Rounded: the server and the browser can print the last digits of a float differently,
+              // and React then reports a mismatch between the two.
+              style={{ flex: `${(place(s.to) - place(s.from)).toFixed(4)} 0 0`, background: TONE[s.tone].color }}
             />
           ))}
         </div>
