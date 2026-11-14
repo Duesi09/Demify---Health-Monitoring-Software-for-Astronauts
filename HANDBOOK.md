@@ -49,6 +49,18 @@ Written on 13 November 2026 and updated on 14 November for the NASA Space Apps C
 
 `Phase-3` was built on `Phase-1` after it had merged `test`. Almost all of Phase 3 is new files, so merging it back should be easy. The shared files it touches are `Dashboard.tsx`, `BodyMap.tsx`, `MetricDetail.tsx`, `RangeBar.tsx`, `tiles.ts` and the domain files for the two new indicators.
 
+## 1b. Infrastructure (added after Phase 3)
+
+| Part | What it is | Details |
+|---|---|---|
+| Data layer | Storage port with a SQLite driver (default, built into Node) and a JSON driver; numbered migrations; append-only audit trail; crew-aware; damaged files are set aside, never fatal | `docs/data.md` |
+| HTTP API | `/api/v1`: status, OpenAPI 3.1 document, indicator catalogue, crew, readings in and out, evaluation per day, audit trail. Token protected, rate limited, one error format | `docs/api.md`, `/api/docs` |
+| Device source | Readings sent by devices are labelled "from device"; a manual reading still wins over a device reading for the same day | |
+| Pipeline | Every push: lint, type check, unit tests, build, 30 end-to-end browser tests, container build and smoke test. CodeQL weekly, Dependabot weekly, image release to GitHub Container Registry on a `v*` tag | `.github/workflows/` |
+| Open source | MIT license, CONTRIBUTING, SECURITY, issue and pull request templates | |
+
+Not yet: user accounts and roles, encryption of stored data, more than one server process sharing one database, live updates of an open page.
+
 ## 1a. What Phase 3 adds
 
 The app now has four sections, reached from the header. Each opens on the same mission day.
