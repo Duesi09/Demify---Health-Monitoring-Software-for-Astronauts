@@ -100,6 +100,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
       className="mx-auto flex w-full max-w-[2200px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8"
     >
       <AppNav current="today" day={day} />
+      <h1 className="sr-only">Today: mission day {day}</h1>
 
       <MissionTimeline
         day={day}
