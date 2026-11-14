@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -80,17 +81,20 @@ export function AppNav() {
     >
       <Link
         href="/"
-        className="mr-2 flex shrink-0 items-center gap-2 px-2 font-semibold tracking-wide md:mb-5 md:mr-0"
+        aria-label="Demify Health Monitoring, overview"
+        className="mr-2 flex shrink-0 items-center rounded-md px-1 focus-visible:outline-2 focus-visible:outline-accent md:mb-6 md:mr-0 md:mt-1 md:justify-center md:px-2"
       >
-        <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-accent">
-          <Activity size={16} aria-hidden />
-        </span>
-        <span>
-          DEMIFY
-          <span className="hidden text-[10px] font-normal tracking-normal text-muted md:block">
-            Astronaut Health Monitor
-          </span>
-        </span>
+        {/* Phones: compact mark in the top bar. Desktop: full logo with wordmark. */}
+        <Image src="/brand/demify-mark.png" alt="" width={32} height={32} priority unoptimized className="h-8 w-8 md:hidden" />
+        <Image
+          src="/brand/demify-logo.png"
+          alt=""
+          width={640}
+          height={979}
+          priority
+          unoptimized
+          className="hidden h-auto w-[132px] md:block"
+        />
       </Link>
       {NAV.map((group, gi) => (
         <div
