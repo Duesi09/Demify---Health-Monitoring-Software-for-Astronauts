@@ -16,6 +16,7 @@ import { MetricTile } from './MetricTile'
 import { MissionTimeline } from './MissionTimeline'
 import { PlaybackContext, TIMELAPSE_STEP_MS } from './motion'
 import { ReadinessCard } from './ReadinessCard'
+import { SectionCards } from './SectionCards'
 import { TILES, tileFor } from './tiles'
 import { TriageBanner } from './TriageBanner'
 import { VitalsMonitor } from './VitalsMonitor'
@@ -127,6 +128,7 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
             <VitalsMonitor evaluation={evaluation} onSelectMetric={selectMetric} />
           </div>
           <ReadinessCard evaluation={evaluation} onSelectMetric={selectMetric} />
+          <SectionCards day={day} evaluation={evaluation} index={index} />
           <div className="grid gap-5 @4xl:grid-cols-2">
             <BodyMap
               evaluation={evaluation}
