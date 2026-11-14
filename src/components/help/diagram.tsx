@@ -181,7 +181,8 @@ export function Node({
 
 /** Approximate rendered width of an SvgStatusChip (10.5 px semibold label + glyph). */
 export function chipWidth(label: string): number {
-  return Math.round(label.length * 6.1 + 26);
+  // Generous for IBM Plex Sans semibold at 10.5 px, so the label never touches the edge.
+  return Math.round(label.length * 6.6 + 26);
 }
 
 /** Squared mini status chip inside an SVG (shape + text, never colour alone). */

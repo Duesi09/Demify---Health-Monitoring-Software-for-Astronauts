@@ -30,7 +30,7 @@ export function DailyRoutineDiagram() {
         <ArrowDefs id={id} />
 
         <Node x={20} y={y} w={220} h={h} step={1} title="Morning check-in" lines={["Enter vitals, sleep, mood", "and any symptoms"]} />
-        <Node x={320} y={y} w={240} h={h} step={2} title="Demify rates each value" lines={["NASA and clinical ranges", "plus your pre-flight baseline"]}>
+        <Node x={320} y={y} w={262} h={h} step={2} title="Demify rates each value" lines={["NASA and clinical ranges", "plus your pre-flight baseline"]}>
           <SvgStatusChip x={334} y={y + 84} status="nominal" label="Nominal" />
           <SvgStatusChip x={334 + chipWidth("Nominal") + 6} y={y + 84} status="caution" label="Caution" />
           <SvgStatusChip x={334 + chipWidth("Nominal") + chipWidth("Caution") + 12} y={y + 84} status="critical" label="Critical" />
@@ -52,9 +52,9 @@ export function DailyRoutineDiagram() {
         <EdgeLabel x={280} y={cy - 22}>values</EdgeLabel>
         <EdgeLabel x={280} y={cy - 8}>saved</EdgeLabel>
 
-        <Arrow id={id} strong d={`M560,${cy} H636`} />
-        <EdgeLabel x={600} y={cy - 22}>status of</EdgeLabel>
-        <EdgeLabel x={600} y={cy - 8}>each value</EdgeLabel>
+        <Arrow id={id} strong d={`M582,${cy} H636`} />
+        <EdgeLabel x={609} y={cy - 22}>status of</EdgeLabel>
+        <EdgeLabel x={609} y={cy - 8}>each value</EdgeLabel>
 
         <Arrow id={id} strong d={`M860,${cy} H936`} />
         <EdgeLabel x={900} y={cy - 22}>open a</EdgeLabel>
