@@ -229,11 +229,11 @@ describe('on-board advice', () => {
   it('splits into one step per sentence', () => {
     expect(
       splitSteps(
-        'Stop all activity and call the Crew Medical Officer now. Chew aspirin (160 to 325 mg) unless you are allergic, give oxygen if blood oxygen is low.',
+        'Stop all activity and call the Crew Medical Officer now. Start the onboard checklist, give oxygen if blood oxygen is below 90.5 %.',
       ),
     ).toEqual([
       'Stop all activity and call the Crew Medical Officer now.',
-      'Chew aspirin (160 to 325 mg) unless you are allergic, give oxygen if blood oxygen is low.',
+      'Start the onboard checklist, give oxygen if blood oxygen is below 90.5 %.',
     ])
   })
 

@@ -222,7 +222,8 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
       detail:
         'A resting heart rate above 120 together with a sharp change in blood pressure or low blood oxygen can mean the heart muscle is not getting enough oxygen. Chest pain or pressure, pain spreading to the arm or jaw, shortness of breath, cold sweat or nausea make it likely.',
       action:
-        'Stop all activity and call the Crew Medical Officer now. Chew aspirin (160 to 325 mg) unless you are allergic, give oxygen if blood oxygen is low, record an ECG and contact the flight surgeon.',
+        // No drug or dose here: medication is decided by the Crew Medical Officer from the onboard checklist.
+        'Stop all activity and call the Crew Medical Officer now. Start the onboard chest pain checklist, give oxygen if blood oxygen is low, record an ECG and contact the flight surgeon.',
       metrics: ['restingHr', 'systolic', 'diastolic', 'spo2'],
     })
   }

@@ -19,6 +19,6 @@ In scope: the web app, the HTTP API under `/api/v1`, the storage layer, the cont
 - The rate limit of the API is kept in memory per process.
 - Back up the data directory with `node scripts/backup.mjs`.
 
-## Not a medical device
+## Not a certified medical device
 
-Demify is a prototype. Its thresholds are demo defaults and it gives no medical advice.
+Demify is a research prototype and is not placed on the market. Its triage functions (rating vital signs, naming possible conditions, saying when to call a doctor) would be medical device software under EU MDR and the Swiss Medical Devices Ordinance, and are not certified. Its thresholds are demo defaults. Not for clinical use.

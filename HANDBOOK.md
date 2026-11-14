@@ -785,7 +785,7 @@ Space Apps projects are usually judged on impact, creativity, validity, relevanc
 
 ### Small things that matter
 
-- Say "not a medical device" once, clearly.
+- Say "research prototype, not a certified medical device" once, clearly. Never say "not a medical device": by EU and Swiss rules its triage functions would be one (see BUSINESS_MODEL.md, section 5).
 - Do not call the vital signs traces a live signal.
 - Use a large font and zoom in for anything shown on a projector.
 - Record the video early, then re-record if time allows. Never leave it for the last hour.
