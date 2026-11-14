@@ -8,6 +8,7 @@ import { MISSION_DAYS } from '@/domain/simulator'
 import type { MetricId, Reading } from '@/domain/types'
 import { AppNav } from './AppNav'
 import { BodyMap } from './BodyMap'
+import { EventNote } from './EventNote'
 import { FindingsList } from './FindingsList'
 import { HazardRow } from './HazardRow'
 import { MetricDetail } from './MetricDetail'
@@ -115,6 +116,8 @@ export function Dashboard({ initialReadings, initialDay }: Props) {
           setPlaying(!playing)
         }}
       />
+
+      <EventNote day={day} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_minmax(0,31rem)]">
         <main className="@container flex min-w-0 flex-col gap-5">
