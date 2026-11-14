@@ -51,7 +51,7 @@ Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 56 (Störung 
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
-- **Tests:** Vitest, 313 Unit-Tests für Regel-Engine, Simulator, Körperkarte, Datenspeicher und die neuen Bereiche.
+- **Tests:** Vitest, 316 Unit-Tests für Regel-Engine, Simulator, Körperkarte, Datenspeicher und die neuen Bereiche.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |

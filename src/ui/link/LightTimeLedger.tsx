@@ -56,6 +56,9 @@ export function LightTimeLedger({ evaluation, link }: { evaluation: Evaluation; 
   const [announcement, setAnnouncement] = useState('')
   const consults = ledger?.consults ?? []
   const rate = ledger?.clock.rate ?? 1
+  // Once the clock has run fast it is ahead of the real one and must not be called UTC.
+  const demoTime = ledger !== null && (ledger.clock.rate !== 1 || Math.abs(ledger.clock.shipAt - ledger.clock.realAt) > 1000)
+  const ledgerHeading = useRef<HTMLHeadingElement>(null)
 
   const top = evaluation.findings[0]
   const findingId = top?.id ?? null
@@ -253,7 +256,7 @@ export function LightTimeLedger({ evaluation, link }: { evaluation: Evaluation; 
       >
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
           <div className="min-w-0">
-            <h2 id="ledger-title" className="text-xl font-semibold tracking-tight">
+            <h2 id="ledger-title" ref={ledgerHeading} tabIndex={-1} className="rounded-md text-xl font-semibold tracking-tight">
               Light-time ledger
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-ink-2">
@@ -267,7 +270,7 @@ export function LightTimeLedger({ evaluation, link }: { evaluation: Evaluation; 
               <p className="text-sm text-ink-2">
                 Ship clock{' '}
                 <span className="font-semibold text-ink tabular-nums">{now === null ? '--:--:--' : formatClock(now)}</span>{' '}
-                UTC
+                {demoTime ? 'demo time' : 'UTC'}
               </p>
               <div className="flex gap-1 rounded-full bg-page/60 p-1 ring-1 ring-edge" role="group" aria-label="Clock speed">
                 {[
@@ -318,7 +321,13 @@ export function LightTimeLedger({ evaluation, link }: { evaluation: Evaluation; 
               : 'Storage is unavailable, so the ledger lasts until you leave this page. Replies from Earth are simulated.'}
           </p>
           {consults.length > 0 && (
-            <button type="button" onClick={() => update(() => emptyLedger(Date.now()))} className={quiet}>
+            <button type="button" onClick={() => {
+                update(() => emptyLedger(Date.now()))
+                // This button disappears with the last consult; keep focus in the ledger.
+                ledgerHeading.current?.focus()
+              }}
+              className={quiet}
+            >
               Clear the ledger
             </button>
           )}

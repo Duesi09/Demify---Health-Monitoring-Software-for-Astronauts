@@ -25,6 +25,7 @@ import { MissionDose } from './MissionDose'
 import { SourceLink, Tag, button, primaryButton } from './parts'
 import { ShelterProcedure } from './ShelterProcedure'
 import { newRun, useShelterSession, type ProcedureRun } from './useShelterSession'
+import { useAddress } from '../useAddress'
 
 interface Props {
   readings: Reading[]
@@ -193,13 +194,12 @@ export function RadiationView({ readings, initialDay }: Props) {
   // Keep the day in the address bar so a reload or a shared link opens the same day.
   // Written once the day has settled: browsers limit how often the URL may change,
   // and dragging the day control changes it many times a second.
-  useEffect(() => {
-    const timer = setTimeout(() => window.history.replaceState(null, '', `?day=${day}`), 200)
-    return () => clearTimeout(timer)
-  }, [day])
+  useAddress(`?day=${day}`)
 
   useEffect(() => {
     if (moveFocus === 'invite') invite.current?.focus()
+    // One request moves focus once. Left set, it would pull focus again whenever the panel remounts.
+    if (moveFocus !== null) setMoveFocus(null)
   }, [moveFocus])
 
   // The indicator decides: act or critical on a current reading means take shelter.

@@ -24,6 +24,8 @@ export function AppNav({ current, day }: { current: AppSection; day: number }) {
           <Link
             key={section.id}
             href={`${section.href}?day=${day}`}
+            // The address changes with the mission day; fetching every one ahead would flood the server in the time-lapse.
+            prefetch={false}
             aria-current={section.id === current ? 'page' : undefined}
             className={`rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
               section.id === current ? 'bg-ink text-page' : 'text-ink-2 hover:bg-white/[0.08] hover:text-ink'

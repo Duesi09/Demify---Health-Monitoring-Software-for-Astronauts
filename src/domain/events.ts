@@ -289,9 +289,11 @@ export const MISSION_EVENTS: MissionEvent[] = [
   {
     id: 'exercise-outage',
     firstDay: 105,
-    lastDay: 140,
-    title: 'Exercise device out of service',
-    story: 'The exercise device is out of service. Resting heart rate climbs and blood pressure rises.',
+    // The device is back on day 141; the heart needs until about day 146 to settle.
+    lastDay: 146,
+    title: 'Exercise device out of service, then recovery',
+    story:
+      'The exercise device is out of service from day 105 to day 140. Resting heart rate climbs and blood pressure rises. After the repair the heart needs about a week to recover.',
     basis: 'observed in a ground or analog study',
     evidence: [
       {

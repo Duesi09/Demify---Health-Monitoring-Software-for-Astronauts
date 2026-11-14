@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { METRICS } from '@/domain/metrics'
 import { isMetricId, isMissionDay, validateReading } from '@/domain/validate'
 import type { Reading } from '@/domain/types'
@@ -39,9 +40,12 @@ export async function logReadings(day: unknown, entries: unknown): Promise<LogRe
   }
 
   await saveManualReadings(readings)
+  // Every section shows these readings; none may serve an older copy, even after the Back button.
+  revalidatePath('/', 'layout')
   return { ok: true, readings }
 }
 
 export async function resetManualReadings(): Promise<void> {
   await clearManualReadings()
+  revalidatePath('/', 'layout')
 }

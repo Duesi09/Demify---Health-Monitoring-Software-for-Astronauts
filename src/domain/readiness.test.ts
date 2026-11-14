@@ -253,8 +253,8 @@ describe('verdict for hand-built evaluations', () => {
     expect(spacewalk.reasons[0]).toMatchObject({ text: 'Solar particle event', metric: 'radiationDose' })
     expect(spacewalk.alternative?.kind).toBe('postpone')
     expect(spacewalk.alternative?.text).toContain('A crewmate would face the same')
-    // Work inside goes on with care; rest is untouched.
-    expect(levelOf('science', e)).toBe('caution')
+    // The crew belongs in the storm shelter, so work inside stops too; rest is untouched.
+    expect(levelOf('science', e)).toBe('no-go')
     expect(levelOf('rest', e)).toBe('go')
   })
 
@@ -271,11 +271,21 @@ describe('verdict for hand-built evaluations', () => {
     expect(levelOf('spacewalk', e)).toBe('no-go')
     expect(levelOf('exercise', e)).toBe('no-go')
     expect(assessReadiness(TASKS.exercise, e).alternative?.kind).toBe('lighter')
-    expect(levelOf('science', e)).toBe('caution')
+    // The finding says rest and keep away from crewmates, so light work stops as well.
+    expect(levelOf('science', e)).toBe('no-go')
     const rest = assessReadiness(TASKS.rest, e)
     expect(rest.level).toBe('go')
     expect(rest.summary).toBe('Resting is the right plan today.')
     expect(rest.reasons).toEqual([])
+  })
+
+  it('gives a heart that is racing today no milder verdict than one that raced yesterday', () => {
+    const e = evaluation([finding('range:restingHr', 'act', ['restingHr'])], {
+      restingHr: { status: 'act', value: 130, recentPeak: 130 },
+    })
+    expect(levelOf('exercise', e)).toBe('no-go')
+    expect(levelOf('spacewalk', e)).toBe('no-go')
+    expect(levelOf('rest', e)).toBe('go')
   })
 
   it('keeps a recovering heart away from exertion and asks for care in light work', () => {
@@ -377,9 +387,10 @@ describe('verdict for the simulated mission', () => {
     // After the life-support fault.
     [56, 'maintenance', 'no-go', 'pattern:atmosphere'],
     [60, 'burn', 'caution', 'drift:reactionMs'],
+    [62, 'roboticArm', 'caution', 'drift:reactionMs'],
     [63, 'spacewalk', 'caution', 'drift:spo2'],
     // Infection, days 70 to 77.
-    [73, 'roboticArm', 'caution', 'pattern:infection'],
+    [73, 'roboticArm', 'no-go', 'pattern:infection'],
     [75, 'rest', 'go', null],
     // Blood pressure not measured.
     [90, 'burn', 'caution', 'unmeasured:systolic'],
@@ -390,10 +401,12 @@ describe('verdict for the simulated mission', () => {
     [118, 'burn', 'go', null],
     [120, 'roboticArm', 'go', null],
     [128, 'spacewalk', 'no-go', 'pattern:deconditioning'],
-    [129, 'exercise', 'go', null],
+    // No exercise session is planned while the device is out of service.
+    [129, 'maintenance', 'go', null],
+    [143, 'exercise', 'go', null],
     // Solar particle event.
     [148, 'spacewalk', 'no-go', 'range:radiationDose'],
-    [149, 'exercise', 'caution', 'range:radiationDose'],
+    [149, 'exercise', 'no-go', 'range:radiationDose'],
     [151, 'spacewalk', 'go', null],
     // Low blood sugar.
     [153, 'burn', 'caution', 'range:glucose'],
@@ -433,7 +446,7 @@ describe('verdict for the simulated mission', () => {
   })
 
   it('says that exercise is part of the fix while the heart deconditions', () => {
-    expect(verdictOn(129).summary).toContain('part of the fix')
+    expect(verdictOn(143).summary).toContain('part of the fix')
   })
 
   it('shows every verdict for the demanding tasks', () => {
@@ -462,7 +475,7 @@ describe('verdict for the simulated mission', () => {
   it('is go on most days of the mission', () => {
     const counts: Record<VerdictLevel, number> = { go: 0, caution: 0, 'no-go': 0 }
     for (let day = 1; day <= MISSION_DAYS; day++) counts[verdictOn(day).level]++
-    expect(counts).toEqual({ go: 130, caution: 32, 'no-go': 18 })
+    expect(counts).toEqual({ go: 129, caution: 29, 'no-go': 22 })
   })
 
   it('never gives a reason without a verdict, or a verdict without a way forward', () => {

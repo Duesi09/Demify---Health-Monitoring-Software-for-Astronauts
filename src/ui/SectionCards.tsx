@@ -42,7 +42,8 @@ export function SectionCard({
   children?: React.ReactNode
 }) {
   return (
-    <Link href={href} className={card}>
+    // The address changes with the mission day, many times a second in the time-lapse; do not fetch each one ahead.
+    <Link href={href} prefetch={false} className={card}>
       <p className="eyebrow">{eyebrow}</p>
       <p className="mt-2 text-2xl leading-tight font-semibold tracking-tight text-ink">{headline}</p>
       <p className="mt-1 text-sm text-ink-2">{detail}</p>
@@ -75,7 +76,8 @@ export function SectionCards({ day, evaluation, index, children }: Props) {
       {children}
 
       <SectionCard
-        href={`/link?day=${day}`}
+        // The numbers on this card are for the Mars transit, so the link opens that place.
+        href={`/link?day=${day}&profile=${DEFAULT_PROFILE}`}
         eyebrow="Earth link"
         headline={`Earth is ${formatDuration(link.oneWayS)} away`}
         detail={`An answer from the flight surgeon needs at least ${formatDuration(earliestAnswerS(link))}.`}

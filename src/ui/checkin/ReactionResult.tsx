@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { logReadings } from '@/app/actions'
 import { formatAverage, formatDay, formatDelta, formatValue } from '@/domain/format'
+import { METRICS } from '@/domain/metrics'
 import type { Protocol, Score } from '@/domain/reactionTest'
 import type { Evaluation, MetricAssessment, Reading } from '@/domain/types'
 import { validateReading } from '@/domain/validate'
@@ -34,13 +35,18 @@ export function ReactionResult({ score, protocol, day, before, beforeManual, eva
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const demo = protocol.id === 'demo'
-  const unsavable = validateReading('reactionMs', score.meanMs)
+  // The log accepts a fixed range. A mean outside it is the result most worth keeping,
+  // so it is saved at the nearest accepted value and the crew member is told.
+  const limits = METRICS.reactionMs
+  const savedMs = Math.min(limits.inputMax, Math.max(limits.inputMin, score.meanMs))
+  const clamped = savedMs !== score.meanMs
+  const unsavable = validateReading('reactionMs', savedMs)
 
   function save() {
     setError(null)
     startTransition(async () => {
       try {
-        const result = await logReadings(day, [{ metric: 'reactionMs', value: score.meanMs }])
+        const result = await logReadings(day, [{ metric: 'reactionMs', value: savedMs }])
         if (!result.ok) {
           setError(result.error)
           return
@@ -188,6 +194,13 @@ export function ReactionResult({ score, protocol, day, before, beforeManual, eva
         )}
       </div>
 
+      {clamped && !saved && (
+        <p className="text-sm text-ink-2">
+          Your mean of {score.meanMs} ms is outside what the log accepts ({limits.inputMin} to {limits.inputMax} ms). It
+          will be saved as {savedMs} ms.
+        </p>
+      )}
+
       {(error ?? unsavable) && (
         <p role="alert" className="flex items-start gap-2 text-sm text-ink">
           <span className="mt-0.5">
@@ -204,7 +217,7 @@ export function ReactionResult({ score, protocol, day, before, beforeManual, eva
           </button>
         ) : (
           <button type="button" onClick={save} disabled={pending || unsavable !== null} className={primaryButton}>
-            {pending ? 'Saving…' : `Save ${score.meanMs} ms for mission day ${day}`}
+            {pending ? 'Saving…' : `Save ${savedMs} ms for mission day ${day}`}
           </button>
         )}
         <button type="button" onClick={onAgain} disabled={pending} className={quietButton}>

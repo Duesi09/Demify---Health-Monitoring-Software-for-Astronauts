@@ -223,6 +223,7 @@ const SCHEDULED: Record<number, TaskId> = {
   49: 'spacewalk',
   // After the life-support fault of days 54 to 58: blood oxygen and reactions are still off baseline.
   60: 'burn',
+  62: 'roboticArm',
   63: 'spacewalk',
   // Days 70 to 77: infection with fever.
   73: 'roboticArm',
@@ -243,13 +244,20 @@ const SCHEDULED: Record<number, TaskId> = {
   176: 'burn',
 }
 
+/** Days on which the simulated mission has no working exercise device. */
+const EXERCISE_OUTAGE = { firstDay: 105, lastDay: 140 }
+
 /**
  * The main task of a mission day. Days outside the mission follow the routine,
  * so every whole-numbered day has an answer.
  */
 export function taskForDay(day: number): MissionTask {
   const slot = (((day - 1) % RHYTHM.length) + RHYTHM.length) % RHYTHM.length
-  return TASKS[SCHEDULED[day] ?? RHYTHM[slot]]
+  const routine = RHYTHM[slot]
+  // The exercise device is out of service on these days in the simulated mission,
+  // so the plan cannot ask for a session on it; the crew works on the repair instead.
+  const noDevice = day >= EXERCISE_OUTAGE.firstDay && day <= EXERCISE_OUTAGE.lastDay
+  return TASKS[SCHEDULED[day] ?? (routine === 'exercise' && noDevice ? 'maintenance' : routine)]
 }
 
 /** The plan for the whole mission: entry 0 is mission day 1. */
@@ -348,10 +356,12 @@ const PATTERN_RULES: Record<string, PatternRule> = {
     shared: true,
   },
   'pattern:cardiac': { demands: ['heart'], text: 'Possible heart attack', metric: 'restingHr' },
+  // The finding's own advice is to rest and keep away from crewmates, so no work with a partner either.
   'pattern:infection': {
     demands: ['health'],
     text: 'Possible infection with fever',
     metric: 'bodyTemp',
+    severity: 'block',
   },
   'pattern:deconditioning': {
     demands: ['heart'],
@@ -413,10 +423,14 @@ function concernFor(finding: Finding, evaluation: Evaluation): Concern {
   }
 
   const metric = finding.metrics[0]
-  let severity = natural
+  let severity: Severity = natural
   if (WARNING_AT_MOST.includes(metric)) severity = 'warning'
   // A reaction time in the slowed range stops tasks that need alertness, even at watch level.
   if (finding.id === 'range:reactionMs') severity = 'limit'
+  // A solar particle event sends the crew to the storm shelter and a fever sends
+  // the crew member to rest: no task goes on beside either, whatever its demand.
+  const stopsAllWork = finding.id === 'range:radiationDose' || finding.id === 'range:bodyTemp'
+  if (stopsAllWork && finding.status === 'act') severity = 'block'
   return {
     id: finding.id,
     // A pattern this file does not know yet counts for every demand its indicators speak to.
@@ -461,11 +475,8 @@ export function assessReadiness(task: MissionTask, evaluation: Evaluation): Verd
 
   const heart = assessments.restingHr
   // After a racing heart the muscle needs time, even when today's readings look calm again.
-  const recovering =
-    heart.recentPeak !== null &&
-    heart.recentPeak > RACING_HEART_BPM &&
-    heart.value !== null &&
-    heart.value <= RACING_HEART_BPM
+  // A heart that is racing today counts just the same: it must not get a milder verdict than tomorrow.
+  const recovering = heart.recentPeak !== null && heart.recentPeak > RACING_HEART_BPM
 
   // A rest day is the one plan that is never wrong.
   if (task.id === 'rest') {

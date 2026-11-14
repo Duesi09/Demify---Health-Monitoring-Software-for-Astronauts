@@ -30,7 +30,7 @@ Written on 13 November 2026 and updated on 14 November for the NASA Space Apps C
 
 | Item | State |
 |---|---|
-| Unit tests | 313 of 313 pass |
+| Unit tests | 316 of 316 pass |
 | Type check and production build | Clean |
 | Browser run | 17 page variants load with no console errors, desktop and phone width |
 | Accessibility scan | No WCAG A or AA violations found by the automated scan on any section |
@@ -100,10 +100,30 @@ The simulated values of the ten older indicators did not change; a checksum test
 - Task readiness limits are project defaults, not flight rules.
 - Citations in the evidence notes and on the Radiation page were confirmed through search results, not by opening every paper. Click each one before the pitch.
 
+### Second-pass review
+
+An independent review read all Phase 3 code and found 13 defects. All are fixed, and one more was found while checking the fixes:
+
+| Area | What was wrong | Now |
+|---|---|---|
+| Task readiness | "Exercise, with caution" during a solar particle event, while the banner said take shelter | No-go for every task except rest |
+| Task readiness | Work "with a crewmate" during a possible infection, while the banner said rest and keep away from crewmates | No-go for every task except rest |
+| Task readiness | A heart racing today got a milder verdict than the same heart a day later | Both count the same |
+| Task readiness | Exercise sessions planned on days when the exercise device is out of service | Maintenance on those days |
+| Saving | A reading saved in one section could be missing after the Back button | Every section is refreshed after a save |
+| Back button | After a fresh page load, Back changed the address but not the page | Fixed in every section, Back and Forward |
+| Earth link | The dashboard card could quote a different distance than the page it opened | The card opens the Mars transit it quotes |
+| Earth link | The ship clock still said "UTC" after fast-forward | It says "demo time" |
+| Earth link | Keyboard focus was lost after clearing the ledger | Focus moves to the ledger heading |
+| Radiation | Focus jumped away while stepping through days with the drill open | Focus moves once |
+| Check-in | A very slow or very fast reaction result could not be saved | Saved at the nearest accepted value, with a note |
+| Evidence | The note for the exercise outage ended before its after-effects | It runs to day 146 and says so |
+| Performance | Every day of the time-lapse could trigger page fetches in the background | Day-dependent links are no longer fetched ahead |
+
 ### Not finished
 
-- An independent bug review of the Phase 3 code was started and cut off by the usage limit. Every section was driven in a real browser and scanned, but nobody has read all the new code a second time.
 - The older sections of this handbook (thresholds table, patterns, simulated mission day table) do not list the two new indicators, the fatigue pattern or the solar particle event.
+- Reaction timing was not measured on a real device, only driven by script.
 
 ---
 

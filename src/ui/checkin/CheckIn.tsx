@@ -7,6 +7,7 @@ import { evaluateIndexed, indexReadings } from '@/domain/engine'
 import { MISSION_DAYS } from '@/domain/simulator'
 import type { Reading } from '@/domain/types'
 import { TILES } from '../tiles'
+import { useAddress } from '../useAddress'
 import { MeasureForm } from './MeasureForm'
 import { ReactionTest } from './ReactionTest'
 import { RoutineEnd } from './RoutineEnd'
@@ -61,9 +62,7 @@ export function CheckIn({ initialReadings, day, initialStep }: Props) {
   const begun = savedId !== null || skipped.size > 0 || steps.some((s) => s.metrics.some((m) => manualKeys.has(`${day}:${m}`)))
 
   // Keep the step in the address bar so a reload opens the same step.
-  useEffect(() => {
-    window.history.replaceState(null, '', `?day=${day}${activeId ? `&step=${activeId}` : ''}`)
-  }, [day, activeId])
+  useAddress(`?day=${day}${activeId ? `&step=${activeId}` : ''}`)
 
   // After the crew member moves to another step, take focus and view there.
   // Not on the first render: the page must open at its top.
