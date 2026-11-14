@@ -70,7 +70,8 @@ function Numeric({
   return (
     <div
       className={`relative rounded-[14px] px-3 py-2 @3xl:px-3.5 @3xl:py-2.5 ${alarmCls} ${className}`}
-      style={{ color }}
+      // In alarm the flash colours come from the CSS class (inline colour would win).
+      style={alarm ? undefined : { color }}
       data-alarm={alarm?.priority}
     >
       <div className="flex items-start justify-between gap-2">
@@ -333,7 +334,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               }
             >
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[60px] font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums @3xl:text-[112px]">
+                <span className={`font-extralight leading-[0.95] tracking-[-0.045em] tabular-nums ${v.hr == null ? "text-[44px] @3xl:text-[84px]" : "text-[60px] @3xl:text-[112px]"}`}>
                   <Val>{hrText}</Val>
                 </span>
                 <span className="text-[11px] font-light text-white/50">bpm</span>
