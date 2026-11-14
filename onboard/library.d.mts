@@ -136,6 +136,8 @@ export function embedPending(pool: Pool, cfg: OnboardConfig, limit?: number): Pr
 export interface SearchOptions {
   /** Go straight to full-text search (e.g. the cached model status says the model server is not ready). */
   skipVector?: boolean;
+  /** Why the vector tier was skipped (the result's fallbackReason); default: the model server was not ready. */
+  skipVectorReason?: string;
   /** Time limit for embedding the question, ms (default 3000; document embeddings keep cfg.embedTimeoutMs). */
   embedTimeoutMs?: number;
 }
@@ -165,6 +167,9 @@ export function germanToEnglish(text: string): string | null;
 
 /** Keyword search over bundled documents (no database). Deterministic BM25-style score. A German question is searched with its English (germanToEnglish). */
 export function searchBundled(docs: LibraryDoc[], query: string, k?: number): SearchResult;
+
+/** How many chunks of the bundled library contain this (stemmed) search word; 0 when none does. */
+export function bundledTermFrequency(docs: LibraryDoc[]): (term: string) => number;
 
 /**
  * Latest successful library sync that came from the ground (finished_at, ISO), or null:

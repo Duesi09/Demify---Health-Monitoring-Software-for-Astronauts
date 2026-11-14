@@ -143,7 +143,8 @@ export default async function ResearchPage() {
           title="Measured ISS radiation dose"
           subtitle="Daily absorbed dose inside the ISS during Rodent Research missions: ISS area dosimetry (OSDR), not crew dose"
         >
-          {"error" in dose ? (
+          {/* Branch on data, not on error: a SNAPSHOT fallback carries both and must still render (like /radiation). */}
+          {!("data" in dose) ? (
             <p className="text-sm text-critical">Dosimetry unavailable: {dose.error}</p>
           ) : (
             <>
@@ -182,7 +183,7 @@ export default async function ResearchPage() {
           title="All Inspiration4 datasets"
           subtitle="Studies linked to the mission in the OSDR registry"
         >
-          {"error" in mission ? (
+          {!("data" in mission) ? (
             <p className="text-sm text-critical">Mission registry unavailable: {mission.error}</p>
           ) : (
             <>

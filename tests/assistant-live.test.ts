@@ -172,7 +172,9 @@ describe("alarm events (pure)", () => {
     expect(flightSurgeonLine(true)).toContain(BLACKOUT_ADVICE);
     expect(flightSurgeonLine(true)).toMatch(/^No contact with the ground: .*Prepare the report for the flight surgeon/);
     expect(DRILL_TAG).toBe("Training scenario (drill)");
-    expect(BLACKOUT_STEP_NOTE).toMatch(/transmit it when contact returns/);
+    expect(BLACKOUT_STEP_NOTE).toBe(
+      "No contact with the ground: wherever a step says to contact or transmit to the flight surgeon, prepare the report instead and transmit it when contact returns.",
+    );
   });
 
   it("asks the model a fixed question without values, crew names or anything to copy", () => {
@@ -393,5 +395,11 @@ describe("walk-through text", () => {
     expect(dropLeadIn("Stop all activity [1].\nRecord an ECG [1].")).toBe("Stop all activity [1].\nRecord an ECG [1].");
     expect(dropLeadIn("The checklist [1] says:\n1. Rest [1].")).toBe("The checklist [1] says:\n1. Rest [1].");
     expect(dropLeadIn("Steps:\nno citation here")).toBe("Steps:\nno citation here");
+    // A lead-in that mentions the passages, or starts with "Here", goes even when it carries markers.
+    expect(dropLeadIn("Here are the steps from the drill checklist [1]:\n1. Rest [1].")).toBe("1. Rest [1].");
+    expect(dropLeadIn("Based on passages [1] and [2], the crew should:\n- Rest [1].\n- Record an ECG [2].")).toBe("- Rest [1].\n- Record an ECG [2].");
+    expect(dropLeadIn("According to passage [1]:\n1. Rest [1].")).toBe("1. Rest [1].");
+    // Not a lead-in: no colon at the end.
+    expect(dropLeadIn("Here the crew rests [1].\n1. Rest [1].")).toBe("Here the crew rests [1].\n1. Rest [1].");
   });
 });

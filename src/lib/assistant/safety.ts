@@ -334,6 +334,38 @@ export function statements(text: string): string[] {
   return out.filter((s) => /[\p{L}\d]/u.test(s.replace(MARKER, "")));
 }
 
+/**
+ * Lines of numbers and markers only ("1, 2, 6, 7 [1][2]"): small models
+ * sometimes list the passage numbers before the answer. They state nothing
+ * and are dropped (after the dose check), as is such a list in front of a
+ * line's leading markers ("1, 3, [3] The crew …"). A line of markers alone stays: it
+ * belongs to the statement above it (statements()).
+ */
+function dropNumberLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => {
+      const rest = line.replace(MARKER, " ");
+      return !(/\d/.test(rest) && !/\p{L}/u.test(rest));
+    })
+    // "1, 3, [3] The crew member …": the same list in front of a statement.
+    .map((line) => line.replace(/^([ \t]*)(?:\d+[ \t]*,[ \t]*)+(?:\d+[ \t]*)?(?=\[(?:\d+|C)\])/, "$1"))
+    .join("\n");
+}
+
+/** Fewest words of a statement that counts as copied from a passage (a word or two can mean anything). */
+const VERBATIM_MIN_WORDS = 3;
+
+/** Text for the word-for-word comparison: folded, lower case, punctuation and Markdown dropped, single spaces. */
+function verbatimForm(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
 /** Lines that introduce the next lines or head a section: they state nothing themselves. */
 function isLeadIn(statement: string): boolean {
   const s = statement.replace(MARKER, "").trim();
@@ -371,11 +403,18 @@ function dropLeadingMarkers(text: string): string {
  * - a dose, an amount or a schedule withholds the answer;
  * - markers out of range are removed; a sentence or list item that loses
  *   its only marker, more than one sentence without any marker, or no
- *   library marker at all withholds the answer.
+ *   library marker at all withholds the answer;
+ * - except: a statement that is, word for word (case, spacing and
+ *   punctuation aside, at least VERBATIM_MIN_WORDS words), part of a passage
+ *   (opts.passages[n - 1] is passage [n]): without a marker it counts as
+ *   cited when that passage is cited elsewhere in the answer; when its only
+ *   markers were out of range it keeps a marker to that passage (a cited
+ *   one first).
  */
-export function checkAnswer(raw: string, passageCount: number, opts: { crew?: boolean } = {}): AnswerCheck {
+export function checkAnswer(raw: string, passageCount: number, opts: { crew?: boolean; passages?: string[] } = {}): AnswerCheck {
   const text = raw.trim();
-  if (!text || new RegExp(`\\b${NO_ANSWER_TOKEN}\\b`).test(text)) {
+  // Only an answer that IS the token (or opens with it): a sentence that quotes "NO_ANSWER" in passing is checked like any other.
+  if (!text || new RegExp(`^[^\\p{L}\\d]*${NO_ANSWER_TOKEN}(?![\\p{L}\\d_])`, "u").test(text)) {
     return { ok: false, kind: "no-answer", reason: "the model found no answer in the passages", detail: "model answered NO_ANSWER" };
   }
   if (containsDose(text)) return { ok: false, kind: "dose", reason: PASSAGES_ONLY_REASON.dose, detail: "model answer contained a dose pattern" };
@@ -385,20 +424,40 @@ export function checkAnswer(raw: string, passageCount: number, opts: { crew?: bo
     const i = Number(m);
     return Number.isInteger(i) && i >= 1 && i <= passageCount;
   };
-  const normalised = normaliseMarkers(text);
+  const normalised = dropNumberLines(normaliseMarkers(text));
+  // Statements copied word for word from a passage (verbatimForm; at least VERBATIM_MIN_WORDS words).
+  const forms = (opts.passages ?? []).slice(0, passageCount).map((p) => ` ${verbatimForm(p)} `);
+  const citedNs = new Set([...normalised.matchAll(MARKER)].map((m) => m[1]).filter((m) => m !== "C" && valid(m)).map(Number));
+  /** Number of the passage this statement is copied from (a cited one first; any given one when anyCited), or null. */
+  const copiedFrom = (statement: string, any: boolean): number | null => {
+    const form = verbatimForm(statement.replace(MARKER, " ").replace(LIST_ITEM, ""));
+    if (form.split(" ").length < VERBATIM_MIN_WORDS) return null;
+    const order = [...forms.keys()].map((i) => i + 1).sort((a, b) => Number(citedNs.has(b)) - Number(citedNs.has(a)));
+    return order.find((n) => (any || citedNs.has(n)) && forms[n - 1].includes(` ${form} `)) ?? null;
+  };
+  let working = normalised;
   let unmarked = 0;
   for (const s of statements(normalised)) {
     const markers = [...s.matchAll(MARKER)].map((m) => m[1]);
     if (markers.length && !markers.some(valid)) {
-      return { ok: false, kind: "uncited", reason: PASSAGES_ONLY_REASON.uncited, detail: "a statement of the model answer cited no passage that exists" };
+      // Its only markers point nowhere: kept when it is copied from a passage, cited with that passage.
+      const n = copiedFrom(s, true);
+      if (n === null) {
+        return { ok: false, kind: "uncited", reason: PASSAGES_ONLY_REASON.uncited, detail: "a statement of the model answer cited no passage that exists" };
+      }
+      let first = true;
+      const fixed = s.replace(MARKER, () => (first ? ((first = false), `[${n}]`) : ""));
+      if (working.includes(s)) working = working.replace(s, fixed);
+      continue;
     }
-    if (!markers.length && !isLeadIn(s) && !isStaleNote(s)) unmarked++;
+    // A statement without a marker that is copied from a passage the answer cites needs none.
+    if (!markers.length && !isLeadIn(s) && !isStaleNote(s) && copiedFrom(s, false) === null) unmarked++;
   }
   if (unmarked > 1) {
     return { ok: false, kind: "uncited", reason: PASSAGES_ONLY_REASON.uncited, detail: `${unmarked} statements of the model answer had no citation` };
   }
 
-  const cleaned = dropLeadingMarkers(normalised.replace(MARKER, (marker, m: string) => (valid(m) ? marker : "")))
+  const cleaned = dropLeadingMarkers(working.replace(MARKER, (marker, m: string) => (valid(m) ? marker : "")))
     // Tidy the gaps left by removed markers.
     .replace(/[ \t]+([.,;:!?])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")

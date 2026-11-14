@@ -12,8 +12,8 @@ import {
   releaseCopyFreshness,
   stationFreshness,
 } from "@/lib/assistant/freshness";
-import { buildMessages, promptQuestion, SYSTEM_PROMPT, userMessage } from "@/lib/assistant/prompt";
-import { termCoverage, usableHits } from "@/lib/assistant/relevance";
+import { buildMessages, passageCountLine, promptQuestion, SYSTEM_PROMPT, userMessage } from "@/lib/assistant/prompt";
+import { coversQuestion, questionTerms, termCoverage, usableHits } from "@/lib/assistant/relevance";
 import {
   blockedReason,
   checkAnswer,
@@ -382,6 +382,63 @@ describe("answer check", () => {
     expect(checkAnswer("NO_ANSWER", 3)).toMatchObject({ ok: false, kind: "no-answer" });
     expect(checkAnswer("  NO_ANSWER.\n", 3)).toMatchObject({ ok: false, kind: "no-answer" });
     expect(checkAnswer("", 3)).toMatchObject({ ok: false, kind: "no-answer" });
+    expect(checkAnswer("**NO_ANSWER**", 3)).toMatchObject({ ok: false, kind: "no-answer" });
+    expect(checkAnswer("NO_ANSWER: the passages do not cover this.", 3)).toMatchObject({ ok: false, kind: "no-answer" });
+  });
+
+  it("an answer that only quotes NO_ANSWER while citing a passage is checked like any other", () => {
+    const quoted = 'The checklist says to start CPR [1]. It does not reply "NO_ANSWER" here [1].';
+    expect(checkAnswer(quoted, 2)).toMatchObject({ ok: true, cited: [1] });
+    expect(checkAnswer("NO_ANSWERS are rare [1].", 2)).toMatchObject({ ok: true });
+  });
+
+  it("drops a line that only lists passage numbers", () => {
+    expect(checkAnswer("1, 2, 6, 7, 8 [1, 2, 6, 7, 8]\nStay with the crew member [1].\nTime the seizure [2].", 2)).toEqual({
+      ok: true,
+      text: "Stay with the crew member [1].\nTime the seizure [2].",
+      cited: [1, 2],
+    });
+    // Values with a unit are not such a line; a line of markers alone still joins the statement above.
+    expect(checkAnswer("Systolic above 180 mmHg [1].\n185/115 mmHg is above it [1].", 2)).toMatchObject({ ok: true });
+    expect(checkAnswer("Start CPR.\n[1]", 2)).toMatchObject({ ok: true, cited: [1] });
+    expect(checkAnswer("1, 3, [2] The crew member rests [2].", 2)).toMatchObject({ ok: true, text: "The crew member rests [2].", cited: [2] });
+  });
+
+  describe("statements copied word for word from a cited passage", () => {
+    const passages = ["## Seizure (convulsions)\n1. Protect the head and clear the area.\n2. Time the seizure.", "Call the flight surgeon."];
+
+    it("count as cited without a marker of their own", () => {
+      const text = "Protect the head and clear the area. Time the seizure [1]. The crew decides with the flight surgeon. Call the flight surgeon [2].";
+      // Two uncited sentences: one is copied from passage [1], one is the model's own.
+      expect(checkAnswer(text, 2, { passages })).toMatchObject({ ok: true, cited: [1, 2] });
+      expect(checkAnswer(text, 2)).toMatchObject({ ok: false, kind: "uncited" });
+      // Case, spacing and punctuation do not matter; list markers neither.
+      expect(checkAnswer("- PROTECT the head, and clear the area!\n- Do something else\n- Time the seizure [1]", 2, { passages })).toMatchObject({ ok: true });
+    });
+
+    it("keep a sentence whose only marker was out of range", () => {
+      const text = "Protect the head and clear the area [7]. Time the seizure [1].";
+      // It keeps a marker to the passage it was copied from.
+      expect(checkAnswer(text, 2, { passages })).toEqual({ ok: true, text: "Protect the head and clear the area [1]. Time the seizure [1].", cited: [1] });
+      // Copied from a passage the answer does not cite otherwise: cited with that passage.
+      expect(checkAnswer("Time the seizure [1]. Call the flight surgeon [7].", 2, { passages })).toEqual({
+        ok: true,
+        text: "Time the seizure [1]. Call the flight surgeon [2].",
+        cited: [1, 2],
+      });
+      expect(checkAnswer(text, 2)).toMatchObject({ ok: false, kind: "uncited" });
+      // Not copied (a word changed): withheld as before.
+      expect(checkAnswer("Protect the head and leave the area [7]. Time the seizure [1].", 2, { passages })).toMatchObject({ ok: false, kind: "uncited" });
+    });
+
+    it("only from a passage the answer cites, at least three words, and never past the dose check", () => {
+      // "Call the flight surgeon." is in passage [2], which this answer does not cite.
+      expect(checkAnswer("Call the flight surgeon. Time the seizure [1]. Do it now.", 2, { passages })).toMatchObject({ ok: false, kind: "uncited" });
+      expect(checkAnswer("Time the seizure [1]. Head. Do it now.", 2, { passages })).toMatchObject({ ok: false, kind: "uncited" });
+      expect(checkAnswer("Take 2 tablets now. Time the seizure [1].", 2, { passages: ["Take 2 tablets now.", ""] })).toMatchObject({ kind: "dose" });
+      // No valid marker anywhere: nothing is cited, nothing counts as copied.
+      expect(checkAnswer("Protect the head and clear the area.", 2, { passages })).toMatchObject({ ok: false, kind: "uncited" });
+    });
   });
 });
 
@@ -525,6 +582,32 @@ describe("relevance gate", () => {
     expect(usableHits(result([hit({ tier: "bundled", score: 0.4 })]), EXAMPLES[0], { minScore: 0.5, k: 5 })).toHaveLength(1);
   });
 
+  it("ignores filler words of natural questions", () => {
+    expect(questionTerms("Someone is having a seizure, what do we do?")).toEqual(["seizur"]);
+    expect(questionTerms("The commander has crushing chest pain and is sweating. What should the crew do first?")).toEqual([
+      "commander",
+      "chest",
+      "pain",
+      "sweat",
+      "crew",
+    ]);
+    expect(questionTerms("Please, quickly, ok, right now: what is going to happen? Anybody? Somebody? Anyone doing anything?")).toEqual(["anyth"]);
+  });
+
+  it("a short question (3 words or fewer) needs half of its words, including the rarest", () => {
+    const frequency = (t: string) => ({ seizure: 2, crew: 40, protocol: 9 })[t] ?? 0;
+    expect(coversQuestion("crew seizure", "Seizure: protect the head.", frequency)).toBe(true);
+    expect(coversQuestion("crew seizure", "The crew stays together.", frequency)).toBe(false);
+    expect(coversQuestion("crew seizure protocol", "Seizure: protect the head.", frequency)).toBe(false);
+    expect(coversQuestion("crew seizure protocol", "Seizure protocol: protect the head.", frequency)).toBe(true);
+    // Four words or more: most of them (TERM_COVERAGE_MIN), as before.
+    expect(coversQuestion(NO_ANSWER_QUESTION, "Released calcium raises kidney-stone risk", () => 1)).toBe(false);
+    // Without a library-wide count, the hits themselves say which word is rare.
+    const crewOnly = hit({ tier: "fulltext", score: 0.3, heading: "Crew", title: "Crew", text: "The crew stays together." });
+    const seizure = hit({ tier: "fulltext", score: 0.2, heading: "Seizure", title: "Checklists", text: "Seizure: protect the head." });
+    expect(usableHits(result([crewOnly, crewOnly, seizure]), "crew seizure", { minScore: 0.5, k: 5 }).map((h) => h.heading)).toEqual(["Seizure"]);
+  });
+
   it("drops hits that failed the checksum and keeps at most k", () => {
     const hits = [hit({ integrityOk: false }), hit({ score: 0.9 }), hit({ score: 0.8 }), hit({ score: 0.7 })];
     expect(usableHits(result(hits), EXAMPLES[0], { minScore: 0.5, k: 2 }).map((h) => h.score)).toEqual([0.9, 0.8]);
@@ -579,6 +662,10 @@ describe("prompt", () => {
     expect(msg).toContain("Crew data [C] (SIMULATED, 2026-11-15T14:59:00.000Z):\nCommander.");
     expect(msg).toContain("Library status: last synced 30 hours ago; the library may be out of date.");
     expect(msg).toMatch(/Ground link status: down \(blackout\)/);
+    expect(msg).toContain("There are 2 passages; cite only [1] to [2], and [C] for the crew data.");
+    expect(msg.indexOf("There are 2 passages")).toBeGreaterThan(msg.indexOf("Ground link status:"));
+    expect(passageCountLine(1, false)).toBe("There is 1 passage; cite only [1].");
+    expect(passageCountLine(3, false)).toBe("There are 3 passages; cite only [1] to [3].");
     expect(buildMessages(input).map((m) => m.role)).toEqual(["system", "user"]);
   });
 

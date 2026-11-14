@@ -207,4 +207,6 @@ and the sync service in four containers) is set up differently; see
 | `--timeout <s>` | `-TimeoutSeconds <s>` | How long to wait for Demify to start (240) |
 
 With Node.js installed, `npm run install:demify` runs `bash install.sh` (add
-options after `--`, for example `npm run install:demify -- --yes`).
+options after `--`, for example `npm run install:demify -- --yes`). It and
+`npm run model:setup` run bash, so they work on macOS, Linux and Git Bash only;
+in Windows PowerShell run `powershell -ExecutionPolicy Bypass -File install.ps1`.

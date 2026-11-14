@@ -14,7 +14,8 @@
 #   docker compose --profile offline up -d --build demify-offline
 #
 # Optional local language model for the onboard assistant (Ollama on this
-# machine): npm run model:setup, or scripts/setup-local-model.ps1 on Windows.
+# machine): npm run model:setup (macOS, Linux and Git Bash only), or in Windows
+# PowerShell: powershell -ExecutionPolicy Bypass -File install.ps1
 # Without it the assistant shows matching library passages only. See
 # docs/LOCAL-MODEL.md.
 #

@@ -14,7 +14,7 @@ import {
   type EventScenario,
 } from "./alarm-events";
 import { AssistantBusyError, excerpt, modelAnswer, modelReady, toCitation } from "./answer";
-import { libraryFreshness, resolveLibrary, searchOnboardLibrary, type ResolvedLibrary } from "./library-source";
+import { libraryFreshness, libraryTermFrequency, resolveLibrary, searchOnboardLibrary, type ResolvedLibrary } from "./library-source";
 import { usableHits } from "./relevance";
 import { PASSAGES_ONLY_REASON } from "./wording";
 
@@ -116,14 +116,15 @@ export async function activeAlarmEvents(now = Date.now()): Promise<AlarmEvent[]>
  */
 async function retrieve(e: AlarmEvent, lib: ResolvedLibrary, cfg: OnboardConfig, blackout: boolean): Promise<Retrieved> {
   let last: Omit<Retrieved, "at" | "query" | "hits"> | null = null;
+  const frequency = await libraryTermFrequency();
   for (const query of eventQueries(e)) {
     const search = await searchOnboardLibrary(query, lib, cfg, { skipVector: true });
     last = { source: search.source, retrieval: search.tier, fallbackReason: search.fallbackReason, integrityFailures: search.integrityFailures };
-    const hits = usableHits(search, query, { minScore: cfg.minScore, k: EVENT_PASSAGES });
+    const hits = usableHits(search, query, { minScore: cfg.minScore, k: EVENT_PASSAGES, frequency });
     if (hits.length) {
       if (blackout) {
         const extra = await searchOnboardLibrary(BLACKOUT_QUERY, lib, cfg, { skipVector: true });
-        const step = usableHits(extra, BLACKOUT_QUERY, { minScore: cfg.minScore, k: 3 }).find((h) => !hits.some((x) => x.sha256 === h.sha256));
+        const step = usableHits(extra, BLACKOUT_QUERY, { minScore: cfg.minScore, k: 3, frequency }).find((h) => !hits.some((x) => x.sha256 === h.sha256));
         if (step) hits.push(step);
       }
       return { at: Date.now(), query, hits, ...last };
@@ -159,14 +160,17 @@ function retrieved(e: AlarmEvent, lib: ResolvedLibrary, cfg: OnboardConfig, blac
 
 /**
  * Without the model's uncited lead-in line ("Here's the response to the crew's question, based on the library
- * passages:"): the panel already says what the walk-through is. Only a first line that ends with a colon and cites
- * nothing is dropped, and only when cited text follows.
+ * passages:"): the panel already says what the walk-through is. Only a first line that ends with a colon is dropped,
+ * only when cited text follows, and when it cites something only if it mentions the passage(s) or starts with "Here".
  */
 export function dropLeadIn(text: string): string {
   const m = /^([^\n]*)\n+([\s\S]+)$/.exec(text.trim());
   if (!m) return text;
   const [, first, rest] = m;
-  if (/\[(?:\d+|C)\]/.test(first) || !/:\s*$/.test(first) || !/\[\d+\]/.test(rest)) return text;
+  if (!/:\s*$/.test(first) || !/\[\d+\]/.test(rest)) return text;
+  // "Here are the steps from the passages [1]:" introduces the list even with markers; any other line with markers states something.
+  const introduces = /\bpassages?\b/i.test(first) || /^\W*here\b/i.test(first);
+  if (/\[(?:\d+|C)\]/.test(first) && !introduces) return text;
   return rest.trim();
 }
 

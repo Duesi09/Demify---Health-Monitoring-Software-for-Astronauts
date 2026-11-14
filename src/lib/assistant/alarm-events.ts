@@ -38,7 +38,7 @@ export function flightSurgeonLine(blackout: boolean): string {
 
 /** Under a walk-through written or shown during a blackout: the model may still repeat the checklist's contact step. */
 export const BLACKOUT_STEP_NOTE =
-  "No contact with the ground: wherever a step says to contact the flight surgeon, prepare the report instead and transmit it when contact returns.";
+  "No contact with the ground: wherever a step says to contact or transmit to the flight surgeon, prepare the report instead and transmit it when contact returns.";
 
 /** A training scenario as GET /api/alarms (or LiveVitals.scenario) reports it. */
 export interface EventScenario {

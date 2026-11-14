@@ -402,7 +402,7 @@ export function AlarmCenter() {
         >
           <div className="px-4 py-1.5 md:px-8">
             {/* One slim bar: the most urgent alarm, its crew member, then controls. Details on demand. */}
-            <div className="flex min-h-9 items-center gap-x-2.5 gap-y-1">
+            <div className="flex min-h-9 flex-wrap items-center gap-x-2.5 gap-y-1">
               <BellRing size={16} strokeWidth={2.25} aria-hidden className="shrink-0" />
               <span className="shrink-0 text-[15px] font-semibold tracking-[-0.01em]">
                 {level === "high" ? "Alarm" : "Warning"}
@@ -412,7 +412,7 @@ export function AlarmCenter() {
                 Training alarms
               </span>
               {top && (
-                <p className="ac-line min-w-0 flex-1 truncate text-[13px] leading-snug md:text-[14px]">
+                <p className="ac-line min-w-[min(100%,22rem)] flex-1 truncate text-[13px] leading-snug md:text-[14px]">
                   <span className="sr-only">{top.priority === "high" ? "High priority: " : "Medium priority: "}</span>
                   {alarmLine(top)}
                 </p>

@@ -90,6 +90,10 @@ bash scripts/setup-local-model.sh --model gemma3:1b   # another model
 npm run model:setup                                   # the same, if Node is installed
 ```
 
+`npm run model:setup` (and `npm run install:demify`) run the bash scripts, so
+they work on macOS, Linux and Git Bash only. In Windows PowerShell use the
+`.ps1` script below (the installer: `powershell -ExecutionPolicy Bypass -File install.ps1`).
+
 ### Windows (PowerShell 5 or later)
 
 ```powershell
@@ -168,11 +172,22 @@ Docker networks also need a rule:
 
 ### Without the script
 
+macOS/Linux/Git Bash:
+
 ```bash
 ollama pull gemma3:4b
 # add the two lines from step 4 to .env, then:
 docker compose up -d --build
 curl -s http://127.0.0.1:3000/api/onboard/status   # "model": {"state": "ready", ...}
+```
+
+Windows PowerShell:
+
+```powershell
+ollama pull gemma3:4b
+# add the two lines from step 4 to .env, then:
+docker compose up -d --build
+(Invoke-RestMethod http://127.0.0.1:3000/api/onboard/status).model   # state: ready
 ```
 
 `docker-compose.yml` passes `DEMIFY_MODEL_URL`, `DEMIFY_LLM_MODEL`,
@@ -230,9 +245,13 @@ memory and no GPU, shared with other work. Ollama 0.40.16 ran in Docker with
   flight surgeon"; the answer said "The flight surgeon prepares a report".
 - **"What is the best treatment for a kidney stone?"**: no answer, without
   calling the model.
-- **A German question** ("Wo ist das Pulsoximeter im Medizinkit?"): no answer.
-  The keyword search finds no German words in the English library, so ask
-  in English.
+- **A German question** ("Wo ist das Pulsoximeter im Medizinkit?"): no answer
+  in that run, because the keyword search found no German words in the
+  English library. Since then a German-English glossary translates common
+  terms before the search (this question becomes "pulse oximeter medical
+  kit"), so German questions now work for common terms; for rarer words ask
+  in English. The assistant page says: "The library is in English; German
+  questions work for common terms."
 - **Without the two lines in `.env`:** status `not-configured`, the
   assistant shows passages only, all pages load: the same as before.
 
@@ -260,7 +279,9 @@ Not tested: macOS, Windows (neither installer nor setup script has run there
 yet; the PowerShell scripts were reviewed, and CI parses them and runs the
 model choice of `install.ps1` on every push), installing Docker or Ollama for
 real, a GPU, `gemma3:1b`, `gpt-oss` on a laptop. Repeat the example questions
-on the pitch laptop after any change:
+on the pitch laptop after any change.
+
+macOS/Linux/Git Bash:
 
 ```bash
 for q in "The monitor shows ventricular fibrillation. What does the drill checklist say?" \
@@ -268,6 +289,18 @@ for q in "The monitor shows ventricular fibrillation. What does the drill checkl
   curl -s http://127.0.0.1:3000/api/assistant -H 'Content-Type: application/json' \
     -d "{\"question\":\"$q\"}" | jq '{status, model: .mode.model, answer, reason}'
 done
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:3000/api/onboard/status
+foreach ($q in "The monitor shows ventricular fibrillation. What does the drill checklist say?",
+               "Where is the pulse oximeter in the medical kit?") {
+  $r = Invoke-RestMethod http://127.0.0.1:3000/api/assistant -Method Post -ContentType 'application/json' `
+    -Body (@{ question = $q } | ConvertTo-Json)
+  $r | Select-Object status, @{ n = 'model'; e = { $_.mode.model } }, answer, reason | Format-List
+}
 ```
 
 ## 5. Switch the model or turn it off

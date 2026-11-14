@@ -602,7 +602,8 @@ const STOPWORDS = new Set(
     "ourselves out over own same she should so some such than that the their theirs them themselves then there these they " +
     "this those through to too under until very was we were what when where which while who whom why will with would you " +
     "your yours yourself yourselves s t don shall may might must also please tell say says show shows us let get got know " +
-    "need needs want"
+    "need needs want someone somebody anyone anybody first now happen happening going crushing having doing please quickly " +
+    "right ok"
   ).split(" "),
 );
 
@@ -748,7 +749,7 @@ export const GERMAN_STOPWORDS = new Set(
     "unsere unseren unserem mein meine man nicht kein keine keinen soll sollen sollte sollten muss mussen musste kann konnen " +
     "konnte darf durfen gibt geht gehen gehe tun machen macht sagt sagen zeigt zeigen steht stehen dann denn doch noch schon " +
     "nur auch sehr so jetzt hier dort da bitte mal ja nein dieser diese dieses diesem diesen jeder jede jedes alle alles " +
-    "etwas wieviel hoch liegt finde finden findet befindet sich"
+    "etwas wieviel hoch liegt finde finden findet befindet sich jemand jemanden jemandem irgendwer irgendjemand zuerst schnell"
   ).split(" "),
 );
 
@@ -863,6 +864,18 @@ function bundledIndex(docs) {
   const avgLen = chunks.length ? chunks.reduce((s, c) => s + c.len, 0) / chunks.length : 1;
   bundledCache = { key, chunks, df, avgLen: avgLen || 1, failures };
   return bundledCache;
+}
+
+/**
+ * How many chunks of the bundled library contain this search word (stemmed,
+ * as the keyword search sees it); 0 when none does. The relevance gate uses
+ * it to find a question's rarest word.
+ * @param {LibraryDoc[]} docs
+ * @returns {(term: string) => number}
+ */
+export function bundledTermFrequency(docs) {
+  const index = bundledIndex(docs);
+  return (term) => index.df.get(term) ?? 0;
 }
 
 const BM25_K1 = 1.2;
@@ -1606,7 +1619,9 @@ function embedFailureReason(err) {
  * default 3 s); after a failure the vector tier stays off for 30 s, so a
  * hung model server costs one short wait, not one per question.
  * opts.skipVector goes straight to full-text (the caller knows the model
- * server is not ready).
+ * server is not ready, or the vector hits did not pass its relevance gate;
+ * opts.skipVectorReason then says why). A German question is embedded and
+ * searched by its English (germanToEnglish).
  * @param {Pool} pool
  * @param {OnboardConfig} cfg
  * @param {string} query
@@ -1623,7 +1638,7 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK, opts = {}) {
 
   if (!cfg.modelUrl) fallbackReason = "no embedding model configured";
   else if (!cfg.vectorSearch) fallbackReason = "embedding width does not match the database column";
-  else if (opts.skipVector) fallbackReason = "vector search skipped (the model server was not ready at the last check)";
+  else if (opts.skipVector) fallbackReason = opts.skipVectorReason || "vector search skipped (the model server was not ready at the last check)";
   else {
     const failures = embedFailures();
     const key = embedKey(cfg);
@@ -1641,7 +1656,8 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK, opts = {}) {
         /** @type {number[] | null} */
         let vector = null;
         try {
-          const [v] = await (await model()).embed({ ...cfg, embedTimeoutMs }, [q], "query");
+          // A German question is embedded by its English: the library (and its embeddings) is English.
+          const [v] = await (await model()).embed({ ...cfg, embedTimeoutMs }, [germanToEnglish(q) ?? q], "query");
           if (Array.isArray(v) && v.length === cfg.embedDim && v.every(Number.isFinite)) vector = v;
           else fallbackReason = "embedding model returned an unusable vector";
         } catch (err) {
@@ -1664,7 +1680,7 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK, opts = {}) {
     }
   }
 
-  // A German question is searched with its English (germanToEnglish); the vector tier above keeps it as asked.
+  // A German question is searched with its English (germanToEnglish), as in the vector tier above.
   const terms = [...new Set(words(germanToEnglish(q) ?? q).filter((w) => w.length > 1 && !STOPWORDS.has(w)))];
   if (!terms.length) {
     return { tier: "fulltext", hits: [], integrityFailures: 0, fallbackReason: fallbackReason ?? "the question has no searchable words" };

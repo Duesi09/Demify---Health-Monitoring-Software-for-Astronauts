@@ -9,6 +9,7 @@ import { EXCERPT_MAX, excerpt } from "./excerpt";
 import {
   libraryFreshness,
   libraryKnownWords,
+  libraryTermFrequency,
   maybeAutoSync,
   resolveLibrary,
   searchOnboardLibrary,
@@ -37,7 +38,8 @@ export { EXCERPT_MAX, excerpt };
  *
  *   blocked check -> model readiness (cached) -> retrieval (database or
  *   bundled, see library-source.ts; no vector search while the model server
- *   is known to be unreachable) -> relevance gate -> model (at most
+ *   is known to be unreachable) -> relevance gate (no vector hit passes:
+ *   full-text search, gated the same way) -> model (at most
  *   MAX_CONCURRENT_CHATS at a time) -> answer checks (citations, doses,
  *   grounding) -> citations
  *
@@ -66,6 +68,9 @@ export class AssistantBusyError extends Error {
     this.name = "AssistantBusyError";
   }
 }
+
+/** Fallback reason when no vector hit passed the relevance gate and the full-text tier answered. */
+export const VECTOR_GATE_REASON = "no vector search hit passed the relevance check; full-text search used";
 
 export interface AskInput {
   question: string;
@@ -267,7 +272,7 @@ export async function modelAnswer(input: ModelAnswerInput): Promise<ModelAnswer>
   }
 
   // Check the answer before anyone sees it.
-  const check = checkAnswer(raw, passages.length, { crew: !!crew });
+  const check = checkAnswer(raw, passages.length, { crew: !!crew, passages: hits.map((h) => `${h.heading}\n${h.text}`) });
   if (!check.ok) {
     if (check.kind === "no-answer") return { ok: false, kind: "no-answer" };
     return { ok: false, kind: "passages-only", reason: check.reason, detail: check.detail };
@@ -337,14 +342,24 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
   }
 
   // 2. Retrieval. While the model server is known to be unreachable, vector search is skipped (no embedding wait).
-  const search = await searchOnboardLibrary(question, lib, cfg, { skipVector: !ready.ready && !ready.reachable });
+  //    When the relevance gate rejects every vector hit, the full-text tier gets its turn (paraphrased questions).
+  const frequency = await libraryTermFrequency();
+  let search = await searchOnboardLibrary(question, lib, cfg, { skipVector: !ready.ready && !ready.reachable });
+  let hits = usableHits(search, question, { minScore: cfg.minScore, k: cfg.topK, frequency });
+  if (!hits.length && search.tier === "vector") {
+    const fulltext = await searchOnboardLibrary(question, lib, cfg, { skipVector: true, skipVectorReason: VECTOR_GATE_REASON });
+    const fulltextHits = usableHits(fulltext, question, { minScore: cfg.minScore, k: cfg.topK, frequency });
+    if (fulltextHits.length) {
+      search = fulltext;
+      hits = fulltextHits;
+    }
+  }
   const freshness = await libraryFreshness(search.source, lib, cfg);
   if (groundLinkUp && lib.pool) {
     // A stale (or still empty) database library syncs in the background; this answer does not wait for it.
     const dbFreshness = search.source === "database" ? freshness : await libraryFreshness("database", lib, cfg);
     maybeAutoSync(lib, { groundLinkUp, stale: dbFreshness.stale }, cfg);
   }
-  const hits = usableHits(search, question, { minScore: cfg.minScore, k: cfg.topK });
   const retrieval = { freshness, retrieval: search.tier, integrityFailures: search.integrityFailures };
   const noAnswer = withActNow(groundLinkUp ? NO_ANSWER_LINK_UP : NO_ANSWER_LINK_DOWN, " ");
   if (!hits.length) {

@@ -884,7 +884,7 @@ export const HAZARDS: Record<HazardId, HazardDef> = {
     id: "distance",
     name: "Distance from Earth",
     summary: `Mars is ~140 million miles away; communication delays are ${MARS_DELAY_RANGE} and evacuation is impossible.`,
-    effects: ["Crew must diagnose and treat themselves", "Limited medical supplies", "Food must last the mission (nutrition)"],
+    effects: ["Crew must assess and treat themselves", "Limited medical supplies", "Food must last the mission (nutrition)"],
     url: "https://www.nasa.gov/hrp/hazard-distance-from-earth/",
   },
   gravity: {
