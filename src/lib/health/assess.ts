@@ -1,5 +1,6 @@
 import "server-only";
-import { config, currentMission } from "../config";
+import { currentMission } from "../config";
+import { simulatesTelemetry } from "../crew-mode";
 import { SCENARIO_LABEL, simulateDaily, simulateLive, simulateSeries } from "../sources/simulator";
 import { getScenario } from "../store/scenarios";
 import { estimateDoseRate, getSpaceWeather } from "../sources/swpc";
@@ -74,12 +75,13 @@ export async function readingsFor(crew: CrewMember, hours = 24): Promise<Reading
   // Continuous telemetry only needs the last day; daily check-ins cover the whole window.
   const now = Date.now();
   const scenario = await getScenario(crew.id, now);
-  const sim = config.simulateTelemetry
+  const simulate = simulatesTelemetry(crew);
+  const sim = simulate
     ? [...simulateSeries(crew, Math.max(since, now - 24 * 3_600_000)), ...simulateDaily(crew, since)]
     : [];
   // A live sample at "now" lets assessments react within seconds; during a
   // training scenario it is produced even when demo telemetry is off.
-  if (config.simulateTelemetry || scenario) sim.push(...simulateLive(crew, now, scenario));
+  if (simulate || scenario) sim.push(...simulateLive(crew, now, scenario));
   return [...sim, ...stored].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
 }
 

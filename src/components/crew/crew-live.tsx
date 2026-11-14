@@ -111,6 +111,7 @@ const STAGE_SOURCE: Record<LiveVitals["source"], string> = {
   simulated: "SIMULATED (demo telemetry generator)",
   sensor: "DEVICE (posted by a sensor or gateway)",
   mixed: "DEVICE + SIMULATED",
+  none: "NO SIGNAL (waiting for a sensor or gateway)",
 };
 
 /** Footnote under the monitor stage. */

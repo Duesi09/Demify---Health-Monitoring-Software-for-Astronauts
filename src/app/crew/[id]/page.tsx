@@ -46,6 +46,7 @@ const TELEMETRY_CAPTION: Record<LiveVitals["source"], string> = {
   simulated: "SIMULATED telemetry",
   sensor: "DEVICE telemetry (posted by a sensor or gateway)",
   mixed: "DEVICE + SIMULATED telemetry",
+  none: "no signal: waiting for a sensor or gateway (this crew member is never simulated)",
 };
 
 function SectionTitle({ id, title, children }: { id: string; title: string; children?: ReactNode }) {

@@ -88,8 +88,8 @@ afterAll(async () => {
 });
 
 describe("P1.0 pitch time (2026-11-15 15:30Z, fresh data, quiet sun)", () => {
-  it("assesses the four default crew members", () => {
-    expect(all.map((a) => a.crew.id)).toEqual(["cdr", "plt", "ms1", "ms2"]);
+  it("assesses the four default crew members and the sensor-only test member", () => {
+    expect(all.map((a) => a.crew.id)).toEqual(["cdr", "plt", "ms1", "ms2", "test"]);
   });
 
   it("pins which crew members escalate", () => {

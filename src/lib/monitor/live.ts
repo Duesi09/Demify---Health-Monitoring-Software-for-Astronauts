@@ -1,5 +1,5 @@
 import "server-only";
-import { config } from "../config";
+import { isSensorOnly, simulatesTelemetry } from "../crew-mode";
 import { physioAt, SCENARIO_LABEL } from "../sources/simulator";
 import { getCrew, listCrew, listReadings } from "../store/readings";
 import { listScenarios } from "../store/scenarios";
@@ -18,9 +18,18 @@ const SENSOR_FIELDS: Array<[IndicatorId, "hr" | "sys" | "dia" | "spo2" | "resp" 
   ["bodyTemp", "temp"],
 ];
 
+/**
+ * Data label of the monitor. A sensor-only crew member (crew-mode.ts) never
+ * mixes in simulated numbers: DEVICE when anything was posted, else none.
+ */
+function liveSource(sensorCount: number, sensorOnly: boolean): LiveVitals["source"] {
+  if (sensorOnly) return sensorCount > 0 ? "sensor" : "none";
+  return sensorCount === 0 ? "simulated" : sensorCount === SENSOR_FIELDS.length ? "sensor" : "mixed";
+}
+
 async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number): Promise<LiveVitals> {
   // A drill always drives the monitor from the simulator, even when sensors exist.
-  const sim = config.simulateTelemetry || scenario ? physioAt(crew, now, scenario) : null;
+  const sim = simulatesTelemetry(crew) || scenario ? physioAt(crew, now, scenario) : null;
   const vals: Record<"hr" | "sys" | "dia" | "spo2" | "resp" | "temp", number | null> = {
     hr: sim?.hr ?? null,
     sys: sim?.sys ?? null,
@@ -60,7 +69,7 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
     spo2: vals.spo2 == null ? null : Math.min(100, Math.round(vals.spo2)),
     resp: round(vals.resp),
     temp: round(vals.temp, 1),
-    source: sensorCount === 0 ? "simulated" : sensorCount === SENSOR_FIELDS.length ? "sensor" : "mixed",
+    source: liveSource(sensorCount, isSensorOnly(crew) && !scenario),
     activity: sim?.activity ?? "rest",
     scenario: scenario
       ? {

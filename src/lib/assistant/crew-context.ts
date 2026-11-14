@@ -26,6 +26,7 @@ const LIVE_LABEL: Record<LiveVitals["source"], string> = {
   simulated: "SIMULATED",
   sensor: "DEVICE",
   mixed: "DEVICE + SIMULATED",
+  none: "NO SIGNAL",
 };
 
 /** Indicators listed at most (most severe first). */

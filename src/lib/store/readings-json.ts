@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { config } from "../config";
+import { isSensorOnly } from "../crew-mode";
 import type { CrewMember, IndicatorId, Reading } from "../types";
 
 /**
@@ -65,7 +66,21 @@ export const DEFAULT_CREW: CrewMember[] = [
     role: "Flight Engineer",
     baseline: { heartRate: 60, systolicBP: 116, diastolicBP: 74, bodyTemp: 36.7, glucose: 90, spo2: 98 },
   },
+  {
+    // Sensor-only (crew-mode.ts): never simulated, shows "--" until a sensor
+    // posts, e.g. the phone camera pulse demo (crewId "test").
+    id: "test",
+    name: "Test Crew (phone)",
+    role: "Demo volunteer",
+    baseline: { heartRate: 70 },
+  },
 ];
+
+/** Default sensor-only members missing from a stored crew list (added on load). */
+export function missingSensorOnlyCrew(crew: CrewMember[]): CrewMember[] {
+  const have = new Set(crew.map((c) => c.id));
+  return DEFAULT_CREW.filter((c) => isSensorOnly(c) && !have.has(c.id));
+}
 
 const dbFile = () => path.join(config.dataDir, "demify-db.json");
 
@@ -123,7 +138,12 @@ async function readAndParse(): Promise<DbShape> {
   } catch (err) {
     parsed = err;
   }
-  if (isDbShape(parsed)) return parsed;
+  if (isDbShape(parsed)) {
+    // Databases created before the sensor-only test member existed get it too
+    // (persisted with the next write).
+    parsed.crew.push(...missingSensorOnlyCrew(parsed.crew));
+    return parsed;
+  }
 
   // Corrupt or truncated file: keep it for manual recovery instead of letting
   // the next persist() overwrite it, then start with an empty DB.

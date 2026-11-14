@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { ensureSchema, getPool } from "@onboard/db.mjs";
+import { isSensorOnly } from "../crew-mode";
 import * as json from "./readings-json";
 import type { JsonDbShape, ReadingFilter } from "./readings-json";
 import { cleanDeep, cleanText } from "./text";
@@ -241,6 +242,10 @@ async function init(pool: Pool, s: State): Promise<void> {
     const added = await insertCrew(pool, json.DEFAULT_CREW);
     s.crew = null;
     console.log(`[demify] PostgreSQL crew table was empty: added the ${added} default crew members.`);
+  } else {
+    // Existing crew lists also get the sensor-only test member (crew-mode.ts).
+    const added = await insertCrew(pool, json.DEFAULT_CREW.filter((c) => isSensorOnly(c)));
+    if (added) s.crew = null;
   }
   await loadLastKnown(pool, s);
 }

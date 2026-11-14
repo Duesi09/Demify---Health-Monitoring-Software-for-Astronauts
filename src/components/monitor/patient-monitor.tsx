@@ -51,6 +51,7 @@ const CAPTION_SOURCE: Record<LiveVitals["source"], string> = {
   simulated: "SIMULATED data",
   sensor: "DEVICE data",
   mixed: "DEVICE + SIMULATED data",
+  none: "no signal",
 };
 
 function seedFor(id: string): number {

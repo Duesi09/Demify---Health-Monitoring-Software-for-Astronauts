@@ -205,8 +205,12 @@ export interface LiveVitals {
   spo2: number | null;
   resp: number | null;
   temp: number | null;
-  /** Where the numbers come from. Waveforms are always synthesised from them. */
-  source: "simulated" | "sensor" | "mixed";
+  /**
+   * Where the numbers come from. Waveforms are always synthesised from them.
+   * "none": a sensor-only crew member (see lib/crew-mode.ts) with no recent
+   * sensor data, so every numeric is null (no signal).
+   */
+  source: "simulated" | "sensor" | "mixed" | "none";
   /**
    * Current activity (from the schedule / accelerometer). Wearable alarms are
    * activity-aware: a heart rate of 140 is expected on the treadmill.

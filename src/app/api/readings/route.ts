@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { config } from "@/lib/config";
+import { simulatesTelemetry } from "@/lib/crew-mode";
 import { isCrossOrigin, isJson, requireAdmin } from "@/lib/http";
 import { INDICATORS } from "@/lib/health/knowledge";
 import { addReadings, getCrew, listReadings } from "@/lib/store/readings";
@@ -144,11 +145,11 @@ export async function GET(req: Request) {
   const scenario = crewId ? await getScenario(crewId) : null;
   if ((config.simulateTelemetry || scenario) && crewId) {
     const crew = await getCrew(crewId);
-    if (crew) {
+    if (crew && (simulatesTelemetry(crew) || scenario)) {
       const from = Date.parse(since);
       const now = Date.now();
       simulated = [
-        ...(config.simulateTelemetry
+        ...(simulatesTelemetry(crew)
           ? [...simulateSeries(crew, Math.max(from, now - 48 * 3_600_000)), ...simulateDaily(crew, from)]
           : []),
         ...simulateLive(crew, now, scenario),
