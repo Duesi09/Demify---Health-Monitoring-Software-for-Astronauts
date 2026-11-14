@@ -558,6 +558,99 @@ export const METRICS: Record<MetricId, MetricDef> = {
       'Read the partial pressure of CO₂ from the cabin atmosphere monitor nearest to where you work and sleep.',
     reference: 'NASA spacecraft maximum allowable concentration for CO₂ (5.3 mmHg long-term) and ISS operating practice of keeping it lower. Lower thresholds are project defaults.',
   },
+
+  radiationDose: {
+    id: 'radiationDose',
+    label: 'Radiation dose',
+    unit: 'mSv/day',
+    decimals: 1,
+    evaluateOn: 'latest',
+    bands: [
+      { below: 3, status: 'nominal', label: 'Normal for deep space' },
+      {
+        below: 10,
+        status: 'watch',
+        label: 'Raised dose rate',
+        action:
+          'Check the space weather report and the cabin radiation monitor. Spend rest time in the best shielded part of the vehicle and read the dosimeter again in a few hours.',
+      },
+      {
+        below: 50,
+        status: 'act',
+        label: 'Solar particle event',
+        action:
+          'Go to the storm shelter, the best shielded part of the vehicle, and stay there until the dose rate is back to normal. Tell the crew and report to mission control.',
+      },
+      {
+        below: Infinity,
+        status: 'critical',
+        label: 'Severe solar particle event',
+        action:
+          'All crew go to the storm shelter now. Contact mission control and the flight surgeon, and watch for nausea in the next hours.',
+      },
+    ],
+    // No drift rule: a baseline taken on Earth says nothing about deep space.
+    staleAfterDays: 2,
+    inputMin: 0,
+    inputMax: 1000,
+    inputStep: 0.1,
+    // The dose of a solar particle event is tens of times the background.
+    scale: [0.5, 100],
+    logScale: true,
+    hazard: 'radiation',
+    nasaRisk: 'Risk of Radiation-Induced Cancers',
+    whyInSpace:
+      "Outside Earth's magnetic field the crew is exposed to galactic cosmic rays all the time and to solar particle events at short notice. The dose adds up over the mission and raises the lifetime risk of cancer.",
+    howToMeasure:
+      'Read the daily dose from your personal dosimeter or from the cabin radiation monitor.',
+    reference:
+      'Deep-space background of about 1.8 mSv per day, measured by the RAD instrument during the cruise to Mars (Zeitlin et al., Science, 2013). NASA career limit of 600 mSv (NASA-STD-3001). The daily thresholds are project defaults.',
+  },
+
+  reactionMs: {
+    id: 'reactionMs',
+    label: 'Reaction time',
+    unit: 'ms',
+    decimals: 0,
+    evaluateOn: 'latest',
+    bands: [
+      { below: 400, status: 'nominal', label: 'Normal' },
+      {
+        below: 500,
+        status: 'watch',
+        label: 'Slowed reactions',
+        action:
+          'Rest for a while and test again on the same device. Check how you slept and the cabin CO₂ reading.',
+      },
+      {
+        below: Infinity,
+        status: 'act',
+        label: 'Markedly slowed reactions',
+        action:
+          'Avoid safety-critical tasks, rest and test again. If the result stays this slow, tell the Crew Medical Officer.',
+      },
+    ],
+    drift: {
+      direction: 'up',
+      watch: 40,
+      act: 80,
+      action:
+        'Your reactions are slower than your own pre-flight level. Check sleep, workload and cabin CO₂, and plan demanding tasks for when you are rested. Test again tomorrow on the same device.',
+    },
+    staleAfterDays: 3,
+    inputMin: 150,
+    inputMax: 2000,
+    inputStep: 1,
+    scale: [150, 650],
+    hazard: 'isolation',
+    nasaRisk: 'Risk from Inadequate Sleep and Irregular Schedules',
+    whyInSpace:
+      'Sleep loss, shifted schedules and high CO₂ slow reactions before the crew member notices. Slow reactions matter most during spacewalks, piloting and robotic arm work.',
+    howToMeasure:
+      'Run the Reaction Self-Test in the Check-in section and tap as soon as the counter appears. Always use the same device.',
+    reference:
+      'Modelled on the 3-minute Psychomotor Vigilance Test (PVT-B) used in the Reaction Self-Test on the International Space Station. Browser and screen add delay, so the value is compared with your own baseline on the same device. Thresholds are project defaults.',
+  },
 }
 
 export const METRIC_IDS = Object.keys(METRICS) as MetricId[]

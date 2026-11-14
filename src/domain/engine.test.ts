@@ -38,6 +38,26 @@ describe('range bands', () => {
     expect(classify('spo2', 89).status).toBe('critical')
     expect(classify('spo2', 95).status).toBe('nominal')
   })
+
+  it('classifies the daily radiation dose from deep-space background to a severe solar particle event', () => {
+    expect(classify('radiationDose', 1.8).status).toBe('nominal')
+    expect(classify('radiationDose', 2.9).status).toBe('nominal')
+    expect(classify('radiationDose', 3).status).toBe('watch')
+    expect(classify('radiationDose', 9.9).status).toBe('watch')
+    expect(classify('radiationDose', 10).status).toBe('act')
+    expect(classify('radiationDose', 49.9).status).toBe('act')
+    expect(classify('radiationDose', 50).status).toBe('critical')
+    expect(classify('radiationDose', 10).action).toContain('storm shelter')
+  })
+
+  it('classifies reaction time as slowed from 400 ms and markedly slowed from 500 ms', () => {
+    expect(classify('reactionMs', 262).status).toBe('nominal')
+    expect(classify('reactionMs', 399).status).toBe('nominal')
+    expect(classify('reactionMs', 400).status).toBe('watch')
+    expect(classify('reactionMs', 499).status).toBe('watch')
+    expect(classify('reactionMs', 500).status).toBe('act')
+    expect(classify('reactionMs', 1200).status).toBe('act')
+  })
 })
 
 describe('evaluate', () => {
@@ -105,6 +125,36 @@ describe('evaluate', () => {
   it('only sees readings up to the evaluated day', () => {
     const result = evaluate(log('bodyTemp', 36.7, [...days(5, 36.7), 39.6]), 5)
     expect(result.assessments.bodyTemp.value).toBe(36.7)
+  })
+
+  it('judges reaction time against the personal baseline: watch at +40 ms, act at +80 ms', () => {
+    // Every value here is inside the normal range; only the baseline tells them apart.
+    const assess = (value: number) => evaluate(log('reactionMs', 262, days(10, value)), 10).assessments.reactionMs
+    expect(assess(301).status).toBe('nominal')
+    expect(assess(302).band?.status).toBe('nominal')
+    expect(assess(302).driftStatus).toBe('watch')
+    expect(assess(341).driftStatus).toBe('watch')
+    expect(assess(342).driftStatus).toBe('act')
+    // Faster than before the flight is no concern.
+    expect(assess(200).status).toBe('nominal')
+  })
+
+  it('does not compare the radiation dose with the baseline measured on Earth', () => {
+    const result = evaluate(log('radiationDose', 0, days(10, 1.8)), 10)
+    expect(result.assessments.radiationDose.delta).toBeNull()
+    expect(result.assessments.radiationDose.status).toBe('nominal')
+    expect(result.findings).toEqual([])
+  })
+
+  it('judges the radiation dose on the latest reading, so a solar particle event shows and clears at once', () => {
+    const readings = log('radiationDose', 0, [...days(8, 1.8), 42, 1.8])
+    const during = evaluate(readings, 9)
+    expect(during.status).toBe('act')
+    expect(during.findings.map((f) => f.id)).toEqual(['range:radiationDose'])
+    expect(during.findings[0].title).toBe('Radiation dose: solar particle event')
+    expect(evaluate(readings, 10).status).toBe('nominal')
+    const severe: Reading = { day: 10, metric: 'radiationDose', value: 60, source: 'manual' }
+    expect(evaluate([...readings, severe], 10).status).toBe('critical')
   })
 })
 
@@ -227,6 +277,59 @@ describe('patterns across indicators', () => {
     )
     expect(highCo2.findings[0].id).toBe('pattern:atmosphere')
     expect(highCo2.findings[0].status).toBe('critical')
+  })
+
+  it('links short sleep and slowed reactions as fatigue', () => {
+    const readings = [
+      ...log('sleepHours', 7.5, days(10, 6)),
+      ...log('reactionMs', 262, days(10, 310)),
+    ]
+    const result = evaluate(readings, 10)
+    // The pattern replaces the two single-indicator findings it explains.
+    expect(result.findings.map((f) => f.id)).toEqual(['pattern:fatigue'])
+    expect(result.findings[0].metrics).toEqual(['sleepHours', 'reactionMs'])
+    expect(result.findings[0].status).toBe('watch')
+    expect(result.findings[0].action).toContain('safety-critical')
+  })
+
+  it('gives the fatigue pattern the worse status of sleep and reaction time', () => {
+    const severeSleepLoss = evaluate(
+      [...log('sleepHours', 7.5, days(10, 5)), ...log('reactionMs', 262, days(10, 310))],
+      10,
+    )
+    expect(severeSleepLoss.findings.find((f) => f.id === 'pattern:fatigue')?.status).toBe('act')
+
+    const verySlow = evaluate(
+      [...log('sleepHours', 7.5, days(10, 6)), ...log('reactionMs', 262, [...days(9, 262), 520])],
+      10,
+    )
+    expect(verySlow.findings.find((f) => f.id === 'pattern:fatigue')?.status).toBe('act')
+  })
+
+  it('does not call slowed reactions fatigue when sleep is normal', () => {
+    const readings = [
+      ...log('sleepHours', 7.5, days(10, 7.5)),
+      ...log('reactionMs', 262, days(10, 310)),
+    ]
+    const ids = evaluate(readings, 10).findings.map((f) => f.id)
+    expect(ids).not.toContain('pattern:fatigue')
+    expect(ids).toEqual(['drift:reactionMs'])
+  })
+
+  it('does not call short sleep fatigue when reaction time is normal or out of date', () => {
+    const normal = evaluate(
+      [...log('sleepHours', 7.5, days(10, 6)), ...log('reactionMs', 262, days(10, 265))],
+      10,
+    )
+    expect(normal.findings.map((f) => f.id)).toEqual(['range:sleepHours'])
+
+    // A slow test five days ago says nothing about today.
+    const outOfDate = evaluate(
+      [...log('sleepHours', 7.5, days(10, 6)), ...log('reactionMs', 262, [...days(4, 262), 520])],
+      10,
+    )
+    expect(outOfDate.assessments.reactionMs.stale).toBe(true)
+    expect(outOfDate.findings.map((f) => f.id)).not.toContain('pattern:fatigue')
   })
 
   it('does not read a few days of raised heart rate as deconditioning', () => {

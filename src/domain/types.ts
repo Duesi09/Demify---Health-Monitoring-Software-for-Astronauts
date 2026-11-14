@@ -11,6 +11,8 @@ export type MetricId =
   | 'mood'
   | 'exerciseMin'
   | 'cabinCo2'
+  | 'radiationDose'
+  | 'reactionMs'
 
 /** Triage levels, in rising order of urgency. */
 export type Status = 'nominal' | 'watch' | 'act' | 'critical'
@@ -69,6 +71,8 @@ export interface MetricDef {
   inputStep: number
   /** Value range drawn on the range bar, wide enough to show every band. */
   scale: [number, number]
+  /** Draws the range bar logarithmically, for values that span orders of magnitude. The scale must start above 0. */
+  logScale?: true
   /** The NASA spaceflight hazard that drives this indicator. */
   hazard: HazardId
   /** The matching NASA human spaceflight risk, by the short name of NASA's page for it. */

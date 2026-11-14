@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { BODY_REGIONS, regionForMetric, regionStatus } from './bodyRegions'
 import { evaluate } from './engine'
-import { hasRiskPage } from './hazards'
-import { METRICS, METRIC_IDS } from './metrics'
+import { HAZARD_IDS, hasRiskPage } from './hazards'
+import { METRICS, METRIC_IDS, metricsForHazard } from './metrics'
 import { simulateMission } from './simulator'
 import type { Reading } from './types'
 
@@ -53,10 +53,41 @@ describe('body regions', () => {
     expect(regionStatus(region('lungs'), evaluation)).toBe('critical')
   })
 
+  it('places radiation dose on the whole body and reaction time on the brain', () => {
+    expect(regionForMetric('radiationDose').id).toBe('wholeBody')
+    expect(regionForMetric('reactionMs').id).toBe('brain')
+    expect(METRICS.radiationDose.hazard).toBe(region('wholeBody').hazard)
+  })
+
+  it('tracks at least one indicator for each of the five hazards', () => {
+    for (const hazard of HAZARD_IDS) expect(metricsForHazard(hazard).length, hazard).toBeGreaterThan(0)
+    expect(metricsForHazard('radiation')).toEqual(['radiationDose'])
+  })
+
+  it('marks the whole body during the solar particle event and no other body system', () => {
+    const evaluation = evaluate(mission, 148)
+    expect(regionStatus(region('wholeBody'), evaluation)).toBe('act')
+    for (const r of BODY_REGIONS.filter((r) => r.id !== 'wholeBody' && r.metrics.length > 0)) {
+      expect(regionStatus(r, evaluation), r.id).toBe('nominal')
+    }
+    expect(regionStatus(region('wholeBody'), evaluate(mission, 150))).toBe('nominal')
+  })
+
+  it('shows slowed reactions on the brain', () => {
+    // Day 58: sleep and mood are normal, reaction time is still above baseline after the bad air.
+    const evaluation = evaluate(mission, 58)
+    expect(evaluation.assessments.sleepHours.status).toBe('nominal')
+    expect(evaluation.assessments.mood.status).toBe('nominal')
+    expect(regionStatus(region('brain'), evaluation)).toBe('watch')
+  })
+
   it('is stale when none of its indicators has a recent reading', () => {
     // Blood pressure is not measured on days 86 to 90, but heart rate still is.
     expect(regionStatus(region('heart'), evaluate(mission, 90))).toBe('nominal')
     const withoutSleepAndMood = mission.filter((r) => r.metric !== 'sleepHours' && r.metric !== 'mood')
-    expect(regionStatus(region('brain'), evaluate(withoutSleepAndMood, 20))).toBe('stale')
+    // Reaction time now belongs to the brain as well, so it still vouches for it.
+    expect(regionStatus(region('brain'), evaluate(withoutSleepAndMood, 20))).toBe('nominal')
+    const withoutBrainIndicators = withoutSleepAndMood.filter((r) => r.metric !== 'reactionMs')
+    expect(regionStatus(region('brain'), evaluate(withoutBrainIndicators, 20))).toBe('stale')
   })
 })

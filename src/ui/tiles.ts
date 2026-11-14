@@ -19,8 +19,10 @@ export const TILES: Tile[] = [
   single('glucose'),
   single('sleepHours'),
   single('mood'),
+  single('reactionMs'),
   single('exerciseMin'),
   single('cabinCo2'),
+  single('radiationDose'),
 ]
 
 export function tileFor(metric: MetricId): Tile {

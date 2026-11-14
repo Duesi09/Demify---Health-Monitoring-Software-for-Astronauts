@@ -48,7 +48,13 @@ function bodyOutline(): string {
   }
   return `${d}L142 74Z`
 }
-const BODY_OUTLINE = bodyOutline()
+/** The figure: body and head. Drawn once in neutral grey and once more as the whole-body system. */
+const FIGURE = (
+  <>
+    <path d={bodyOutline()} />
+    <ellipse cx="130" cy="46" rx="26" ry="32" />
+  </>
+)
 
 /** Where each body system is marked: centre and size of its selection ring, and where its status badge sits. */
 const MARKER: Record<RegionId, { x: number; y: number; r: number; badge: [number, number] }> = {
@@ -61,10 +67,12 @@ const MARKER: Record<RegionId, { x: number; y: number; r: number; badge: [number
   metabolism: { x: 117, y: 190, r: 17, badge: [98, 198] },
   kidneys: { x: 146, y: 224, r: 13, badge: [160, 214] },
   bones: { x: 107, y: 332, r: 15, badge: [122, 318] },
+  // The dosimeter on the shoulder, clear of the lung, the armpit lymph node and the arm bone.
+  wholeBody: { x: 172, y: 116, r: 9, badge: [190, 102] },
 }
 
 /** Drawn back to front, so the heart sits on top of the lungs. */
-const DRAW_ORDER: RegionId[] = ['bones', 'lungs', 'metabolism', 'kidneys', 'heart', 'immune', 'brain', 'eyes', 'balance']
+const DRAW_ORDER: RegionId[] = ['wholeBody', 'bones', 'lungs', 'metabolism', 'kidneys', 'heart', 'immune', 'brain', 'eyes', 'balance']
 
 /**
  * The shapes of one body system. Measured systems are filled in their status
@@ -158,6 +166,17 @@ function Organ({ id, hollow }: { id: RegionId; hollow: boolean }) {
           <path {...bone} strokeWidth="4" d="M107 402L108 488M153 402L152 488" />
         </>
       )
+    case 'wholeBody':
+      // Radiation reaches every cell, so the outline of the figure itself carries the status.
+      // The small badge on the shoulder is the personal dosimeter, which gives the marker something to sit on.
+      return (
+        <>
+          <g fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+            {FIGURE}
+          </g>
+          <rect {...paint} x="167.5" y="110.5" width="9" height="11" rx="2.5" />
+        </>
+      )
   }
 }
 
@@ -205,8 +224,7 @@ export function BodyMap({ evaluation, selectedId, onSelectRegion, onSelectMetric
             </linearGradient>
           </defs>
           <g fill="url(#body-fill)" stroke="rgb(255 255 255 / 0.3)" strokeWidth="1.5" strokeLinejoin="round">
-            <path d={BODY_OUTLINE} />
-            <ellipse cx="130" cy="46" rx="26" ry="32" />
+            {FIGURE}
           </g>
 
           {DRAW_ORDER.map((id) => {

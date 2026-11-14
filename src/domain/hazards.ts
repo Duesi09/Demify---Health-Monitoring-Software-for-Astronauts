@@ -54,6 +54,7 @@ const RISK_PAGES: Record<string, string> = {
     'https://www.nasa.gov/reference/risk-of-altered-sensorimotor-and-vestibular-function/',
   'Risk of Acute and Chronic Carbon Dioxide Exposure':
     'https://www.nasa.gov/directorates/esdmd/hhp/risk-of-acute-and-chronic-carbon-dioxide-exposure/',
+  'Risk of Radiation-Induced Cancers': 'https://www.nasa.gov/reference/risk-of-radiation-induced-cancers/',
 }
 
 /** The page for one risk, or NASA's full list when we have no page for it. */

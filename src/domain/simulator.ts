@@ -20,6 +20,11 @@ interface Profile {
   max: number
   /** Rounding step of the instrument, e.g. 0.1 for a thermometer. */
   step: number
+  /**
+   * Set by where the vehicle is, not by the body: the shift applies in full
+   * from launch day, and the spread is a share of the value, not a fixed amount.
+   */
+  ambient?: true
 }
 
 const PROFILE: Record<MetricId, Profile> = {
@@ -33,7 +38,33 @@ const PROFILE: Record<MetricId, Profile> = {
   mood: { base: 4.2, noise: 0.45, inFlightShift: -0.2, min: 1, max: 5, step: 1 },
   exerciseMin: { base: 110, noise: 12, inFlightShift: 15, min: 0, max: 240, step: 5 },
   cabinCo2: { base: 0.4, noise: 0.15, inFlightShift: 2, min: 0.2, max: 9, step: 0.1 },
+  // About 0.01 mSv a day on the ground and 1.8 in deep space, varying by about 4%.
+  radiationDose: { base: 0.01, noise: 0.04, inFlightShift: 1.79, min: 0, max: 1000, step: 0.1, ambient: true },
+  reactionMs: { base: 262, noise: 6, inFlightShift: 8, min: 150, max: 2000, step: 1 },
 }
+
+/**
+ * The first ten indicators share one noise stream, drawn in this order.
+ * Reordering or extending this list would change every simulated value.
+ */
+const SHARED_STREAM: MetricId[] = [
+  'restingHr',
+  'systolic',
+  'diastolic',
+  'glucose',
+  'bodyTemp',
+  'spo2',
+  'sleepHours',
+  'mood',
+  'exerciseMin',
+  'cabinCo2',
+]
+
+/**
+ * Indicators added later. Each draws its noise from a stream of its own, so
+ * adding one never shifts the values of any other indicator.
+ */
+const OWN_STREAM: MetricId[] = ['radiationDose', 'reactionMs']
 
 /** Days it takes for the body to settle into the in-flight shift. */
 const ADAPTATION_DAYS = 12
@@ -46,6 +77,8 @@ function bump(day: number, start: number, end: number, ramp: number): number {
 
 /** Mission days on which the crew member has a heart attack. */
 export const HEART_ATTACK_DAYS = [97, 168]
+/** Mission days of the solar particle event. */
+export const SOLAR_EVENT_DAYS = [148, 149]
 /** Days the after-effects of a heart attack last. */
 const RECOVERY_DAYS = 6
 
@@ -77,6 +110,9 @@ function scenarioOffset(metric: MetricId, day: number): number {
   // blood oxygen drops. In the days after, the heart stays fast and pressure runs low.
   const attack = HEART_ATTACK_DAYS.includes(day) ? 1 : 0
   const afterAttack = afterHeartAttack(day)
+  // Days 148 and 149: a solar particle event. The dose rate jumps to more than
+  // twenty times the background and is down to a third of that a day later.
+  const solarEvent = day === SOLAR_EVENT_DAYS[0] ? 1 : day === SOLAR_EVENT_DAYS[1] ? 0.33 : 0
 
   switch (metric) {
     case 'sleepHours':
@@ -100,6 +136,11 @@ function scenarioOffset(metric: MetricId, day: number): number {
     case 'glucose':
       // Day 153: a missed meal before the morning measurement.
       return day === 153 ? -36 : 0
+    case 'radiationDose':
+      return 40.2 * solarEvent
+    case 'reactionMs':
+      // Tiredness, bad air and illness all slow reactions.
+      return 58 * overload + 100 * airFault + 84 * infection + 210 * attack + 45 * afterAttack
     default:
       return 0
   }
@@ -136,20 +177,32 @@ function roundTo(value: number, step: number): number {
   return Math.round((Math.round(value / step) * step + Number.EPSILON) * 1000) / 1000
 }
 
+/** The seed of an indicator's own stream: the mission seed mixed with the indicator's name (FNV-1a). */
+function ownSeed(seed: number, metric: MetricId): number {
+  let hash = seed >>> 0
+  for (let i = 0; i < metric.length; i++) hash = Math.imul(hash ^ metric.charCodeAt(i), 0x01000193)
+  return hash >>> 0
+}
+
 export function simulateMission(seed = 2026): Reading[] {
-  const random = seededRandom(seed)
+  const shared = seededRandom(seed)
+  const streams = [
+    ...SHARED_STREAM.map((metric) => ({ metric, random: shared })),
+    ...OWN_STREAM.map((metric) => ({ metric, random: seededRandom(ownSeed(seed, metric)) })),
+  ]
   const readings: Reading[] = []
-  const metrics = Object.keys(PROFILE) as MetricId[]
 
   for (let day = -PREFLIGHT_DAYS + 1; day <= MISSION_DAYS; day++) {
     const adapted = day >= 1 ? 1 - Math.exp(-day / ADAPTATION_DAYS) : 0
-    for (const metric of metrics) {
+    for (const { metric, random } of streams) {
       const p = PROFILE[metric]
       // Draw noise for every slot, measured or not, so that skipping a
       // measurement never shifts the values of later days.
       const noise = gaussian(random) * p.noise
       if (!isMeasured(metric, day)) continue
-      const raw = p.base + p.inFlightShift * adapted + scenarioOffset(metric, day) + noise
+      const settled = p.ambient ? Number(day >= 1) : adapted
+      const level = p.base + p.inFlightShift * settled + scenarioOffset(metric, day)
+      const raw = p.ambient ? level * (1 + noise) : level + noise
       const value = roundTo(Math.min(p.max, Math.max(p.min, raw)), p.step)
       readings.push({ day, metric, value, source: 'simulated' })
     }

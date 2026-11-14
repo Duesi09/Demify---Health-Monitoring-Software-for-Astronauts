@@ -55,7 +55,11 @@ export function MetricDetail({ tile, evaluation, index, manualKeys, onLogged }: 
             {def.evaluateOn === 'avg7' ? ' | judged on the 7-day average' : ''}
           </p>
         </div>
-        <StatusBadge tone={tone} label={tone === 'stale' ? undefined : leading.band?.label} />
+        {/* A value inside its range can still be off the personal baseline; then the level is named, not the range. */}
+        <StatusBadge
+          tone={tone}
+          label={tone === 'stale' || leading.band?.status !== leading.status ? undefined : leading.band?.label}
+        />
       </header>
 
       <div>

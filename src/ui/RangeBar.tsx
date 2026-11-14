@@ -21,7 +21,9 @@ const MIN_LABEL_GAP = 0.085
 export function RangeBar({ metric, value, detailed = false }: Props) {
   const def = METRICS[metric]
   const [lo, hi] = def.scale
-  const share = (v: number) => Math.min(1, Math.max(0, (v - lo) / (hi - lo)))
+  // On a logarithmic bar every tenfold step takes the same room.
+  const place = (v: number) => (def.logScale ? Math.log(Math.max(v, lo)) : v)
+  const share = (v: number) => Math.min(1, Math.max(0, (place(v) - place(lo)) / (place(hi) - place(lo))))
 
   const segments: { from: number; to: number; tone: keyof typeof TONE }[] = []
   let from = lo
@@ -52,7 +54,7 @@ export function RangeBar({ metric, value, detailed = false }: Props) {
             <span
               key={s.from}
               className="rounded-full opacity-55"
-              style={{ flex: `${s.to - s.from} 0 0`, background: TONE[s.tone].color }}
+              style={{ flex: `${place(s.to) - place(s.from)} 0 0`, background: TONE[s.tone].color }}
             />
           ))}
         </div>

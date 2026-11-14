@@ -16,6 +16,7 @@ export type RegionId =
   | 'metabolism'
   | 'kidneys'
   | 'bones'
+  | 'wholeBody'
 
 export interface BodyRegion {
   id: RegionId
@@ -39,7 +40,7 @@ export const BODY_REGIONS: BodyRegion[] = [
   {
     id: 'brain',
     label: 'Brain & mind',
-    role: 'Controls attention, memory, mood and sleep.',
+    role: 'Controls attention, reactions, memory, mood and sleep.',
     inSpace:
       'Isolation, confinement, heavy workload and a disturbed day-night rhythm cause sleep loss. Together they can lower mood and performance on critical tasks.',
     protect: [
@@ -47,7 +48,7 @@ export const BODY_REGIONS: BodyRegion[] = [
       'Stay in regular contact with family and friends.',
       'Keep a journal and talk to a crewmate you trust.',
     ],
-    metrics: ['sleepHours', 'mood'],
+    metrics: ['sleepHours', 'mood', 'reactionMs'],
     hazard: 'isolation',
     nasaRisk: 'Risk of Behavioral Changes and Psychiatric Disorders',
   },
@@ -169,6 +170,22 @@ export const BODY_REGIONS: BodyRegion[] = [
     metrics: ['exerciseMin'],
     hazard: 'gravity',
     nasaRisk: 'Risk of Spaceflight-Induced Bone Changes',
+  },
+  {
+    id: 'wholeBody',
+    label: 'Whole body & cells',
+    role: 'Every cell carries DNA, the instructions it needs to work and to renew itself.',
+    inSpace:
+      "Outside Earth's magnetic field, galactic cosmic rays pass through the vehicle and the body all the time, and a solar particle event can raise the dose within hours. Radiation can damage the DNA of cells in every tissue. The dose adds up over the mission and raises the lifetime risk of cancer.",
+    protect: [
+      'Go to the storm shelter, the best shielded part of the vehicle, during a solar particle event.',
+      'Sleep and rest in the better shielded areas of the vehicle.',
+      'Wear your personal dosimeter and check the daily dose.',
+      'Keep track of your total mission dose against your career limit.',
+    ],
+    metrics: ['radiationDose'],
+    hazard: 'radiation',
+    nasaRisk: 'Risk of Radiation-Induced Cancers',
   },
 ]
 

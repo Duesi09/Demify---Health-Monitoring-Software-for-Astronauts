@@ -303,6 +303,21 @@ function patternFindings(a: Record<MetricId, MetricAssessment>): Finding[] {
     })
   }
 
+  // Short sleep with slowed reactions: tiredness is already costing performance.
+  const reactionsSlow = fresh('reactionMs') && a.reactionMs.status !== 'nominal'
+  if (sleepLow && reactionsSlow) {
+    findings.push({
+      id: 'pattern:fatigue',
+      kind: 'pattern',
+      status: worst(a.sleepHours.status, a.reactionMs.status) as Finding['status'],
+      title: 'Sleep loss is slowing your reactions',
+      detail: 'Short sleep and slower reactions together raise the risk of errors in critical tasks.',
+      action:
+        'Do not start safety-critical tasks today (spacewalk, piloting, robotic arm) if they can wait. Protect your sleep period tonight and test again tomorrow.',
+      metrics: ['sleepHours', 'reactionMs'],
+    })
+  }
+
   // A recent fever already explains both the missed exercise and the raised pulse.
   const feverish = fresh('bodyTemp') && a.bodyTemp.status !== 'nominal'
   // After a racing heart, rest is the treatment; advising exercise would be wrong.
