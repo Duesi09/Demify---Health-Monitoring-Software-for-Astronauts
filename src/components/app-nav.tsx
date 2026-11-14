@@ -7,12 +7,14 @@ import {
   BookOpen,
   ClipboardPlus,
   Database,
+  HeartPulse,
   PersonStanding,
   Radiation,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Activity },
+  { href: "/crew", label: "Crew Monitor", icon: HeartPulse },
   { href: "/body", label: "Body Map", icon: PersonStanding },
   { href: "/check-in", label: "Check-in", icon: ClipboardPlus },
   { href: "/radiation", label: "Radiation", icon: Radiation },
@@ -42,7 +44,8 @@ export function AppNav() {
         </span>
       </Link>
       {NAV.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active =
+          href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
