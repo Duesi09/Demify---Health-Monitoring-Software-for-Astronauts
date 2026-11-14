@@ -37,6 +37,16 @@ export default defineConfig([
     },
   },
   {
+    name: 'demify/unused',
+    rules: {
+      // A leading underscore marks a value that is left out on purpose, as in `({ id: _id, ...rest })`.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
+  },
+  {
     name: 'demify/config-files',
     files: ['*.config.{js,mjs,ts}'],
     rules: {
