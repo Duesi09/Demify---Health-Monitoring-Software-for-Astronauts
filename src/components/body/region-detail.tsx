@@ -2,9 +2,9 @@ import Link from "next/link";
 import { ArrowUpRight, BookOpen, PhoneCall, Ruler } from "lucide-react";
 import { BODY_REGIONS, HAZARDS, INDICATORS } from "@/lib/health/knowledge";
 import type { Assessment, BodyRegionId, IndicatorId, Reading, Status } from "@/lib/types";
-import { StatusBadge, STATUS_TEXT } from "@/components/ui";
+import { StatusBadge, STATUS_TEXT, tagClass } from "@/components/ui";
 import { BasisTag } from "@/components/guidance/basis";
-import { REGION_ICON, SOURCE_LABEL, STATUS_RANK, STATUS_VAR } from "./regions";
+import { REGION_ICON, SOURCE_LABEL, STATUS_RANK } from "./regions";
 
 function formatValue(a: Assessment): string {
   if (a.value == null) return "—";
@@ -55,32 +55,24 @@ export function RegionDetail({
       aria-labelledby="region-detail-title"
       className="bm-panel-in rounded-xl border border-border bg-surface"
     >
-      <header className="relative overflow-hidden rounded-t-xl border-b border-border p-4 md:p-5">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full opacity-20 blur-2xl"
-          style={{ background: STATUS_VAR[status] }}
-        />
-        <div className="relative flex items-start gap-3">
-          <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border"
-            style={{ color: STATUS_VAR[status], borderColor: "currentColor", background: "color-mix(in srgb, currentColor 12%, transparent)" }}
-          >
+      <header className="border-b border-border p-4 md:p-6">
+        <div className="flex items-start gap-3.5">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-fg">
             <Icon size={20} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="region-detail-title" className="text-lg font-semibold tracking-tight">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h2 id="region-detail-title" className="text-xl font-semibold tracking-[-0.015em]">
                 {def.name}
               </h2>
-              <StatusBadge status={status} />
+              <StatusBadge status={status} size="md" />
             </div>
             <p className="mt-1 text-sm text-muted">{def.function}</p>
           </div>
         </div>
       </header>
 
-      <div className="space-y-5 p-4 md:p-5">
+      <div className="space-y-6 p-4 md:p-6">
         {escalations.length > 0 && (
           <div role="alert" className="rounded-lg border border-critical/50 bg-critical/10 p-3.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-critical">
@@ -111,10 +103,10 @@ export function RegionDetail({
                   href={HAZARDS[h].url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                  className={tagClass("sm", true)}
                 >
                   {HAZARDS[h].name}
-                  <ArrowUpRight size={12} aria-hidden />
+                  <ArrowUpRight size={11} aria-hidden />
                 </a>
               </li>
             ))}

@@ -212,8 +212,6 @@ export function BodyFigure({
 }) {
   const uid = useId().replace(/:/g, "");
   const fillId = `${uid}-fill`;
-  const scanId = `${uid}-scan`;
-  const clipId = `${uid}-clip`;
   const beatSeconds = heartRate && heartRate >= 30 && heartRate <= 220 ? Number((60 / heartRate).toFixed(3)) : null;
 
   const onKey = (id: BodyRegionId) => (e: KeyboardEvent) => {
@@ -235,35 +233,15 @@ export function BodyFigure({
           <stop offset="0" style={{ stopColor: "var(--surface-2)" }} />
           <stop offset="1" style={{ stopColor: "var(--surface)" }} />
         </linearGradient>
-        <linearGradient id={scanId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
-          <stop offset="0.85" style={{ stopColor: "var(--accent)", stopOpacity: 0.14 }} />
-          <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0.45 }} />
-        </linearGradient>
-        <clipPath id={clipId}>
-          <Silhouette />
-        </clipPath>
       </defs>
-
-      {/* Instrument backdrop: range rings and a vertical scale. */}
-      <g fill="none" stroke="var(--border)" aria-hidden>
-        <circle cx="120" cy="262" r="118" strokeOpacity="0.55" strokeDasharray="2 5" />
-        <line x1="120" y1="8" x2="120" y2="514" strokeOpacity="0.25" strokeDasharray="1 6" />
-        {Array.from({ length: 11 }, (_, i) => (
-          <line key={i} x1="8" x2={i % 5 === 0 ? 20 : 14} y1={20 + i * 48} y2={20 + i * 48} strokeOpacity="0.8" />
-        ))}
-      </g>
 
       {/* Silhouette: a wide stroked pass under a fill pass gives a clean outer outline. */}
       <g aria-hidden pointerEvents="none">
-        <g fill="none" stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="2.4" strokeLinejoin="round">
+        <g fill="none" stroke="var(--muted)" strokeOpacity="0.4" strokeWidth="2" strokeLinejoin="round">
           <Silhouette />
         </g>
         <g fill={`url(#${fillId})`}>
           <Silhouette />
-        </g>
-        <g clipPath={`url(#${clipId})`}>
-          <rect className="bm-scan" x="0" y="0" width="240" height="56" fill={`url(#${scanId})`} />
         </g>
       </g>
 

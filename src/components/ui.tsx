@@ -39,6 +39,9 @@ const BADGE_ICON: Record<Status, typeof Check> = {
   unknown: Minus,
 };
 
+/** Shape per status level (shared by StatusBadge and status legends). */
+export const STATUS_ICON = BADGE_ICON;
+
 /**
  * Status label in the style of a patient-monitor alarm indicator: squared,
  * uppercase, with a distinct shape per level so status is never colour-only.
@@ -77,6 +80,50 @@ export function StatusBadge({
   );
 }
 
+const TAG_SIZE = {
+  xs: "h-4 gap-1 px-1 text-[9.5px]",
+  sm: "h-5 gap-1 px-1.5 text-[10.5px]",
+  md: "h-7 gap-1.5 px-2.5 text-[11px]",
+} as const;
+
+/**
+ * Class string for a neutral, squared tag: same geometry and type as
+ * StatusBadge but on a quiet surface, for things that are not a status
+ * (basis NASA/CLINICAL/APP, data source, accession numbers, filter chips,
+ * hazard links). Use `tagClass` on links/buttons, `Tag` for plain labels.
+ * Never add a coloured dot; if it carries a status, use StatusBadge.
+ */
+export function tagClass(size: keyof typeof TAG_SIZE = "sm", interactive = false): string {
+  return `inline-flex shrink-0 items-center rounded-[3px] border border-border bg-surface-2 font-semibold uppercase leading-none tracking-[0.07em] text-muted ${TAG_SIZE[size]} ${
+    interactive
+      ? "transition-colors hover:border-muted/60 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+      : ""
+  }`;
+}
+
+/** Selected state for a squared filter chip (`aria-pressed`): inverted, not coloured. */
+export const TAG_SELECTED = "border-fg! bg-fg! text-bg!";
+
+export function Tag({
+  children,
+  size = "sm",
+  title,
+  mono = false,
+  className = "",
+}: {
+  children: ReactNode;
+  size?: keyof typeof TAG_SIZE;
+  title?: string;
+  mono?: boolean;
+  className?: string;
+}) {
+  return (
+    <span title={title} className={`${tagClass(size)} ${mono ? "font-mono normal-case tracking-normal" : ""} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
 export function Card({
   title,
   subtitle,
@@ -110,8 +157,8 @@ export function PageHeader({ title, description, children }: { title: string; de
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-1 max-w-3xl text-sm text-muted">{description}</p>}
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.022em] md:text-[32px]">{title}</h1>
+        {description && <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-muted">{description}</p>}
       </div>
       {children}
     </div>

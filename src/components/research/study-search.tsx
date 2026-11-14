@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ExternalLink, Loader2, Search } from "lucide-react";
 import type { StudySearch as StudySearchData } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
-import { Provenance } from "@/components/ui";
+import { Provenance, Tag, tagClass } from "@/components/ui";
 
 type Meta = Omit<SourceResult<unknown>, "data">;
 type Result = { data: StudySearchData; meta: Meta };
@@ -74,13 +74,13 @@ export function StudySearch({ initial }: { initial: Result | null }) {
             onChange={(e) => setQ(e.target.value)}
             placeholder="e.g. bone loss, Inspiration4, radiation…"
             maxLength={120}
-            className="w-full rounded-md border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
           />
         </div>
         <button
           type="submit"
           disabled={loading || !q.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg disabled:opacity-50"
         >
           {loading && <Loader2 size={14} className="animate-spin" aria-hidden />}
           Search OSDR
@@ -95,7 +95,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
               setQ(s);
               void run(s);
             }}
-            className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted hover:border-accent hover:text-fg"
+            className={tagClass("md", true)}
           >
             {s}
           </button>
@@ -120,7 +120,9 @@ export function StudySearch({ initial }: { initial: Result | null }) {
               {data.hits.map((h) => (
                 <li key={h.accession} className="p-3">
                   <a href={h.url} target="_blank" rel="noreferrer" className="group block text-sm font-medium hover:text-accent">
-                    <span className="mr-2 whitespace-nowrap rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] text-accent">{h.accession}</span>
+                    <Tag mono className="mr-2 align-[1px]">
+                      {h.accession}
+                    </Tag>
                     {h.title}
                     <ExternalLink size={12} className="ml-1 inline align-baseline text-muted group-hover:text-accent" aria-hidden />
                   </a>
@@ -155,7 +157,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
                 type="button"
                 disabled={loading || from === 0}
                 onClick={() => void run(data.query, Math.max(0, from - PAGE))}
-                className="rounded-md border border-border px-3 py-1 text-xs disabled:opacity-40"
+                className="rounded-lg border border-border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-40"
               >
                 Previous
               </button>
@@ -163,7 +165,7 @@ export function StudySearch({ initial }: { initial: Result | null }) {
                 type="button"
                 disabled={loading || from + PAGE >= data.total || from + PAGE > 500}
                 onClick={() => void run(data.query, from + PAGE)}
-                className="rounded-md border border-border px-3 py-1 text-xs disabled:opacity-40"
+                className="rounded-lg border border-border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-40"
               >
                 Next
               </button>

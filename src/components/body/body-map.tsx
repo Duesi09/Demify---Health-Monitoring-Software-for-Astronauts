@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { BODY_REGIONS } from "@/lib/health/knowledge";
 import type { Assessment, BodyRegionId, IndicatorId, Reading, Status } from "@/lib/types";
-import { STATUS_BG, STATUS_LABEL, STATUS_TEXT } from "@/components/ui";
+import { STATUS_ICON, STATUS_LABEL, StatusBadge } from "@/components/ui";
 import "./body-map.css";
 import { BodyFigure } from "./body-figure";
 import { RegionDetail } from "./region-detail";
@@ -50,11 +50,11 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,540px)_minmax(0,1fr)]">
       <section
         aria-labelledby="body-map-title"
-        className="relative overflow-hidden rounded-xl border border-border bg-surface p-4 md:p-5 xl:sticky xl:top-6"
+        className="relative overflow-hidden rounded-xl border border-border bg-surface p-4 md:p-6 xl:sticky xl:top-6"
       >
         <header className="mb-2 flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 id="body-map-title" className="text-sm font-semibold tracking-wide">
+            <h2 id="body-map-title" className="text-base font-semibold tracking-tight">
               {crewName}
             </h2>
             <p className="mt-0.5 text-xs text-muted">
@@ -65,12 +65,15 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
             </p>
           </div>
           <ul className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted" aria-label="Colour legend">
-            {LEGEND.map((s) => (
-              <li key={s} className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${STATUS_BG[s]}`} aria-hidden />
-                {STATUS_LABEL[s]}
-              </li>
-            ))}
+            {LEGEND.map((s) => {
+              const Shape = STATUS_ICON[s];
+              return (
+                <li key={s} className="flex items-center gap-1">
+                  <Shape size={12} strokeWidth={2.5} aria-hidden style={{ color: STATUS_VAR[s] }} />
+                  {STATUS_LABEL[s]}
+                </li>
+              );
+            })}
           </ul>
         </header>
 
@@ -100,21 +103,18 @@ export function BodyMap({ crewName, regions, assessments, sources, initialRegion
                     onMouseLeave={() => setHovered(null)}
                     onFocus={() => setHovered(id)}
                     onBlur={() => setHovered(null)}
-                    className={`group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                    className={`group flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                       on
-                        ? "border-accent/50 bg-accent/10 text-fg"
+                        ? "border-fg/25 bg-surface-2 text-fg"
                         : hovered === id
                           ? "border-border bg-surface-2 text-fg"
                           : "border-transparent text-muted hover:bg-surface-2 hover:text-fg"
                     }`}
                   >
-                    <Icon size={16} aria-hidden style={{ color: STATUS_VAR[status] }} className="shrink-0" />
+                    <Icon size={16} aria-hidden className={`shrink-0 ${on ? "text-fg" : "text-muted group-hover:text-fg"}`} />
                     <span className="min-w-0 flex-1">
                       <span className="block leading-tight">{BODY_REGIONS[id].name}</span>
-                      <span className={`mt-0.5 flex items-center gap-1 text-[11px] leading-tight ${STATUS_TEXT[status]}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${STATUS_BG[status]}`} aria-hidden />
-                        {STATUS_LABEL[status]}
-                      </span>
+                      <StatusBadge status={status} size="xs" className="mt-1" />
                     </span>
                   </button>
                 </li>

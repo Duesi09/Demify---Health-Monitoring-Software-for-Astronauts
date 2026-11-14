@@ -91,8 +91,9 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
           </div>
           <p className="mt-2 text-3xl font-semibold tabular">{level != null ? `S${level}` : "—"}</p>
           <div className="mt-1 flex items-center gap-2">
-            <StatusBadge status={sStatus(level)} />
-            <span className="text-xs text-muted">{levelText ? levelText.name : "Unknown: no proton flux data"}</span>
+            {/* Status shape + NOAA scale name (None, Minor … Extreme); the S-level itself is the numeral above. */}
+            <StatusBadge status={sStatus(level)} label={level === 0 ? "No storm" : levelText ? levelText.name : "Unknown"} />
+            <span className="text-xs text-muted">{levelText ? "NOAA S-scale" : "No proton flux data"}</span>
           </div>
         </Card>
         <Card>
@@ -131,14 +132,10 @@ export default async function RadiationPage(props: PageProps<"/radiation">) {
       </div>
 
       <Card
-        className={`border-l-4 ${
-          level == null ? "border-l-unknown" : level >= 3 ? "border-l-critical" : level >= 1 ? "border-l-caution" : "border-l-nominal"
-        }`}
         title="Recommended crew action"
+        action={<StatusBadge status={sStatus(level)} size="md" label={level != null ? `S${level}` : "S –"} />}
       >
-        <p
-          className={`text-sm ${level == null ? "text-fg" : level >= 3 ? "text-critical" : level >= 1 ? "text-caution" : "text-fg"}`}
-        >
+        <p className={`text-[15px] leading-relaxed ${level != null && level >= 1 ? "font-medium" : ""}`}>
           {levelText ? levelText.action : UNKNOWN_ACTION}
         </p>
       </Card>

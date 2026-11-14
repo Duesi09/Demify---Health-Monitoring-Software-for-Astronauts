@@ -30,11 +30,13 @@ const SOUND_KEY = "demify.alarmSound";
 /* ------------------------------------------------------------------------- */
 
 const soundListeners = new Set<() => void>();
+/** Last value written in this tab (used when storage is unavailable). */
+let memorySoundPref: boolean | null = null;
 function readSoundPref(): boolean {
   try {
     return window.localStorage.getItem(SOUND_KEY) !== "off";
   } catch {
-    return true;
+    return memorySoundPref ?? true;
   }
 }
 function writeSoundPref(on: boolean) {
@@ -46,7 +48,6 @@ function writeSoundPref(on: boolean) {
   memorySoundPref = on;
   soundListeners.forEach((l) => l());
 }
-let memorySoundPref: boolean | null = null;
 function subscribeSound(cb: () => void) {
   soundListeners.add(cb);
   const onStorage = (e: StorageEvent) => {
@@ -236,10 +237,9 @@ export function AlarmCenter() {
       if (!document.title.startsWith(TITLE_MARK)) document.title = TITLE_MARK + document.title;
     };
     mark();
-    // Next.js rewrites the title on navigation; put the mark back.
-    const titleEl = document.querySelector("head > title");
+    // Next.js rewrites (or replaces) the <title> on navigation and refresh; put the mark back.
     const obs = new MutationObserver(mark);
-    obs.observe(titleEl ?? document.head, { childList: true, characterData: true, subtree: true });
+    obs.observe(document.head, { childList: true, characterData: true, subtree: true });
     return () => {
       obs.disconnect();
       if (document.title.startsWith(TITLE_MARK)) document.title = document.title.slice(TITLE_MARK.length);
@@ -280,33 +280,91 @@ export function AlarmCenter() {
           aria-label={`Active alarms: ${alarms.length}${anyDrill ? ", training scenario" : ""}`}
           className={`ac-bar ${level === "high" ? "ac-high" : "ac-medium"}`}
         >
-          <div className="flex flex-col gap-2 px-4 py-2.5 md:flex-row md:items-start md:gap-6 md:px-8 md:py-3">
-            {/* Summary */}
-            <div className="flex shrink-0 items-center gap-2.5 md:w-44 md:flex-col md:items-start md:gap-1">
-              <div className="flex items-center gap-2">
+          <div className="px-4 py-2.5 md:px-8 md:py-3">
+            {/* Summary + audio controls */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2.5">
                 <BellRing size={18} strokeWidth={2.25} aria-hidden />
-                <span className="text-[15px] font-semibold tracking-[-0.01em]">
+                <span className="text-[17px] font-semibold tracking-[-0.015em]">
                   {level === "high" ? "Alarm" : "Warning"}
                 </span>
-                <span className="text-[15px] font-light tabular-nums opacity-80">{alarms.length}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
+                <span className="text-[17px] font-light tabular-nums opacity-80">{alarms.length}</span>
                 <span className="ac-tag ac-demo" title="Demo monitor alarms, not a medical device">
                   Demo
                 </span>
-                <span className="text-[11px] font-medium opacity-80">
-                  {highCount ? `${highCount} high` : "medium only"}
+                <span className="hidden text-xs font-medium opacity-80 sm:inline">
+                  {highCount ? `${highCount} high priority` : "medium priority"}
+                  {anyDrill ? " · training scenario" : ""}
                 </span>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {soundOn && audioStatus === "locked" && (
+                  <button
+                    type="button"
+                    className="ac-btn ac-primary"
+                    aria-label="Enable alarm sound"
+                    onClick={() => void unlockAudio()}
+                  >
+                    <Volume2 size={14} aria-hidden /> Enable<span className="hidden sm:inline"> alarm</span> sound
+                  </button>
+                )}
+                {silenced ? (
+                  <button
+                    type="button"
+                    className="ac-btn"
+                    aria-pressed="true"
+                    aria-label={`Alarm sound silenced, ${formatCountdown(silencedUntil - now)} left. Resume sound now`}
+                    onClick={() => setSilencedUntil(null)}
+                  >
+                    <BellOff size={14} aria-hidden />
+                    <span>
+                      Silenced <span className="tabular-nums">{now ? formatCountdown(silencedUntil - now) : "2:00"}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="ac-btn"
+                    aria-pressed="false"
+                    aria-label="Silence alarm sound for 2 minutes (the visual alarm stays)"
+                    onClick={() => {
+                      const t = Date.now();
+                      setNow(t);
+                      setSilencedUntil(t + SILENCE_MS);
+                    }}
+                    disabled={!soundOn}
+                  >
+                    <BellOff size={14} aria-hidden />
+                    <span className="hidden sm:inline">Silence 2 min</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="ac-btn"
+                  aria-pressed={soundOn}
+                  aria-label={soundOn ? "Alarm sound is on. Turn sound off" : "Alarm sound is off. Turn sound on"}
+                  onClick={() => writeSoundPref(!soundOn)}
+                  title={audioStatus === "unsupported" ? "Audio is not available in this browser" : undefined}
+                >
+                  {soundOn ? <Volume2 size={14} aria-hidden /> : <VolumeX size={14} aria-hidden />}
+                  <span className="hidden sm:inline">{soundOn ? "Sound on" : "Sound off"}</span>
+                </button>
               </div>
             </div>
 
             {/* Alarms per crew member */}
-            <ul className="min-w-0 flex-1" aria-label="Alarms by crew member">
+            <ul
+              className="ac-groups mt-2.5 max-h-[38vh] overflow-y-auto pt-1 sm:max-h-none sm:overflow-visible"
+              aria-label="Alarms by crew member"
+            >
               {groups.map((g) => (
-                <li key={g.crewId} className="ac-group flex flex-wrap items-center gap-x-3 gap-y-1.5 py-1.5 first:pt-0 last:pb-0 md:first:pt-0.5">
-                  <ul className="flex min-w-0 flex-1 flex-col gap-0.5" aria-label={`${g.crewName}`}>
+                <li
+                  key={g.crewId}
+                  className="ac-group flex flex-col gap-x-4 gap-y-1.5 py-1.5 last:pb-0 sm:flex-row sm:items-center"
+                >
+                  <ul className="flex min-w-0 flex-col gap-x-6 gap-y-0.5 sm:flex-1 lg:flex-row lg:flex-wrap" aria-label={g.crewName}>
                     {g.alarms.map((a) => (
-                      <li key={a.id} className="ac-line truncate text-[13px] md:text-sm" title={alarmLine(a)}>
+                      <li key={a.id} className="ac-line text-[13px] leading-snug md:text-[15px]">
                         <span className="sr-only">{a.priority === "high" ? "High priority: " : "Medium priority: "}</span>
                         {alarmLine(a)}
                       </li>
@@ -326,55 +384,6 @@ export function AlarmCenter() {
                 </li>
               ))}
             </ul>
-
-            {/* Audio controls */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {soundOn && audioStatus === "locked" && (
-                <button type="button" className="ac-btn ac-primary" onClick={() => void unlockAudio()}>
-                  <Volume2 size={14} aria-hidden /> Enable alarm sound
-                </button>
-              )}
-              {silenced ? (
-                <button
-                  type="button"
-                  className="ac-btn"
-                  aria-pressed="true"
-                  aria-label={`Alarm sound silenced, ${formatCountdown(silencedUntil - now)} left. Resume sound now`}
-                  onClick={() => setSilencedUntil(null)}
-                >
-                  <BellOff size={14} aria-hidden />
-                  <span>
-                    Silenced <span className="tabular-nums">{now ? formatCountdown(silencedUntil - now) : "2:00"}</span>
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="ac-btn"
-                  aria-pressed="false"
-                  aria-label="Silence alarm sound for 2 minutes (the visual alarm stays)"
-                  onClick={() => {
-                    const t = Date.now();
-                    setNow(t);
-                    setSilencedUntil(t + SILENCE_MS);
-                  }}
-                  disabled={!soundOn}
-                >
-                  <BellOff size={14} aria-hidden /> Silence 2 min
-                </button>
-              )}
-              <button
-                type="button"
-                className="ac-btn"
-                aria-pressed={soundOn}
-                aria-label={soundOn ? "Alarm sound is on. Turn sound off" : "Alarm sound is off. Turn sound on"}
-                onClick={() => writeSoundPref(!soundOn)}
-                title={audioStatus === "unsupported" ? "Audio is not available in this browser" : undefined}
-              >
-                {soundOn ? <Volume2 size={14} aria-hidden /> : <VolumeX size={14} aria-hidden />}
-                {soundOn ? "Sound on" : "Sound off"}
-              </button>
-            </div>
           </div>
         </section>
       )}

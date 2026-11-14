@@ -33,7 +33,7 @@ function Stat({
   children?: ReactNode;
 }) {
   return (
-    <section className="flex min-w-0 flex-col rounded-[24px] border border-border/70 bg-surface/80 p-5 backdrop-blur md:p-6">
+    <section className="flex min-w-0 flex-col rounded-[24px] border border-border/70 bg-surface p-5 md:p-6">
       <div className="flex items-center justify-between gap-2 text-muted">
         <h2 className="text-[11px] font-medium uppercase tracking-[0.2em]">{label}</h2>
         {icon}

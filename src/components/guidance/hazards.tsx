@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AirVent, ArrowUpRight, Orbit, Radiation, UsersRound, Weight, type LucideIcon } from "lucide-react";
 import { BODY_REGIONS, HAZARDS, INDICATORS } from "@/lib/health/knowledge";
 import type { HazardId } from "@/lib/types";
+import { tagClass } from "@/components/ui";
 
 export const HAZARD_ICON: Record<HazardId, LucideIcon> = {
   radiation: Radiation,
@@ -34,7 +35,7 @@ export function HazardCards() {
             <div className="flex items-center gap-3">
               <span
                 aria-hidden
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-accent/10 font-mono text-xl font-bold text-accent"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-xl font-semibold tracking-tight text-fg"
               >
                 {RIDGE_LETTER[id]}
               </span>
@@ -50,19 +51,19 @@ export function HazardCards() {
             <ul className="mt-3 space-y-1 text-sm">
               {h.effects.map((e) => (
                 <li key={e} className="flex gap-2">
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
+                  <span className="mt-[9px] h-px w-2 shrink-0 bg-muted" aria-hidden />
                   {e}
                 </li>
               ))}
             </ul>
             <div className="mt-auto pt-4">
               <p className="text-[11px] uppercase tracking-wider text-muted">Body systems · {tracked} indicators tracked</p>
-              <ul className="mt-1.5 flex flex-wrap gap-1">
+              <ul className="mt-2 flex flex-wrap gap-1">
                 {affected.map((r) => (
                   <li key={r.id}>
                     <Link
                       href={`/body?region=${r.id}`}
-                      className="inline-block rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                      className={tagClass("sm", true)}
                     >
                       {r.name}
                     </Link>

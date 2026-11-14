@@ -1,4 +1,5 @@
 import type { ChangeRow } from "@/lib/sources/osdr";
+import { StatusBadge } from "@/components/ui";
 import { ANALYTE_INFO, SUBJECT_STYLE, fmtPct, fmtValue, unitLabel } from "./analyte-info";
 
 /**
@@ -12,7 +13,7 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
       {/* Phones: one compact block per marker instead of a wide table. */}
       <ul className="space-y-2 md:hidden">
         {rows.map((r) => (
-          <li key={`${r.panel}-${r.analyteId}`} className="rounded-lg border border-border p-2.5">
+          <li key={`${r.panel}-${r.analyteId}`} className="rounded-lg border border-border p-3">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-medium">
                 {r.name} <span className="text-xs font-normal text-muted">{unitLabel(r.unit)}</span>
@@ -23,14 +24,15 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
             </div>
             <div className="mt-1.5 grid grid-cols-4 gap-1 text-xs tabular">
               {r.cells.map((c) => (
-                <div key={c.subject} className="rounded bg-surface-2 px-1.5 py-1">
+                <div key={c.subject} className="rounded-md bg-surface-2 px-1.5 py-1">
                   <span className="flex items-center gap-1 text-[10px] text-muted">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: SUBJECT_STYLE[c.subject].color }} aria-hidden />
+                    <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: SUBJECT_STYLE[c.subject].color }} aria-hidden />
                     {c.subject}
                   </span>
                   <span className={c.notable ? "font-semibold text-fg" : "text-muted"}>{fmtPct(c.pct)}</span>
-                  {c.range === "high" && <span className="block text-[10px] text-critical">▲ High</span>}
-                  {c.range === "low" && <span className="block text-[10px] text-caution">▼ Low</span>}
+                  {(c.range === "high" || c.range === "low") && (
+                    <StatusBadge status="caution" size="xs" label={c.range === "high" ? "High" : "Low"} className="mt-1 flex w-fit" />
+                  )}
                 </div>
               ))}
             </div>
@@ -47,7 +49,7 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
               {subjects.map((s) => (
                 <th key={s.id} scope="col" className="py-2 pr-4 text-right font-normal">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
+                    <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
                     {s.id}
                   </span>
                 </th>
@@ -68,8 +70,9 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
                   return (
                     <td key={c.subject} className="py-2 pr-4 text-right" title={title}>
                       <span className={c.notable ? "font-semibold text-fg" : "text-muted"}>{fmtPct(c.pct)}</span>
-                      {c.range === "high" && <span className="ml-1 text-xs text-critical">▲ High</span>}
-                      {c.range === "low" && <span className="ml-1 text-xs text-caution">▼ Low</span>}
+                      {(c.range === "high" || c.range === "low") && (
+                        <StatusBadge status="caution" size="xs" label={c.range === "high" ? "High" : "Low"} className="ml-1.5 align-[-2px]" />
+                      )}
                       {c.notable && c.range !== "high" && c.range !== "low" && (
                         <span className="ml-1 text-xs text-accent" aria-label="notable change">●</span>
                       )}
@@ -84,7 +87,7 @@ export function ChangeSummary({ rows, subjects }: { rows: ChangeRow[]; subjects:
       </div>
       <p className="mt-3 text-[11px] text-muted">
         R+1 value versus each person&apos;s own pre-flight mean (L-92, L-44, L-3; suspect values excluded). ● notable change (≥ 15 % for
-        clinical tests, ≥ 50 % for research immunoassays) · ▲/▼ R+1 value outside the lab reference range. Hover a cell for the raw values.
+        clinical tests, ≥ 50 % for research immunoassays) · High/Low: R+1 value outside the lab reference range. Hover a cell for the raw values.
         Four people and one short flight: these are observations, not statistically tested effects.
       </p>
     </div>

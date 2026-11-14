@@ -1,6 +1,7 @@
 import { CircleCheck, Lock, PhoneCall, Satellite, Send, Siren, Stethoscope, type LucideIcon } from "lucide-react";
 import { INDICATORS } from "@/lib/health/knowledge";
 import type { MissionProfile, Status } from "@/lib/types";
+import { StatusBadge, Tag } from "@/components/ui";
 import { escalationThreshold } from "./format";
 
 interface Tier {
@@ -42,12 +43,7 @@ const TIERS: Tier[] = [
   },
 ];
 
-const TONE: Record<Status, { ring: string; text: string; bg: string }> = {
-  critical: { ring: "border-critical/40", text: "text-critical", bg: "bg-critical/10" },
-  caution: { ring: "border-caution/40", text: "text-caution", bg: "bg-caution/10" },
-  nominal: { ring: "border-nominal/40", text: "text-nominal", bg: "bg-nominal/10" },
-  unknown: { ring: "border-border", text: "text-muted", bg: "bg-surface-2" },
-};
+const ICON_TILE = "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-fg";
 
 export function formatDelay(seconds: number): string {
   if (seconds < 60) return `${seconds.toLocaleString("en-US", { maximumFractionDigits: 1 })} s`;
@@ -59,18 +55,15 @@ export function EscalationProtocol() {
     <div className="space-y-4">
       <ol className="grid gap-3 md:grid-cols-2">
         {TIERS.map((t, i) => {
-          const tone = TONE[t.status];
           const Icon = t.icon;
           return (
-            <li key={t.title} className={`flex gap-3 rounded-xl border bg-surface p-4 ${tone.ring}`}>
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.bg} ${tone.text}`}>
+            <li key={t.title} className="flex gap-3 rounded-xl border border-border bg-surface p-4 md:p-5">
+              <span className={ICON_TILE}>
                 <Icon size={17} aria-hidden />
               </span>
               <div>
-                <p className={`text-[11px] font-semibold uppercase tracking-wider ${tone.text}`}>
-                  {i + 1}. {t.when}
-                </p>
-                <h3 className="text-sm font-semibold">{t.title}</h3>
+                <StatusBadge status={t.status} size="xs" label={`${i + 1} · ${t.when}`} />
+                <h3 className="mt-1.5 text-sm font-semibold">{t.title}</h3>
                 <p className="mt-1 text-sm text-muted">{t.body}</p>
               </div>
             </li>
@@ -109,8 +102,8 @@ export function EscalationProtocol() {
 
       <div className="rounded-xl border border-border bg-surface md:hidden">
         <p className="border-b border-border px-4 py-3 text-xs text-muted">
-          Escalation rules per indicator. Red values are automatic flags; the rule text also covers symptoms and trends
-          that only you can judge.
+          Escalation rules per indicator. Values marked “Flag” are automatic flags; the rule text also covers symptoms
+          and trends that only you can judge.
         </p>
         <ul>
           {Object.values(INDICATORS).map((d) => {
@@ -121,7 +114,12 @@ export function EscalationProtocol() {
                   <a href={`#ind-${d.id}`} className="font-medium hover:text-accent">
                     {d.short}
                   </a>
-                  {flag && <span className="tabular text-xs text-critical">{flag}</span>}
+                  {flag && (
+                    <span className="tabular text-xs text-critical">
+                      <span className="font-medium uppercase tracking-wider text-muted">Flag </span>
+                      {flag}
+                    </span>
+                  )}
                 </p>
                 <p className="mt-0.5 text-sm text-muted">{d.escalation}</p>
               </li>
@@ -138,7 +136,7 @@ export function CommDelay({ mission, profiles }: { mission: MissionProfile; prof
   return (
     <section className="rounded-xl border border-border bg-surface p-4 md:p-5" aria-labelledby="comm-delay-title">
       <header className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+        <span className={ICON_TILE}>
           <Satellite size={17} aria-hidden />
         </span>
         <div>
@@ -157,20 +155,20 @@ export function CommDelay({ mission, profiles }: { mission: MissionProfile; prof
         {profiles.map((p) => (
           <li
             key={p.id}
-            className={`flex items-center justify-between gap-3 rounded-md px-3 py-1.5 ${
-              p.id === mission.id ? "bg-accent/10 text-fg" : "text-muted"
+            className={`flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 ${
+              p.id === mission.id ? "bg-surface-2 text-fg" : "text-muted"
             }`}
           >
-            <span>
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {p.name}
-              {p.id === mission.id && <span className="ml-2 text-[11px] text-accent">current</span>}
+              {p.id === mission.id && <Tag size="xs">Current</Tag>}
             </span>
-            <span className="tabular">{formatDelay(p.commDelaySeconds)} one-way</span>
+            <span className="shrink-0 whitespace-nowrap tabular">{formatDelay(p.commDelaySeconds)} one-way</span>
           </li>
         ))}
-        <li className="flex items-center justify-between gap-3 rounded-md px-3 py-1.5 text-muted">
+        <li className="flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-muted">
           <span>Mars, far side of the Sun</span>
-          <span className="tabular">up to ~20 min one-way</span>
+          <span className="shrink-0 whitespace-nowrap tabular">up to ~20 min one-way</span>
         </li>
       </ul>
 
@@ -202,7 +200,7 @@ export function PrivateConferences() {
   return (
     <section className="rounded-xl border border-border bg-surface p-4 md:p-5" aria-labelledby="pmc-title">
       <header className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-2/10 text-accent-2">
+        <span className={ICON_TILE}>
           <Lock size={17} aria-hidden />
         </span>
         <div>

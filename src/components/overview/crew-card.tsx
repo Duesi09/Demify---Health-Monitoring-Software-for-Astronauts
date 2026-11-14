@@ -59,7 +59,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
     <article
       aria-labelledby={`crew-${id}-name`}
       data-alarm={alarmLevel ?? undefined}
-      className={`flex flex-col rounded-[26px] border bg-surface/80 p-5 backdrop-blur transition-[border-color,box-shadow] duration-500 md:p-6 ${
+      className={`flex flex-col rounded-[26px] border bg-surface p-5 transition-[border-color,box-shadow] duration-500 md:p-6 ${
         alarmLevel === "high" ? "ac-card-high" : alarmLevel === "medium" ? "ac-card-medium" : "border-border/70"
       }`}
     >
@@ -68,7 +68,7 @@ export function CrewCard({ id, name, role, overall, regions, findings, vitals }:
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
             {sameRole ? `Crew · ${id.toUpperCase()}` : role}
           </p>
-          <h3 id={`crew-${id}-name`} className="mt-1 truncate text-2xl font-semibold tracking-tight">
+          <h3 id={`crew-${id}-name`} className="mt-1 text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">
             <Link href={`/crew/${id}`} className="hover:text-accent focus-visible:text-accent">
               {name}
             </Link>

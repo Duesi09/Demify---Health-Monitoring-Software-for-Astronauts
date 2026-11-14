@@ -18,8 +18,7 @@
   stroke-width: 1;
   transition:
     fill-opacity 0.25s ease,
-    stroke-width 0.25s ease,
-    filter 0.25s ease;
+    stroke-width 0.25s ease;
 }
 
 .bm-detail {
@@ -40,7 +39,6 @@
 .bm-hotspot[aria-pressed="true"] .bm-shape {
   fill-opacity: 0.68;
   stroke-width: 1.6;
-  filter: drop-shadow(0 0 3px currentColor);
 }
 
 .bm-hotspot[aria-pressed="true"] .bm-detail {
@@ -70,17 +68,6 @@
   animation: bm-heartbeat 1s ease-in-out infinite;
 }
 
-/* Slow scanner sweep across the silhouette. */
-@keyframes bm-scan {
-  0% { transform: translateY(-60px); opacity: 0; }
-  10% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { transform: translateY(540px); opacity: 0; }
-}
-.bm-scan {
-  animation: bm-scan 7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-}
-
 @keyframes bm-panel-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -91,12 +78,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bm-beat,
-  .bm-scan,
   .bm-panel-in {
     animation: none;
-  }
-  .bm-scan {
-    display: none;
   }
   .bm-shape {
     transition: none;

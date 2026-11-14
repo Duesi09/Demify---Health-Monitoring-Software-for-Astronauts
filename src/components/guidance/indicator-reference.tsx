@@ -8,6 +8,7 @@ import type { BodyRegionId, HazardId, IndicatorId } from "@/lib/types";
 import { BASIS_INFO, BasisTag } from "./basis";
 import { escalationThreshold } from "./format";
 import { HAZARD_ICON, HAZARD_ORDER } from "./hazards";
+import { StatusBadge, TAG_SELECTED, tagClass } from "@/components/ui";
 import "@/components/body/body-map.css";
 
 const ALL = Object.values(INDICATORS);
@@ -39,22 +40,10 @@ function subscribeHash(cb: () => void) {
 const getHash = () => window.location.hash;
 const getServerHash = () => "";
 
-const RANGE_STYLE = {
-  nominal: { label: "Nominal", className: "border-nominal/40 bg-nominal/5", text: "text-nominal" },
-  caution: { label: "Caution", className: "border-caution/40 bg-caution/5", text: "text-caution" },
-  critical: { label: "Critical", className: "border-critical/40 bg-critical/5", text: "text-critical" },
-} as const;
-
+/** Squared filter chip; the selected one is inverted (not coloured), like a segmented control. */
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
-        on ? "border-accent/50 bg-accent/15 text-accent" : "border-border text-muted hover:bg-surface-2 hover:text-fg"
-      }`}
-    >
+    <button type="button" aria-pressed={on} onClick={onClick} className={`${tagClass("md", true)} ${on ? TAG_SELECTED : ""}`}>
       {children}
     </button>
   );
@@ -194,7 +183,7 @@ export function IndicatorReference() {
               <li
                 key={def.id}
                 id={`ind-${def.id}`}
-                className={`scroll-mt-20 rounded-lg border bg-surface transition-colors ${open ? "border-accent/40" : "border-border"}`}
+                className={`scroll-mt-20 rounded-lg border bg-surface transition-colors ${open ? "border-fg/25" : "border-border"}`}
               >
                 <h3>
                   <button
@@ -216,14 +205,14 @@ export function IndicatorReference() {
                         <BasisTag basis={def.basis} />
                       </span>
                       <span className="mt-0.5 block text-xs text-muted">
-                        <span className="text-nominal">Nominal</span> {def.ranges.nominal}
+                        <span className="font-medium text-fg/80">Nominal</span> {def.ranges.nominal}
                       </span>
                     </span>
                     <span className="hidden shrink-0 gap-1 md:flex" aria-hidden>
                       {def.hazards.map((h) => {
                         const Icon = HAZARD_ICON[h];
                         return (
-                          <span key={h} title={HAZARDS[h].name} className="rounded bg-surface-2 p-1 text-muted">
+                          <span key={h} title={HAZARDS[h].name} className="rounded-[3px] border border-border bg-surface-2 p-1 text-muted">
                             <Icon size={12} />
                           </span>
                         );
@@ -236,11 +225,9 @@ export function IndicatorReference() {
                   <div id={panelId} className="bm-panel-in space-y-4 border-t border-border px-3 pb-4 pt-3 md:px-4">
                     <div className="grid gap-2 sm:grid-cols-3">
                       {(["nominal", "caution", "critical"] as const).map((k) => (
-                        <div key={k} className={`rounded-md border p-2.5 ${RANGE_STYLE[k].className}`}>
-                          <p className={`text-[11px] font-semibold uppercase tracking-wider ${RANGE_STYLE[k].text}`}>
-                            {RANGE_STYLE[k].label}
-                          </p>
-                          <p className="mt-0.5 text-sm">{def.ranges[k]}</p>
+                        <div key={k} className="rounded-lg border border-border bg-surface-2/40 p-2.5">
+                          <StatusBadge status={k} size="xs" />
+                          <p className="mt-1.5 text-sm">{def.ranges[k]}</p>
                         </div>
                       ))}
                     </div>
@@ -262,7 +249,7 @@ export function IndicatorReference() {
                           ))}
                         </ol>
                       </div>
-                      <div className="rounded-md border border-critical/30 bg-critical/5 p-3">
+                      <div className="rounded-lg border border-critical/40 bg-critical/5 p-3">
                         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-critical">
                           <PhoneCall size={12} aria-hidden /> When to escalate
                         </h4>

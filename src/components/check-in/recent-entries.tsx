@@ -44,7 +44,7 @@ export function RecentEntries({ readings, limit = 8 }: { readings: Reading[]; li
                 return (
                   <li
                     key={r.id}
-                    className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-1.5 py-0.5 text-xs"
+                    className="inline-flex items-center gap-1 rounded-[3px] border border-border bg-surface px-1.5 py-0.5 text-xs"
                     title={`${INDICATORS[r.indicator].label}: ${STATUS_LABEL[s]}`}
                   >
                     <StatusIcon status={s} size={12} />

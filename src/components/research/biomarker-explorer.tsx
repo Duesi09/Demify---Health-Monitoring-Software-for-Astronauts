@@ -17,7 +17,7 @@ import {
 } from "recharts";
 import type { I4Analyte, I4PanelData, RefRange } from "@/lib/sources/osdr";
 import type { SourceResult } from "@/lib/types";
-import { Provenance } from "@/components/ui";
+import { Provenance, StatusBadge } from "@/components/ui";
 import {
   ANALYTE_INFO,
   DEFAULT_ANALYTE,
@@ -91,7 +91,7 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div role="tablist" aria-label="Blood panel" className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
+        <div role="tablist" aria-label="Blood panel" className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-0.5">
           {available.map((t) => (
             <button
               key={t.id}
@@ -206,8 +206,9 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
                       <span>
                         {subjects[o.s].id} · {timepoints[o.t].timepoint}
                       </span>
-                      <span className={o.pos === "high" ? "text-critical" : "text-caution"}>
-                        {o.pos === "high" ? "▲ High" : "▼ Low"} {fmtValue(o.v)}
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">{fmtValue(o.v)}</span>
+                        <StatusBadge status="caution" size="xs" label={o.pos === "high" ? "High" : "Low"} className="min-w-[52px] justify-center" />
                       </span>
                     </li>
                   ))}
@@ -216,9 +217,9 @@ export function BiomarkerExplorer({ panels, timepoints, subjects, flight }: Expl
             </div>
           )}
           {analyte.flags && analyte.flags.length > 0 && (
-            <div className="rounded-lg border border-caution/40 p-3">
-              <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-caution">
-                <AlertTriangle size={12} aria-hidden /> Data-quality notes
+            <div className="rounded-lg border border-border p-3">
+              <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
+                <AlertTriangle size={12} className="text-caution" aria-hidden /> Data-quality notes
               </p>
               <ul className="mt-1.5 space-y-1.5 text-xs">
                 {dedupeFlags(analyte.flags).map((f) => (
@@ -287,7 +288,7 @@ function Segmented({
           aria-checked={o.value === value}
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
             o.value === value ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
           }`}
         >
@@ -550,12 +551,12 @@ function ChartTooltip({
           return (
             <li key={s.id} className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
+                <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
                 {s.id}
               </span>
               <span>
                 {fmtValue(v)} {v != null ? unit : ""}
-                {pos && <span className={`ml-1.5 ${pos === "high" ? "text-critical" : "text-caution"}`}>{pos === "high" ? "▲ High" : "▼ Low"}</span>}
+                {pos && <StatusBadge status="caution" size="xs" label={pos === "high" ? "High" : "Low"} className="ml-1.5 align-[-2px]" />}
               </span>
             </li>
           );
@@ -603,7 +604,7 @@ function AnalyteTable({
               <tr key={s.id} className="border-t border-border">
                 <th scope="row" className="px-3 py-2 text-left font-medium">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
+                    <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: SUBJECT_STYLE[s.id].color }} aria-hidden />
                     {s.id} <span className="text-xs font-normal text-muted">{s.sex}</span>
                   </span>
                 </th>
@@ -615,13 +616,17 @@ function AnalyteTable({
                     <td
                       key={tp.timepoint}
                       title={note?.note}
-                      className={`px-3 py-2 text-right ${tp.timepoint === "R+1" ? "border-l border-accent/50" : ""} ${
-                        pos === "high" ? "font-semibold text-critical" : pos === "low" ? "font-semibold text-caution" : ""
+                      className={`whitespace-nowrap px-3 py-2 text-right ${tp.timepoint === "R+1" ? "border-l border-accent/50" : ""} ${
+                        pos ? "font-semibold" : ""
                       }`}
                     >
-                      {pos === "high" && <span aria-label="high">▲ </span>}
-                      {pos === "low" && <span aria-label="low">▼ </span>}
                       {fmtValue(v)}
+                      {pos && (
+                        <>
+                          <StatusBadge status="caution" size="xs" label={pos === "high" ? "H" : "L"} className="ml-1 align-[-2px]" />
+                          <span className="sr-only">{pos === "high" ? " high" : " low"}</span>
+                        </>
+                      )}
                       {note?.kind === "suspect" && <span className="ml-0.5 text-caution" aria-label="suspect value">*</span>}
                       {note?.kind === "range" && <span className="ml-0.5 text-muted" aria-label="range note">†</span>}
                     </td>
@@ -638,7 +643,7 @@ function AnalyteTable({
         </tbody>
       </table>
       <p className="border-t border-border px-3 py-2 text-[11px] text-muted">
-        Unit: {unit || "ratio"} · ▲/▼ outside the lab reference range · * suspect value · † range note (hover a cell) · vertical rule = flight
+        Unit: {unit || "ratio"} · H/L outside the lab reference range · * suspect value · † range note (hover a cell) · vertical rule = flight
       </p>
     </div>
   );

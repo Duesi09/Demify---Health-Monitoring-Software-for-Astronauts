@@ -3,7 +3,7 @@ import { ShieldAlert } from "lucide-react";
 import { CommDelay, EscalationProtocol, PrivateConferences } from "@/components/guidance/escalation-protocol";
 import { HazardCards } from "@/components/guidance/hazards";
 import { IndicatorReference } from "@/components/guidance/indicator-reference";
-import { PageHeader } from "@/components/ui";
+import { PageHeader, tagClass } from "@/components/ui";
 import { MISSION_PROFILES, currentMission } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Guidance" };
@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 
 function SectionTitle({ id, title, description }: { id: string; title: string; description: string }) {
   return (
-    <div className="mb-3">
-      <h2 id={id} className="text-lg font-semibold tracking-tight">
+    <div className="mb-4">
+      <h2 id={id} className="text-[22px] font-semibold leading-tight tracking-[-0.018em]">
         {title}
       </h2>
-      <p className="mt-0.5 max-w-3xl text-sm text-muted">{description}</p>
+      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">{description}</p>
     </div>
   );
 }
@@ -29,7 +29,7 @@ const TOC = [
 export default function GuidancePage() {
   const mission = currentMission();
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       <div>
         <PageHeader
           title="Guidance & Reference"
@@ -50,12 +50,12 @@ export default function GuidancePage() {
             </p>
           </div>
         </aside>
-        <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-2 text-sm">
+        <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-1.5">
           {TOC.map((t) => (
             <a
               key={t.href}
               href={t.href}
-              className="rounded-full border border-border px-3 py-1 text-muted transition-colors hover:border-accent/50 hover:text-accent"
+              className={tagClass("md", true)}
             >
               {t.label}
             </a>

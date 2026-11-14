@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Save, Stethoscope } from "lucide-react";
-import { StatusBadge, STATUS_TEXT } from "@/components/ui";
+import { StatusBadge } from "@/components/ui";
 import { StatusIcon } from "@/components/overview/status-icon";
 import { bySeverity, formatDelay, formatUtc, formatValue } from "@/components/overview/format";
 import { CHECK_IN_INDICATORS, INDICATORS, classify, evaluateValue } from "@/lib/health/knowledge";
@@ -68,7 +68,7 @@ function Feedback({ id, live, serverError }: { id: IndicatorId; live: Live; serv
     <div className="space-y-1 text-xs">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <StatusBadge status={s} />
-        <span className={s === "nominal" ? "text-muted" : STATUS_TEXT[s]}>{rangeText}</span>
+        <span className={s === "nominal" ? "text-muted" : "text-fg/90"}>{rangeText}</span>
       </p>
       {live.rounded && (
         <p className="text-muted">
@@ -183,13 +183,14 @@ function ScaleField({
         {options.map((n) => {
           const s = classify(id, n);
           const checked = value === String(n);
+          // Selected: inverted like a segmented control; caution/critical use the solid alarm fills of StatusBadge.
           const tone = !checked
-            ? "border-border bg-surface-2 text-fg hover:border-accent/50"
+            ? "border-border bg-surface-2 text-fg hover:border-muted/60"
             : s === "nominal"
-              ? "border-accent bg-accent/20 text-accent"
+              ? "border-fg bg-fg text-bg"
               : s === "caution"
-                ? "border-caution bg-caution/20 text-caution"
-                : "border-critical bg-critical/20 text-critical";
+                ? "border-caution-fill bg-caution-fill text-on-caution"
+                : "border-critical-fill bg-critical-fill text-on-critical";
           return (
             <label key={n} className="relative cursor-pointer">
               <input
@@ -202,7 +203,7 @@ function ScaleField({
                 aria-label={`${n}${labels[n] ? ` (${labels[n]})` : ""}`}
               />
               <span
-                className={`flex h-10 items-center justify-center rounded-md border text-sm font-medium tabular peer-focus-visible:ring-2 peer-focus-visible:ring-accent ${tone}`}
+                className={`flex h-10 items-center justify-center rounded-lg border text-sm font-medium tabular transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface ${tone}`}
                 aria-hidden
               >
                 {n}
@@ -301,9 +302,9 @@ export function CheckInForm({
 
       <form onSubmit={onSubmit} noValidate aria-label={`Daily check-in for ${crewName}`} className="space-y-6">
         {groups.map((g) => (
-          <fieldset key={g.id} className="rounded-xl border border-border bg-surface p-4 md:p-5">
+          <fieldset key={g.id} className="rounded-xl border border-border bg-surface p-4 md:p-6">
             <legend className="sr-only">{g.title}</legend>
-            <h2 className="text-sm font-semibold tracking-wide">
+            <h2 className="text-base font-semibold tracking-tight">
               {g.title}
             </h2>
             {g.description && <p className="mt-0.5 text-xs text-muted">{g.description}</p>}
@@ -326,8 +327,8 @@ export function CheckInForm({
           </fieldset>
         ))}
 
-        <div className="rounded-xl border border-border bg-surface p-4 md:p-5">
-          <label htmlFor="ci-note" className="block text-sm font-semibold tracking-wide">
+        <div className="rounded-xl border border-border bg-surface p-4 md:p-6">
+          <label htmlFor="ci-note" className="block text-base font-semibold tracking-tight">
             Note <span className="font-normal text-muted">(optional)</span>
           </label>
           <p id="ci-note-hint" className="mt-0.5 text-xs text-muted">
@@ -350,8 +351,8 @@ export function CheckInForm({
             {entered.length ? (
               <>
                 <span className="font-medium">{entered.length}</span> value{entered.length === 1 ? "" : "s"} entered
-                {counts.caution > 0 && <span className="text-caution"> · {counts.caution} caution</span>}
-                {counts.critical > 0 && <span className="text-critical"> · {counts.critical} critical</span>}
+                {counts.caution > 0 && <StatusBadge status="caution" size="xs" label={`${counts.caution} caution`} className="ml-2 align-[1px]" />}
+                {counts.critical > 0 && <StatusBadge status="critical" size="xs" label={`${counts.critical} critical`} className="ml-1.5 align-[1px]" />}
                 {invalid.length > 0 && <span className="text-critical"> · {invalid.length} out of range</span>}
               </>
             ) : (
@@ -410,7 +411,7 @@ function ResultPanel({
   const escalate = items.filter((i) => i.escalate || i.status === "critical");
   const longDelay = commDelaySeconds >= 60;
   return (
-    <section aria-labelledby="ci-result" className="space-y-4 rounded-xl border border-accent/40 bg-surface p-4 md:p-5">
+    <section aria-labelledby="ci-result" className="space-y-4 rounded-xl border border-fg/25 bg-surface p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="ci-result" ref={headingRef} tabIndex={-1} className="text-base font-semibold outline-none">

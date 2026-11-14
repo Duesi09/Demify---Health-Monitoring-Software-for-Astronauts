@@ -4,7 +4,7 @@ import { BiomarkerExplorer } from "@/components/research/biomarker-explorer";
 import { ChangeSummary } from "@/components/research/change-summary";
 import { IssDoseChart } from "@/components/research/iss-dose-chart";
 import { StudySearch } from "@/components/research/study-search";
-import { Card, PageHeader, Provenance } from "@/components/ui";
+import { Card, PageHeader, Provenance, Tag, tagClass } from "@/components/ui";
 import { getIssDoseReference } from "@/lib/sources/eda";
 import {
   DEFAULT_SEARCH,
@@ -63,7 +63,7 @@ export default async function ResearchPage() {
               measurements from spaceflight and ground studies, free to reuse.
             </p>
             <div className="flex gap-3 rounded-lg border border-border bg-surface-2 p-3">
-              <Info size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+              <Info size={16} className="mt-0.5 shrink-0 text-muted" aria-hidden />
               <p>
                 <span className="font-medium">Honest scope:</span> public OSDR contains no real-time astronaut vital signs (heart rate,
                 blood pressure, SpO₂). Those stay private medical data. What it does publish are real crew blood tests. Below are the
@@ -110,9 +110,9 @@ export default async function ResearchPage() {
         title="What changed after flight"
         subtitle="Change one day after splashdown (R+1) versus each person's pre-flight average"
         action={
-          <span className="flex flex-wrap justify-end gap-x-2 text-[11px] text-muted">
+          <span className="flex flex-wrap justify-end gap-1">
             {studyAccessions.map((a) => (
-              <a key={a} href={studyUrl(a)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+              <a key={a} href={studyUrl(a)} target="_blank" rel="noreferrer" className={`${tagClass("sm", true)} gap-1 font-mono normal-case tracking-normal`}>
                 {a} <ExternalLink size={10} aria-hidden />
               </a>
             ))}
@@ -188,7 +188,9 @@ export default async function ResearchPage() {
                 {mission.data.studies.map((s) => (
                   <li key={s.accession} className="py-2">
                     <a href={s.url} target="_blank" rel="noreferrer" className="group flex gap-2 hover:text-accent">
-                      <span className="mt-0.5 shrink-0 self-start whitespace-nowrap rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] text-accent">{s.accession}</span>
+                      <Tag mono className="mt-0.5 self-start">
+                        {s.accession}
+                      </Tag>
                       <span className="min-w-0">
                         {s.title ?? "Untitled study"}
                         <ExternalLink size={11} className="ml-1 inline text-muted group-hover:text-accent" aria-hidden />

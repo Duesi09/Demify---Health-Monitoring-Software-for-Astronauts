@@ -3,7 +3,7 @@ import { CheckInForm } from "@/components/check-in/check-in-form";
 import { RecentEntries } from "@/components/check-in/recent-entries";
 import { formatDelay } from "@/components/overview/format";
 import { CrewSwitcher } from "@/components/crew-switcher";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, PageHeader, StatusBadge } from "@/components/ui";
 import { currentMission, missionDay } from "@/lib/config";
 import { listCrew, listReadings } from "@/lib/store/readings";
 import { submitCheckIn } from "./actions";
@@ -54,16 +54,18 @@ export default async function CheckInPage(props: PageProps<"/check-in">) {
               <RecentEntries readings={recent} />
             </Card>
             <Card title="How to read the feedback">
-              <ul className="space-y-2 text-xs text-muted">
-                <li>
-                  <span className="font-medium text-nominal">Nominal</span>: inside the normal range. Nothing to do.
+              <ul className="space-y-2.5 text-xs text-muted">
+                <li className="flex items-start gap-2">
+                  <StatusBadge status="nominal" size="xs" className="mt-px w-[74px]" />
+                  <span>Inside the normal range. Nothing to do.</span>
                 </li>
-                <li>
-                  <span className="font-medium text-caution">Caution</span>: outside the normal range. Follow the listed
-                  crew actions and re-check.
+                <li className="flex items-start gap-2">
+                  <StatusBadge status="caution" size="xs" className="mt-px w-[74px]" />
+                  <span>Outside the normal range. Follow the listed crew actions and re-check.</span>
                 </li>
-                <li>
-                  <span className="font-medium text-critical">Critical</span>: act now and contact the flight surgeon.
+                <li className="flex items-start gap-2">
+                  <StatusBadge status="critical" size="xs" className="mt-px w-[74px]" />
+                  <span>Act now and contact the flight surgeon.</span>
                 </li>
                 <li>
                   Ranges come from NASA-STD-3001, NASA OCHMO technical briefs and standard clinical guidance (see
