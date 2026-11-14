@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowUpRight, BellOff, BellRing, ChevronDown, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ArrowUpRight, BellOff, BellRing, ChevronDown, MessageSquareText, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ALARM_PANEL_ID } from "@/lib/assistant/alarm-events";
 import { DISCLAIMER_SHORT } from "@/lib/disclaimer";
+import { parseLinkParam, withLink } from "@/lib/link";
 import type { LiveVitals, MonitorAlarm } from "@/lib/types";
 import "./alarm-center.css";
 import { AlarmAudio, BURST_INTERVAL_S, audioSupported } from "./alarm-audio";
@@ -134,6 +136,33 @@ export function MonitorLink(props: MonitorLinkProps) {
   return (
     <Suspense fallback={<MonitorAnchor href={monitorHref(props.crewId)} crewName={props.crewName} />}>
       <MonitorLinkFromUrl {...props} />
+    </Suspense>
+  );
+}
+
+function AssistantAnchor({ href }: { href: string }) {
+  return (
+    <Link href={href} className="ac-btn">
+      <MessageSquareText size={14} strokeWidth={2.25} aria-hidden />
+      Open the assistant
+    </Link>
+  );
+}
+
+function AssistantLinkFromUrl() {
+  const search = useSearchParams();
+  return <AssistantAnchor href={`${withLink("/assistant", parseLinkParam(search?.get("link")))}#${ALARM_PANEL_ID}`} />;
+}
+
+/**
+ * "Open the assistant": the onboard assistant responds to the alarm with
+ * the matching checklist passages (it never raises or clears one). Keeps
+ * the page's ?link=, like MonitorLink.
+ */
+export function AssistantLink() {
+  return (
+    <Suspense fallback={<AssistantAnchor href={`/assistant#${ALARM_PANEL_ID}`} />}>
+      <AssistantLinkFromUrl />
     </Suspense>
   );
 }
@@ -425,6 +454,11 @@ export function AlarmCenter() {
                   <MonitorLink crewId={groups[0].crewId} crewName={groups[0].crewName} />
                 </span>
               )}
+              {top && pathname !== "/assistant" && (
+                <span className="hidden shrink-0 xl:inline-flex">
+                  <AssistantLink />
+                </span>
+              )}
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 {soundOn && audioStatus === "locked" && (
                   <button
@@ -520,6 +554,11 @@ export function AlarmCenter() {
                   </li>
                 );
               })}
+              {pathname !== "/assistant" && (
+                <li className="ac-group flex justify-end py-1.5 last:pb-0">
+                  <AssistantLink />
+                </li>
+              )}
             </ul>
           </div>
         </section>

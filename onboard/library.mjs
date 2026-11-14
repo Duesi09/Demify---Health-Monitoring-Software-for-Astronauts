@@ -645,6 +645,189 @@ function searchTerms(text) {
     .map(stem);
 }
 
+/** Search terms of a question: a German question is searched with its English (germanToEnglish). @param {string} query */
+function queryTerms(query) {
+  return searchTerms(germanToEnglish(query) ?? query);
+}
+
+/* ------------------------------------------------------------------------- */
+/* German questions: query expansion with a small domain glossary             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * German -> English domain glossary for the keyword searches (bundled and
+ * full-text). The library is written in English; without this a German
+ * question finds nothing. Reviewed list of everyday terms of this library's
+ * topics (vital signs, drills, kit, radiation, ground link): no medicine
+ * names, no doses. Keys are folded (lower case, umlauts and accents dropped,
+ * ß -> ss); inflected forms ("Blutdrucks", "Kommandanten") and compounds
+ * ("Strahlenschutzraum" = strahlen + schutzraum) are resolved by
+ * germanTerm(). Vector search keeps the question as it is.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const GERMAN_GLOSSARY = Object.freeze({
+  pulsoximeter: "pulse oximeter",
+  blutdruck: "blood pressure",
+  bluthochdruck: "high blood pressure",
+  puls: "heart rate pulse",
+  herzfrequenz: "heart rate",
+  ruhepuls: "resting heart rate",
+  ruheherzfrequenz: "resting heart rate",
+  herzrhythmus: "rhythm",
+  kammerflimmern: "ventricular fibrillation",
+  herzinfarkt: "heart attack STEMI",
+  herzstillstand: "cardiac arrest",
+  wiederbelebung: "CPR",
+  herzdruckmassage: "CPR chest compressions",
+  brustschmerz: "chest pain",
+  schlaganfall: "stroke",
+  krampfanfall: "seizure",
+  anfall: "seizure",
+  bewusstlos: "unresponsive",
+  strahlung: "radiation",
+  strahlen: "radiation",
+  sonnensturm: "solar storm",
+  sonneneruption: "solar particle event",
+  schutzraum: "shelter",
+  medizinkit: "medical kit",
+  notfallkoffer: "medical kit",
+  sanitatskasten: "medical kit",
+  sauerstoff: "oxygen",
+  sauerstoffsattigung: "oxygen saturation SpO2",
+  fieber: "fever temperature",
+  temperatur: "temperature",
+  korpertemperatur: "body temperature",
+  atmung: "respiration",
+  atemfrequenz: "respiratory rate",
+  atemnot: "breathlessness",
+  kohlendioxid: "carbon dioxide CO2",
+  co2: "carbon dioxide CO2",
+  bodenkontakt: "ground link",
+  funkverbindung: "ground link",
+  bodenstation: "ground",
+  verbindung: "link",
+  unterbrochen: "down",
+  ausgefallen: "down",
+  blackout: "blackout",
+  flugarzt: "flight surgeon",
+  flugarztin: "flight surgeon",
+  defibrillator: "defibrillator AED",
+  ekg: "ECG",
+  checkliste: "checklist",
+  ubung: "drill",
+  alarm: "alarm",
+  notfall: "emergency",
+  medizinisch: "medical",
+  ereignis: "event",
+  verfahren: "procedure",
+  vorgehen: "procedure",
+  kontakt: "contact",
+  kontaktieren: "contact",
+  melden: "report",
+  beginnt: "starting",
+  ausgangswert: "baseline",
+  basiswert: "baseline",
+  kommandant: "commander",
+  kommandantin: "commander",
+  besatzung: "crew",
+  bibliothek: "library",
+  inventar: "inventory",
+  verfallsdatum: "expiry",
+});
+
+/**
+ * German function words dropped from a German question before the keyword
+ * search (folded). They carry no topic, and an English library never
+ * contains them.
+ */
+export const GERMAN_STOPWORDS = new Set(
+  (
+    "der die das den dem des ein eine einen einem einer eines und oder aber ist sind war waren wird werden wurde wurden hat " +
+    "haben hatte hatten wie wo was wann wer warum wieso weshalb welche welcher welches welchen welchem im in am an auf aus " +
+    "bei mit nach von vom zu zum zur fur uber unter vor wahrend durch gegen ohne um bis wir ich du sie er es ihr uns unser " +
+    "unsere unseren unserem mein meine man nicht kein keine keinen soll sollen sollte sollten muss mussen musste kann konnen " +
+    "konnte darf durfen gibt geht gehen gehe tun machen macht sagt sagen zeigt zeigen steht stehen dann denn doch noch schon " +
+    "nur auch sehr so jetzt hier dort da bitte mal ja nein dieser diese dieses diesem diesen jeder jede jedes alle alles " +
+    "etwas wieviel hoch liegt finde finden findet befindet sich"
+  ).split(" "),
+);
+
+/** German function words that are English words too ("in", "was", "die"): they never mark a text as German. */
+const ALSO_ENGLISH = new Set("in an am so da man die was war hat es er um bitte ja".split(" "));
+
+/** Common German endings tried when a word is not in the glossary as written. */
+const GERMAN_ENDINGS = ["en", "es", "er", "em", "n", "s", "e"];
+/** Shortest glossary word that counts as part of a compound. */
+const COMPOUND_MIN = 5;
+
+/** @param {string} word */
+function foldGerman(word) {
+  return word.replace(/ß/g, "ss").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** @param {string} w folded word @returns {string | null} */
+function glossaryExact(w) {
+  if (Object.hasOwn(GERMAN_GLOSSARY, w)) return GERMAN_GLOSSARY[w];
+  for (const end of GERMAN_ENDINGS) {
+    const base = w.slice(0, -end.length);
+    if (w.endsWith(end) && base.length >= 4 && Object.hasOwn(GERMAN_GLOSSARY, base)) return GERMAN_GLOSSARY[base];
+  }
+  return null;
+}
+
+/**
+ * English for one German word, or null: the glossary entry of the word,
+ * of the word without a common ending, or of the glossary words a compound
+ * starts and ends with ("Strahlenschutzraum" -> "radiation shelter").
+ * @param {string} word
+ * @returns {string | null}
+ */
+export function germanTerm(word) {
+  const w = foldGerman(word);
+  const exact = glossaryExact(w);
+  if (exact) return exact;
+  let head = "";
+  let tail = "";
+  for (const k of Object.keys(GERMAN_GLOSSARY)) {
+    if (k.length < COMPOUND_MIN || k.length >= w.length) continue;
+    if (w.startsWith(k) && k.length > head.length) head = k;
+    if (k.length > tail.length && (w.endsWith(k) || GERMAN_ENDINGS.some((e) => w.endsWith(k + e)))) tail = k;
+  }
+  const parts = [head, tail].filter((k, i, all) => k && all.indexOf(k) === i).map((k) => GERMAN_GLOSSARY[k]);
+  return parts.length ? parts.join(" ") : null;
+}
+
+/**
+ * The English search text of a German question, or null when the text does
+ * not read as German (no glossary word as written that differs from its
+ * English, and fewer than two German function words that are not English
+ * words as well). Glossary terms become their
+ * English, German function words are dropped, every other word is kept as
+ * it is (numbers, abbreviations such as SpO2, English words).
+ * @param {string} text
+ * @returns {string | null}
+ */
+export function germanToEnglish(text) {
+  const tokens = text.match(/[\p{L}\p{N}]+/gu) ?? [];
+  let translated = 0;
+  let functionWords = 0;
+  /** @type {string[]} */
+  const out = [];
+  for (const t of tokens) {
+    const folded = foldGerman(t);
+    if (GERMAN_STOPWORDS.has(folded)) {
+      if (!ALSO_ENGLISH.has(folded)) functionWords++;
+      continue;
+    }
+    const en = germanTerm(t);
+    // Only a glossary word as written counts as German ("pulse" resolves to "puls" but is English).
+    if (en && Object.hasOwn(GERMAN_GLOSSARY, folded) && en.toLowerCase() !== folded) translated++;
+    out.push(en ?? t);
+  }
+  if (!translated && functionWords < 2) return null;
+  return out.join(" ");
+}
+
 /**
  * @typedef {{ doc: LibraryDoc; chunk: LibraryChunk; tf: Map<string, number>; len: number }} IndexedChunk
  * @typedef {{ key: string; chunks: IndexedChunk[]; df: Map<string, number>; avgLen: number; failures: number }} BundledIndex
@@ -688,7 +871,8 @@ const BM25_B = 0.75;
 /**
  * Keyword search over bundled documents (no database). Okapi BM25 over the
  * chunks of chunkDoc (title + heading + text, English stopwords removed,
- * light stemming). The score is BM25 divided by the best score the query
+ * light stemming; a German question is searched with its English, see
+ * germanToEnglish). The score is BM25 divided by the best score the query
  * could reach (every term present, saturated), so it lies in 0..1 and says
  * how much of the question the chunk covers. Deterministic: ties are broken
  * by document id and chunk order. minScore is not applied here.
@@ -699,7 +883,7 @@ const BM25_B = 0.75;
  */
 export function searchBundled(docs, query, k = 5) {
   const index = bundledIndex(docs);
-  const terms = [...new Set(searchTerms(query))];
+  const terms = [...new Set(queryTerms(query))];
   const n = index.chunks.length;
   /** @param {string} t */
   const idf = (t) => {
@@ -1480,7 +1664,8 @@ export async function searchLibrary(pool, cfg, query, k = cfg.topK, opts = {}) {
     }
   }
 
-  const terms = [...new Set(words(q).filter((w) => w.length > 1 && !STOPWORDS.has(w)))];
+  // A German question is searched with its English (germanToEnglish); the vector tier above keeps it as asked.
+  const terms = [...new Set(words(germanToEnglish(q) ?? q).filter((w) => w.length > 1 && !STOPWORDS.has(w)))];
   if (!terms.length) {
     return { tier: "fulltext", hits: [], integrityFailures: 0, fallbackReason: fallbackReason ?? "the question has no searchable words" };
   }

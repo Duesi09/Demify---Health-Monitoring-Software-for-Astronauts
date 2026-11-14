@@ -43,3 +43,6 @@ export const WITHHELD_REASONS: readonly string[] = [PASSAGES_ONLY_REASON.uncited
 
 /** 503 from POST /api/assistant while the language model already answers other questions. */
 export const ASSISTANT_BUSY = "Assistant busy, try again in a moment.";
+
+/** Shown with the question form: the keyword search translates common German terms (glossary in onboard/library.mjs). */
+export const GERMAN_HINT = "The library is in English; German questions work for common terms.";

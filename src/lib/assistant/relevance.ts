@@ -1,4 +1,4 @@
-import type { LibraryHit, SearchResult } from "@onboard/library.mjs";
+import { germanToEnglish, type LibraryHit, type SearchResult } from "@onboard/library.mjs";
 
 /**
  * Which retrieved passages count as an answer. A passage that only shares a
@@ -62,12 +62,18 @@ export function searchWords(text: string): string[] {
     .map(stem);
 }
 
+/** The words a question is searched with: a German question by its English (glossary, see germanToEnglish). */
+export function searchQuestion(question: string): string {
+  return germanToEnglish(question) ?? question;
+}
+
 /**
  * Share (0..1) of the question's search words that appear in the passage.
  * Plain numbers ("185/115") are left out: values rarely appear in the text.
+ * A German question counts with its English (searchQuestion).
  */
 export function termCoverage(question: string, passage: string): number {
-  const terms = [...new Set(searchWords(question))].filter((t) => !/^\d+$/.test(t));
+  const terms = [...new Set(searchWords(searchQuestion(question)))].filter((t) => !/^\d+$/.test(t));
   if (!terms.length) return 0;
   const words = new Set(searchWords(passage));
   return terms.filter((t) => words.has(t)).length / terms.length;

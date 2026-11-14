@@ -15,7 +15,8 @@ import {
   type ResolvedLibrary,
 } from "./library-source";
 import { buildMessages, type PromptPassage } from "./prompt";
-import { usableHits } from "./relevance";
+import { germanBackedRemoved } from "./german";
+import { searchQuestion, usableHits } from "./relevance";
 import { blockedReason, checkAnswer, groundingCandidates, isEmergency, medicineLikeWords } from "./safety";
 import {
   ACT_NOW_LINE,
@@ -72,7 +73,7 @@ export interface AskInput {
 }
 
 /** reachable: the model server answered (vector search may use it even when the language model is missing). */
-type ModelReady = { ready: true; reachable: true } | { ready: false; reachable: boolean; reason: string; detail: string };
+export type ModelReady = { ready: true; reachable: true } | { ready: false; reachable: boolean; reason: string; detail: string };
 
 const holder = globalThis as typeof globalThis & {
   __demifyModelReady?: { key: string; at: number; ttl: number; value: Promise<ModelReady> };
@@ -112,7 +113,7 @@ async function checkModel(cfg: OnboardConfig): Promise<ModelReady> {
 const readinessKey = (cfg: OnboardConfig) => `${cfg.modelUrl ?? ""}|${cfg.llmModel}`;
 
 /** Readiness of the language model, cached (MODEL_STATUS_TTL_MS; MODEL_DOWN_TTL_MS while unreachable). */
-function modelReady(cfg: OnboardConfig): Promise<ModelReady> {
+export function modelReady(cfg: OnboardConfig): Promise<ModelReady> {
   const key = readinessKey(cfg);
   const now = Date.now();
   const cached = holder.__demifyModelReady;
@@ -186,7 +187,7 @@ export function toCitation(hit: LibraryHit, n: number, question = ""): Citation 
     ...(hit.reviewed ? { reviewed: hit.reviewed } : {}),
     version: hit.version,
     sha256: hit.sha256,
-    excerpt: excerpt(hit.text, question),
+    excerpt: excerpt(hit.text, searchQuestion(question)),
     text: hit.text,
     score: hit.score,
     ...(hit.syncedAt ? { syncedAt: hit.syncedAt } : {}),
@@ -203,6 +204,91 @@ const joinReasons = (...reasons: (string | undefined | null)[]) => {
   const list = [...new Set(reasons.filter((r): r is string => !!r))];
   return list.length ? list.join("; ") : undefined;
 };
+
+export interface ModelAnswerInput {
+  /** The question as the model sees it (inside the <question> block). */
+  question: string;
+  /** The passages, already through the relevance gate; passage [n] is hits[n - 1]. */
+  hits: LibraryHit[];
+  crew: CrewContext | null;
+  libraryAgeText: string;
+  stale: boolean;
+  groundLinkUp: boolean;
+  /** Where the hits came from (the grounding check asks that library). */
+  source: "database" | "bundled";
+  lib: ResolvedLibrary;
+  cfg: OnboardConfig;
+}
+
+export type ModelAnswer =
+  | { ok: true; text: string; cited: number[] }
+  | { ok: false; kind: "no-answer" }
+  | { ok: false; kind: "passages-only"; reason: string; detail?: string };
+
+/**
+ * One model answer from these passages, checked before anyone sees it:
+ * citations, doses, medicine-like words and grounding (words copied from
+ * the question that no cited passage and no library text contains). Takes
+ * one of the MAX_CONCURRENT_CHATS chat slots (throws AssistantBusyError
+ * when none is free). Call it only when the model is ready. Shared by the
+ * question form (askAssistant) and the alarm walk-through (alarm-guidance.ts).
+ */
+export async function modelAnswer(input: ModelAnswerInput): Promise<ModelAnswer> {
+  const { question, hits, crew, cfg } = input;
+  const passages: PromptPassage[] = hits.map((h, i) => ({
+    n: i + 1,
+    title: h.title,
+    heading: h.heading,
+    source: h.source,
+    ...(h.reviewed ? { reviewed: h.reviewed } : {}),
+    text: h.text,
+  }));
+  const release = takeChatSlot();
+  let raw: string;
+  try {
+    raw = await chat(
+      cfg,
+      buildMessages({
+        question,
+        passages,
+        crew: crew ? { source: crew.source, takenAt: crew.takenAt, summary: crew.summary } : null,
+        libraryAgeText: input.libraryAgeText,
+        stale: input.stale,
+        groundLinkUp: input.groundLinkUp,
+      }),
+      { temperature: TEMPERATURE, maxTokens: MAX_TOKENS },
+    );
+  } catch (err) {
+    const why = modelErrorReason(err);
+    noteChatFailure(cfg, err, why);
+    return { ok: false, kind: "passages-only", ...why };
+  } finally {
+    release();
+  }
+
+  // Check the answer before anyone sees it.
+  const check = checkAnswer(raw, passages.length, { crew: !!crew });
+  if (!check.ok) {
+    if (check.kind === "no-answer") return { ok: false, kind: "no-answer" };
+    return { ok: false, kind: "passages-only", reason: check.reason, detail: check.detail };
+  }
+  const backing = [...check.cited.map((n) => `${hits[n - 1].title}\n${hits[n - 1].heading}\n${hits[n - 1].text}`), crew?.summary ?? ""];
+  const medicineLike = medicineLikeWords(check.text, backing);
+  // A German answer may repeat the question's German words when their glossary English is backed (german.ts).
+  const candidates = germanBackedRemoved(groundingCandidates(check.text, question, backing), backing);
+  const known = await libraryKnownWords([...new Set([...medicineLike, ...candidates])], input.source, input.lib, cfg);
+  const unbacked = [...medicineLike, ...candidates.filter((w) => !known.has(w))];
+  if (unbacked.length) {
+    const n = new Set(unbacked).size;
+    return {
+      ok: false,
+      kind: "passages-only",
+      reason: PASSAGES_ONLY_REASON.ungrounded,
+      detail: `model answer used ${n} word${n === 1 ? "" : "s"} that no cited passage contains`,
+    };
+  }
+  return check;
+}
 
 /** Answers one crew question. Never throws for library or model failures; throws AssistantBusyError when the model is busy. */
 export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboardConfig()): Promise<AssistantAnswer> {
@@ -276,54 +362,24 @@ export async function askAssistant(input: AskInput, cfg: OnboardConfig = onboard
   // 3. The model, when it is ready (at most MAX_CONCURRENT_CHATS at a time).
   if (!ready.ready) return passagesOnly(ready.reason, ready.detail);
 
-  const passages: PromptPassage[] = hits.map((h, i) => ({
-    n: i + 1,
-    title: h.title,
-    heading: h.heading,
-    source: h.source,
-    ...(h.reviewed ? { reviewed: h.reviewed } : {}),
-    text: h.text,
-  }));
-  const release = takeChatSlot();
-  let raw: string;
-  try {
-    raw = await chat(
-      cfg,
-      buildMessages({
-        question,
-        passages,
-        crew: crew ? { source: crew.source, takenAt: crew.takenAt, summary: crew.summary } : null,
-        libraryAgeText: freshness.libraryAgeText,
-        stale: freshness.stale,
-        groundLinkUp,
-      }),
-      { temperature: TEMPERATURE, maxTokens: MAX_TOKENS },
-    );
-  } catch (err) {
-    const why = modelErrorReason(err);
-    noteChatFailure(cfg, err, why);
-    return passagesOnly(why.reason, why.detail);
-  } finally {
-    release();
-  }
-
-  // 4. Check the answer before anyone sees it.
-  const check = checkAnswer(raw, passages.length, { crew: !!crew });
-  if (!check.ok) {
-    if (check.kind === "no-answer") {
+  const outcome = await modelAnswer({
+    question,
+    hits,
+    crew,
+    libraryAgeText: freshness.libraryAgeText,
+    stale: freshness.stale,
+    groundLinkUp,
+    source: search.source,
+    lib,
+    cfg,
+  });
+  if (!outcome.ok) {
+    if (outcome.kind === "no-answer") {
       return result({ status: "no-answer", answer: null, reason: noAnswer, citations: [] }, retrieval, cfg.llmModel, search.fallbackReason);
     }
-    return passagesOnly(check.reason, check.detail);
+    return passagesOnly(outcome.reason, outcome.detail);
   }
-  const backing = [...check.cited.map((n) => `${hits[n - 1].title}\n${hits[n - 1].heading}\n${hits[n - 1].text}`), crew?.summary ?? ""];
-  const medicineLike = medicineLikeWords(check.text, backing);
-  const candidates = groundingCandidates(check.text, question, backing);
-  const known = await libraryKnownWords([...new Set([...medicineLike, ...candidates])], search.source, lib, cfg);
-  const unbacked = [...medicineLike, ...candidates.filter((w) => !known.has(w))];
-  if (unbacked.length) {
-    const n = new Set(unbacked).size;
-    return passagesOnly(PASSAGES_ONLY_REASON.ungrounded, `model answer used ${n} word${n === 1 ? "" : "s"} that no cited passage contains`);
-  }
+  const check = outcome;
   const cited = new Set(check.cited);
   return result(
     { status: "answered", answer: withActNow(check.text, "\n\n"), citations: citations.filter((c) => cited.has(c.n)) },

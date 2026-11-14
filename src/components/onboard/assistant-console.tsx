@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Fo
 import { ArrowRight, BookOpenText, ChevronDown, Cpu, Database, LoaderCircle, Search, SatelliteDish, Send } from "lucide-react";
 import { Card, StatusBadge, TAG_SELECTED, tagClass } from "@/components/ui";
 import { withLink, type LinkProfileId } from "@/lib/link";
+import { GERMAN_HINT } from "@/lib/assistant/wording";
 import type { AssistantAnswer, GroundLinkState, OnboardStatus } from "@/lib/onboard/types";
 import type { Status } from "@/lib/types";
 import { AnswerCard, type AnswerEntry } from "./answer-card";
@@ -365,7 +366,7 @@ export function AssistantConsole({
               />
               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
                 <p id="assistant-question-hint" className="text-[11px] text-muted">
-                  Enter sends, Shift+Enter adds a line.{" "}
+                  Enter sends, Shift+Enter adds a line. {GERMAN_HINT}{" "}
                   <span className={`tabular ${tooLong ? "font-semibold text-critical" : ""}`}>
                     {question.trim().length}/{QUESTION_MAX}
                   </span>
