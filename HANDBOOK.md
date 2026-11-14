@@ -2,11 +2,11 @@
 
 Everything in one place: where the project stands, how it is built, what was changed in the review, what is still open, ideas that go beyond a dashboard, and tips for the pitch and the submission.
 
-Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Monitoring Software for Astronauts on Space Missions". It describes the `test` branch after the latest merge of `Phase-1` (redesign, heart attack scenario, new body map) and the hardening pass.
+Written on 13 November 2026 and updated on 14 November for the NASA Space Apps Challenge "Create Health Monitoring Software for Astronauts on Space Missions". Sections 1 and 1a describe the `Phase-3` branch, which holds everything. The later sections were written for the `test` branch before Phase 3 and are still valid for what they cover; where they differ, section 1a wins.
 
 ## Contents
 
-1. [Where things stand](#1-where-things-stand)
+1. [Where things stand](#1-where-things-stand), with [1a. What Phase 3 adds](#1a-what-phase-3-adds)
 2. [What the app does](#2-what-the-app-does)
 3. [How it is built](#3-how-it-is-built)
 4. [Indicators and thresholds](#4-indicators-and-thresholds)
@@ -30,23 +30,81 @@ Written on 13 November 2026 for the NASA Space Apps Challenge "Create Health Mon
 
 | Item | State |
 |---|---|
-| Unit tests | 51 of 51 pass |
+| Unit tests | 313 of 313 pass |
 | Type check and production build | Clean |
-| Browser run | No console errors on desktop and phone width |
-| Accessibility scan | No WCAG A or AA violations found by the automated scan |
-| Simulated mission | 79 nominal days, 26 Watch, 70 Act, 5 Critical |
-| Hazards covered | 4 of 5. Space radiation has no indicator yet |
+| Browser run | 17 page variants load with no console errors, desktop and phone width |
+| Accessibility scan | No WCAG A or AA violations found by the automated scan on any section |
+| Simulated mission | 77 nominal days, 26 Watch, 72 Act, 5 Critical |
+| Hazards covered | 5 of 5 |
 
 ### Branches
 
 | Branch | Contains | Notes |
 |---|---|---|
 | `main` | README only | Nothing merged yet |
-| `Phase-1` | Phase 1, body map, redesign, heart attack scenario | Another session pushes here |
-| `Phase-2` | README only | Empty; later work went to `Phase-1` instead |
-| `test` | Everything on `Phase-1` plus the review fixes and the hardening | The most complete branch right now |
+| `Phase-1` | Phase 1, body map, redesign, heart attack scenario, the review fixes | Another session pushes here |
+| `Phase-2` | README only | Empty |
+| `test` | Same as `Phase-1` at the time of the last merge | Superseded by `Phase-3` |
+| `Phase-3` | Everything on `Phase-1` plus the four sections in section 1a | The most complete branch right now |
 
-`test` is ahead of `Phase-1` by the changes in [section 7](#7-changes-made-in-the-review). The two branches are edited in parallel in the same files, and every merge so far needed conflicts fixed by hand. See [section 16](#16-working-tips).
+`Phase-3` was built on `Phase-1` after it had merged `test`. Almost all of Phase 3 is new files, so merging it back should be easy. The shared files it touches are `Dashboard.tsx`, `BodyMap.tsx`, `MetricDetail.tsx`, `RangeBar.tsx`, `tiles.ts` and the domain files for the two new indicators.
+
+## 1a. What Phase 3 adds
+
+The app now has four sections, reached from the header. Each opens on the same mission day.
+
+| Section | Address | What it does |
+|---|---|---|
+| Today | `/` | The dashboard, now with "Fit for today's task", evidence notes under the timeline, and three cards that lead into the other sections with live numbers |
+| Check-in | `/checkin` | The daily routine as a guided flow, the Reaction Self-Test, the measurement streak |
+| Earth link | `/link` | Distance to Earth, signal time, Earth at its true apparent size, who decides at that distance, and a consult with the flight surgeon that shows the earliest possible answer |
+| Radiation | `/radiation` | Mission dose against the 600 mSv career limit, projection, storm shelter procedure with clocks, drill mode |
+
+### New in the logic
+
+| Addition | Detail |
+|---|---|
+| Indicator: radiation dose | mSv per day. Below 3 nominal, 3 to below 10 Watch, 10 to below 50 Act (take shelter), 50 and above Critical. Project defaults |
+| Indicator: reaction time | Milliseconds. Below 400 nominal, 400 to below 500 Watch, 500 and above Act; drift of +40 ms Watch, +80 ms Act. Project defaults |
+| Pattern: fatigue | Sleep is low and reaction time is off: "Sleep loss is slowing your reactions" |
+| Body system: whole body and cells | The outline of the figure, driven by the radiation dose |
+| Scripted event | Solar particle event on days 148 and 149 (about 43 and 14.5 mSv) |
+| Task readiness | A task plan for all 180 days and a go, caution or no-go verdict with reasons and an alternative |
+| Mission context | Five profiles; light time computed from distance; Mars transit grows to 1.5 astronomical units on day 180 (illustrative curve) |
+| Evidence | Each scripted event carries sources and a strength label: observed in spaceflight, observed in a ground or analog study, or scenario |
+
+The simulated values of the ten older indicators did not change; a checksum test pins them.
+
+### Demo days for the new parts
+
+| Day | Where | Shows |
+|---|---|---|
+| 23 | Today | Spacewalk planned, verdict go |
+| 42 | Today | Spacewalk planned, verdict no-go: sleep loss is slowing reactions |
+| 49 | Today | The postponed spacewalk, go after recovery |
+| 90 | Today, Check-in | A burn with caution because blood pressure is out of date; the check-in walks through the measurement; the streak has just broken |
+| 97 | Earth link | Critical on board; Earth sees you as you were 4 min 56 s ago; earliest answer 19 min 52 s |
+| 148 | Today, Radiation | Solar particle event; the dashboard card leads to the shelter procedure |
+| 180 | Earth link | Earth is 12 min 29 s away, 12 arcseconds across |
+| any | Earth link | Switch to "Behind the Sun": no contact for 14 days, you are the medical authority |
+| any | Check-in | The 30-second demo of the Reaction Self-Test, which a judge can take |
+
+### What is honest about it, and what is not real
+
+- All mission data is simulated. Only values entered by hand, including a reaction test result, are real.
+- Replies from the flight surgeon are written in advance and labelled as simulated.
+- The Mars transit trajectory is an illustration, not a computed orbit.
+- The dose a shelter avoids is an illustrative estimate with its assumption shown.
+- There is no live space weather. The data services could not be reached while building.
+- The browser reaction test is not a medical instrument. It is good for comparison with your own baseline on the same device.
+- Task readiness limits are project defaults, not flight rules.
+- Citations in the evidence notes and on the Radiation page were confirmed through search results, not by opening every paper. Click each one before the pitch.
+
+### Not finished
+
+- An independent bug review of the Phase 3 code was started and cut off by the usage limit. Every section was driven in a real browser and scanned, but nobody has read all the new code a second time.
+- The mission profile chosen on Earth link is not kept when you leave the section.
+- The older sections of this handbook (thresholds table, patterns, simulated mission day table) do not list the two new indicators, the fatigue pattern or the solar particle event.
 
 ---
 

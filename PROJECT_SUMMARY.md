@@ -1,6 +1,6 @@
 # Demify: Projektübersicht
 
-Stand: 13. November 2026, Phase 1 abgeschlossen, aus Phase 2 ist die Körperkarte fertig (Branch `Phase-1`).
+Stand: 14. November 2026. Branch `Phase-3` enthält alles aus `Phase-1` und dazu vier neue Bereiche (siehe unten).
 
 ## Worum es geht
 
@@ -33,13 +33,25 @@ Unsere Leitidee ist der **autonome Bord-Sanitäter**. Auf dem Weg zum Mars brauc
 | Demo | Simulierte 180-Tage-Mission mit eingebauten Ereignissen und Zeitraffer |
 | Quellen | Jede Messgröße verlinkt auf die NASA-Seite ihres Hazards und auf die NASA-Seite ihres Risikos |
 
-Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 56 (Störung der Lebenserhaltung), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 153 (Unterzucker).
+### Neu in Phase 3
+
+| Bereich | Umsetzung |
+|---|---|
+| Navigation | Vier Bereiche im Kopf: Today, Check-in, Earth link, Radiation. Jeder öffnet am selben Missionstag |
+| Zwei neue Messwerte | Reaktionszeit und tägliche Strahlendosis. Damit hat jeder der fünf NASA-Hazards mindestens einen Messwert |
+| Check-in | Tagesroutine als geführter Ablauf, Reaction Self-Test (nach dem 3-Minuten-Test der ISS, mit 30-Sekunden-Demo) und Mess-Serie |
+| Earth link | Entfernung der Erde, Signallaufzeit aus der Distanz berechnet, Erde in wahrer scheinbarer Größe, Anfrage an den Flight Surgeon mit frühestmöglicher Antwort. Antworten sind simuliert und so beschriftet |
+| Radiation | Missionsdosis gegen das Karrierelimit von 600 mSv, Sonnensturm an Tag 148 und 149, Schutzraum-Checkliste mit Uhren, Übungsmodus |
+| Fit for today's task | Go, Caution oder No-go für die Aufgabe des Tages, mit Gründen und Alternative. Eine Empfehlung, keine Entscheidung |
+| Evidenz | Unter der Zeitleiste nennt jedes simulierte Ereignis, was real beobachtet wurde, mit Quelle. Reine Szenarien sind als solche markiert |
+
+Interessante Tage in der Simulation: 42 (CO₂ plus Schlafmangel), 56 (Störung der Lebenserhaltung), 74 (Infekt), 90 (fällige Messung), 97 und 168 (Herzinfarkt), 130 (Trainingsausfall), 148 (Sonnensturm), 148 (Sonnensturm), 153 (Unterzucker).
 
 ## Technik
 
 - **Framework:** Next.js 16 mit React 19 und TypeScript. Der Server spielt die Rolle des Bordcomputers.
 - **Oberfläche:** Tailwind CSS 4, Charts mit Recharts, Schrift Inter (lokal gebündelt). Dunkles Bühnen-Design mit Animationen, nutzt die volle Bildschirmbreite; Animationen schalten sich bei „Bewegung reduzieren" ab.
-- **Tests:** Vitest, 51 Unit-Tests für Regel-Engine, Simulator, Körperkarte und Datenspeicher.
+- **Tests:** Vitest, 313 Unit-Tests für Regel-Engine, Simulator, Körperkarte, Datenspeicher und die neuen Bereiche.
 - **Container:** `Dockerfile` und `compose.yaml` bauen ein eigenständiges Image; Messdaten liegen in einem Volume.
 
 | Ordner | Inhalt |
@@ -75,9 +87,9 @@ Danach jeweils <http://localhost:3000> öffnen.
 |---|---|---|
 | 1 | Datenmodell, Simulator, Regel-Engine, Dashboard mit Farbcodes | Fertig |
 | 2 | Klickbare Körperkarte, ausführlichere Anleitungen pro Befund | Körperkarte fertig, Schritt-für-Schritt-Anleitungen offen |
-| 3 | Echte Messungen: Bluetooth-Geräte, Puls per Webcam, Reaktionstest, Sehtest | Offen |
-| 4 | Missionskontext (ISS, Mond, Mars), Weltraumwetter mit NASA-Daten, Funkverzögerungs-Modus | Offen |
-| 5 | Gamification, Feinschliff, Pitch | Offen |
+| 3 | Echte Messungen: Bluetooth-Geräte, Puls per Webcam, Reaktionstest, Sehtest | Reaktionstest fertig, Rest offen |
+| 4 | Missionskontext (ISS, Mond, Mars), Weltraumwetter mit NASA-Daten, Funkverzögerungs-Modus | Missionskontext, Funkverzögerung und Strahlung fertig (simuliert); Live-Weltraumwetter offen |
+| 5 | Gamification, Feinschliff, Pitch | Mess-Serie fertig, Pitch offen |
 
 ## Bekannte Grenzen
 
@@ -87,7 +99,9 @@ Danach jeweils <http://localhost:3000> öffnen.
 - **Grenzwerte sind Demo-Werte:** Sie stammen aus allgemeinen klinischen Richtlinien, sind keine Flugregeln und keine medizinische Beratung.
 - **Drei Körpersysteme ohne Messwert:** Augen, Gleichgewicht und Nieren sind auf der Karte erklärt, aber noch nicht gemessen. Ein Sehtest kommt in Phase 3.
 - **Herzinfarkt wird nur an Messwerten erkannt:** Die App kennt keine Symptome wie Brustschmerz und kein echtes EKG. Die Regel meldet deshalb einen möglichen Herzinfarkt und fragt nach den Symptomen.
-- **Strahlung fehlt noch:** Der fünfte NASA-Hazard hat bisher keine Messgröße; er kommt mit Phase 4.
+- **Strahlung ist simuliert:** Die Dosiswerte stammen aus der Simulation, nicht aus einem Dosimeter. Es gibt kein Live-Weltraumwetter; die vermiedene Dosis im Schutzraum ist eine beschriftete Schätzung.
+- **Antworten vom Flight Surgeon sind simuliert** und im Bereich Earth link so gekennzeichnet. Die Flugbahn zum Mars ist eine Veranschaulichung, keine berechnete Bahn.
+- **Der Reaktionstest im Browser ist kein Medizinprodukt.** Er taugt zum Vergleich mit der eigenen Baseline auf demselben Gerät.
 
 ## Offene Entscheidungen
 
