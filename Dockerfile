@@ -103,7 +103,10 @@ COPY --from=builder /app/public ./public
 # copied into the data volume on first start by the entrypoint.
 COPY --from=builder /app/data/snapshots ./data/snapshots-seed
 COPY docker/entrypoint.sh /usr/local/bin/demify-entrypoint
-RUN chmod 0755 /usr/local/bin/demify-entrypoint \
+# Strip CR in case the repo was checked out on Windows with CRLF endings
+# (otherwise: "/bin/sh^M: not found" at container start).
+RUN sed -i 's/\r$//' /usr/local/bin/demify-entrypoint \
+ && chmod 0755 /usr/local/bin/demify-entrypoint \
  && rm -f /app/data/demify-db.json \
  && mkdir -p /app/.next/cache \
  && chown nextjs:nodejs /app/.next/cache

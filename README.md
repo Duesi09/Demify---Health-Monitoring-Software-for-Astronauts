@@ -41,6 +41,8 @@ There is **no public real-time source of astronaut vital signs**, because crew m
 
 ## Quick start
 
+**Docker** (recommended). You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows/macOS (on Windows with the WSL 2 backend) or Docker Engine on Linux. Check that it works with `docker --version`.
+
 **Docker** (recommended):
 
 ```bash
