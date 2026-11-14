@@ -25,7 +25,7 @@ export function AppNav() {
   return (
     <nav
       aria-label="Main"
-      className="sticky top-0 z-20 flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-3 py-2 backdrop-blur md:h-screen md:w-56 md:flex-col md:items-stretch md:gap-1 md:border-b-0 md:border-r md:px-3 md:py-5"
+      className="sticky top-0 z-20 flex shrink-0 md:self-start items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-3 py-2 backdrop-blur md:h-screen md:w-56 md:flex-col md:items-stretch md:gap-1 md:border-b-0 md:border-r md:px-3 md:py-5"
     >
       <Link
         href="/"

@@ -231,7 +231,7 @@ export function BodyFigure({
       aria-label="Interactive body map. Each highlighted body region is a button."
     >
       <defs>
-        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={fillId} gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="505">
           <stop offset="0" style={{ stopColor: "var(--surface-2)" }} />
           <stop offset="1" style={{ stopColor: "var(--surface)" }} />
         </linearGradient>
