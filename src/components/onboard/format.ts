@@ -415,6 +415,12 @@ export function modeLine(a: Pick<AssistantAnswer, "status" | "citations" | "mode
 
 export const MED_KIT_NOTE = "Representative training inventory, not the actual ISS medical kit.";
 
+/** A kit item's notes without the per-item training-inventory sentence (the table states it once). */
+export function kitItemNote(notes: string | undefined): string | null {
+  const rest = (notes ?? "").replace(/Representative training inventory, not the (?:real|actual) ISS (?:medical )?kit\.\s*/i, "").trim();
+  return rest || null;
+}
+
 /** "2 each" / "1 set" / "—". */
 export function quantityText(item: Pick<MedKitItem, "quantity" | "unit">): string {
   if (item.quantity == null) return "—";

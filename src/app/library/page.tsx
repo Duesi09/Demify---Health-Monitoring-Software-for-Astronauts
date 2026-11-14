@@ -10,6 +10,7 @@ import {
   databaseText,
   durationText,
   expiryState,
+  kitItemNote,
   quantityText,
   shortVersion,
   syncDetailText,
@@ -164,7 +165,7 @@ export default async function LibraryPage() {
               <tbody>
                 {listing.inventory.map((item) => {
                   const expiry = expiryState(item.expiresOn, today);
-                  const note = item.notes?.replace(/Representative training inventory, not the real ISS kit\.\s*/i, "").trim();
+                  const note = kitItemNote(item.notes);
                   return (
                     <tr key={item.id} className="border-t border-border">
                       <td className={`${TD} font-medium`}>
