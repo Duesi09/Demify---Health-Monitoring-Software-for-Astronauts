@@ -20,7 +20,7 @@ export function isSensorOnly(crew: Pick<CrewMember, "id">): boolean {
  * a few seconds of silence mean "no pulse detected" and the monitor goes back
  * to no signal quickly instead of holding the last value for two minutes.
  */
-export const SENSOR_ONLY_FRESH_MS = 8_000;
+export const SENSOR_ONLY_FRESH_MS = 2_500;
 
 /** True when the demo telemetry generator should fill in values for this crew member. */
 export function simulatesTelemetry(crew: Pick<CrewMember, "id">): boolean {
