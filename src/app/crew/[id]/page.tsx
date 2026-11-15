@@ -28,6 +28,7 @@ import { effectiveLink } from "@/lib/onboard/effective-link";
 import { getCrew } from "@/lib/store/readings";
 import { listScenarios } from "@/lib/store/scenarios";
 import type { LiveVitals } from "@/lib/types";
+import { isSensorOnly } from "@/lib/crew-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -140,8 +141,17 @@ export default async function CrewMemberPage(props: PageProps<"/crew/[id]">) {
               Vital signs, beat by beat.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-white/60 md:text-base">
-              Simulated training monitor for {crew.name}: ECG, arterial pressure, pleth and respiration.{" "}
-              {TELEMETRY_CAPTION[live.source]}; waveforms synthesised from telemetry.
+              {isSensorOnly(crew) ? (
+                <>
+                  Live training monitor for {crew.name}: heart rate from a phone camera pulse estimate (DEVICE), not a
+                  medical measurement. This crew member is never simulated: without a signal the monitor shows --.
+                </>
+              ) : (
+                <>
+                  Simulated training monitor for {crew.name}: ECG, arterial pressure, pleth and respiration.{" "}
+                  {TELEMETRY_CAPTION[live.source]}; waveforms synthesised from telemetry.
+                </>
+              )}
             </p>
           </div>
           <div className="relative mx-auto mt-10 max-w-[1240px] md:mt-14">
