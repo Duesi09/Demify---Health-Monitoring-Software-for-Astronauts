@@ -117,7 +117,7 @@ The step changes with the signal delay of the link (see "Escalation and signal d
 Patient-monitor alarm limits, modelled on common bedside-monitor defaults (adult). High priority is red and life-threatening (IEC 60601-1-8 high priority); medium priority is yellow. These are acute, beat-to-beat alarms; the slower health assessment (ranges, trends, escalations) is separate.
 
 - Heart rate: high priority above 150 or below 40 bpm; medium priority above 120 or below 45 bpm. During scheduled exercise: high above 185, medium above 170 bpm. During sleep: high below 35, medium below 40 bpm.
-- Systolic blood pressure: high priority above 180 or below 80 mmHg; medium priority above 160 or below 90 mmHg.
+- Systolic blood pressure: high priority above 180 or below 80 mmHg; medium priority above 160 or below 90 mmHg. During scheduled exercise, when systolic pressure rises normally: high above 250, medium above 210 mmHg (exercise-testing practice). Training drills always use the resting limits.
 - SpO₂: high priority below 88 %; medium priority below 92 %.
 - Respiratory rate: high priority at 4 /min or below (APNEA at 0); medium priority above 28 /min (above 45 /min during exercise) or below 8 /min.
 - ST elevation: high priority at 1 mm or more.

@@ -392,7 +392,7 @@ export function PatientMonitor({ crewId, initial }: { crewId: string; initial: L
               label="ABP"
               color={MONITOR_COLOR.abp}
               alarm={abpAlarm}
-              limits={[String(L.sys.high), String(L.sys.low)]}
+              limits={[String(lim.sysHigh), String(L.sys.low)]}
               className="order-2 @3xl:order-3 @3xl:col-span-2"
             >
               <div className="flex flex-wrap items-baseline gap-x-2">

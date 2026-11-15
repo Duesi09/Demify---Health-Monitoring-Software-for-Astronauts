@@ -15,6 +15,14 @@ export const ALARM_LIMITS = {
   /** During sleep lower rates are expected. */
   hrSleep: { low: 40, lowLow: 35 },
   sys: { highHigh: 180, high: 160, low: 90, lowLow: 80 },
+  /**
+   * During scheduled exercise systolic pressure rises normally. Exercise-testing
+   * practice (ACC/AHA, Fletcher et al., Circulation 2013) treats a systolic
+   * pressure above 250 mmHg as a reason to stop exercise; about 210 mmHg and
+   * more is commonly called an exaggerated blood-pressure response. Drills always
+   * use the resting limits (a scenario sets activity "rest").
+   */
+  sysExercise: { highHigh: 250, high: 210 },
   spo2: { low: 92, lowLow: 88 },
   resp: { high: 28, low: 8, apnea: 4 },
   respExercise: { high: 45 },
@@ -66,8 +74,9 @@ export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
 
   if (v.sys != null) {
     const sys = Math.round(v.sys);
-    if (sys > L.sys.highHigh) add("abp", "high", `ABP SYS ${sys} > ${L.sys.highHigh}`, "systolicBP");
-    else if (sys > L.sys.high) add("abp", "medium", `ABP SYS HIGH ${sys} > ${L.sys.high}`, "systolicBP");
+    const hiSys = v.activity === "exercise" ? L.sysExercise : L.sys;
+    if (sys > hiSys.highHigh) add("abp", "high", `ABP SYS ${sys} > ${hiSys.highHigh}`, "systolicBP");
+    else if (sys > hiSys.high) add("abp", "medium", `ABP SYS HIGH ${sys} > ${hiSys.high}`, "systolicBP");
     else if (sys < L.sys.lowLow) add("abp", "high", `ABP SYS ${sys} < ${L.sys.lowLow}`, "systolicBP");
     else if (sys < L.sys.low) add("abp", "medium", `ABP SYS LOW ${sys} < ${L.sys.low}`, "systolicBP");
   }

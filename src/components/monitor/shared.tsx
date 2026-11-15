@@ -145,7 +145,7 @@ export function ActivityTag({ activity, className = "" }: { activity: LiveVitals
   );
 }
 
-/** Heart-rate / resp alarm limits for the current activity (mirrors computeAlarms). */
+/** Heart-rate / resp / systolic alarm limits for the current activity (mirrors computeAlarms). */
 export function activityLimits(activity: LiveVitals["activity"]) {
   const L = ALARM_LIMITS;
   return {
@@ -153,6 +153,7 @@ export function activityLimits(activity: LiveVitals["activity"]) {
     hrLow: activity === "sleep" ? L.hrSleep.low : L.hr.low,
     respHigh: activity === "exercise" ? L.respExercise.high : L.resp.high,
     respLow: L.resp.low,
+    sysHigh: activity === "exercise" ? L.sysExercise.high : L.sys.high,
   };
 }
 
