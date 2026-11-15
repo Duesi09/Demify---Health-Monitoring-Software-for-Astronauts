@@ -130,6 +130,13 @@ export const config = {
   fetchTimeoutMs: numberEnv("DEMIFY_FETCH_TIMEOUT_MS", 8000, 1),
   /** Enables the demo telemetry generator for heart rate, BP etc. */
   simulateTelemetry: env("DEMIFY_SIMULATE")?.toLowerCase() !== "false",
+  /**
+   * Healthy simulated crew (pitch demo): no scripted health stories (stress,
+   * sleep debt, under-drinking, raised blood pressure or heart rate), so every
+   * simulated crew member shows nominal values. DEMIFY_HEALTHY_CREW=false
+   * brings the stories back. Drills and real sensor data are unaffected.
+   */
+  healthyCrew: env("DEMIFY_HEALTHY_CREW")?.toLowerCase() !== "false",
   mission: missionEnv(),
   /** Mission start (ISO date). Defaults to 92 days ago so the demo has history. */
   missionStart: missionStartEnv(),

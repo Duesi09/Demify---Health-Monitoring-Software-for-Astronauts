@@ -1,4 +1,5 @@
 import "server-only";
+import { config } from "../config";
 import { SEIZURE_ACTIVE_S } from "../monitor/drills";
 import type { CrewMember, IndicatorId, Reading, Rhythm, Scenario, ScenarioType } from "../types";
 
@@ -125,6 +126,24 @@ const SIGNALS: Signal[] = [
   },
 ];
 
+/**
+ * Healthy crew (config.healthyCrew): resting and sleeping vital signs stay in
+ * the middle of their nominal ranges (knowledge.ts), so noise never tips a
+ * value into "caution". Workout values keep their normal rise.
+ */
+const HEALTHY_VITALS: Partial<Record<IndicatorId, [number, number]>> = {
+  heartRate: [56, 92],
+  systolicBP: [102, 124],
+  diastolicBP: [62, 76],
+  spo2: [96, 100],
+  bodyTemp: [36.4, 37.6],
+  respRate: [13, 18],
+};
+function healthyVital(indicator: IndicatorId, v: number, exercising: boolean): number {
+  const band = config.healthyCrew && !exercising ? HEALTHY_VITALS[indicator] : undefined;
+  return band ? Math.min(band[1], Math.max(band[0], v)) : v;
+}
+
 function context(crew: CrewMember, t: number): Ctx {
   const seed = seedOf(crew.id);
   const step = Math.floor(t / (STEP_MIN * 60_000));
@@ -136,7 +155,7 @@ function context(crew: CrewMember, t: number): Ctx {
   const sleeping = hourUtc >= 21.5 || hourUtc < 6;
   // Scripted anomaly ramps up over the last 6 h.
   const hoursAgo = (Date.now() - t) / 3_600_000;
-  const anomaly = Math.max(0, Math.min(1, (6 - hoursAgo) / 6));
+  const anomaly = config.healthyCrew ? 0 : Math.max(0, Math.min(1, (6 - hoursAgo) / 6));
   return {
     crew,
     t,
@@ -160,7 +179,7 @@ export function simulateSeries(
   for (let t = start; t <= to; t += stepMs) {
     const ctx = context(crew, t);
     for (const s of SIGNALS) {
-      const v = s.value(ctx);
+      const v = healthyVital(s.indicator, s.value(ctx), ctx.exercising);
       out.push({
         id: `sim-${crew.id}-${s.indicator}-${t}`,
         crewId: crew.id,
@@ -194,18 +213,39 @@ interface DailyDef {
   value: (crew: CrewMember, day: number, daysAgo: number, n: (k: number) => number) => number;
 }
 
+/**
+ * Healthy crew (config.healthyCrew): steady daily values in the middle of their
+ * nominal ranges (knowledge.ts), with little day-to-day noise, so no trend rule
+ * (mood drop, stress rise) fires either.
+ */
+const HEALTHY_DAILY: Partial<Record<IndicatorId, (c: CrewMember, n: (k: number) => number) => number>> = {
+  sleepHours: (_c, n) => 7.9 + 0.3 * n(1),
+  mood: (_c, n) => 8 + 0.4 * n(2),
+  stress: (_c, n) => 2.4 + 0.4 * n(3),
+  glucose: (c, n) => Math.min(94, c.baseline.glucose ?? 90) + 2 * n(4),
+  hydration: (_c, n) => 3.0 + 0.2 * n(5),
+  exerciseMinutes: (_c, n) => 108 + 8 * n(6),
+  bodyMassChange: (_c, n) => -0.8 + 0.2 * n(7),
+  visionChange: () => 0,
+  boneLoss: (_c, n) => 0.6 + 0.05 * n(8),
+  cabinCO2: (_c, n) => 2.0 + 0.1 * n(9),
+};
+
+/** A scripted health story for this crew member (off with the healthy crew, config.healthyCrew). */
+const story = (c: CrewMember, id: string) => !config.healthyCrew && c.id === id;
+
 const DAILY: DailyDef[] = [
   {
     indicator: "sleepHours", unit: "h", hourUtc: 6.5, decimals: 1,
-    value: (c, _d, ago, n) => (c.id === "ms2" ? 7 - Math.max(0, 8 - ago) * 0.25 : 7.3) + 0.5 * n(1),
+    value: (c, _d, ago, n) => (story(c, "ms2") ? 7 - Math.max(0, 8 - ago) * 0.25 : 7.3) + 0.5 * n(1),
   },
   {
     indicator: "mood", unit: "/10", hourUtc: 7, decimals: 0,
-    value: (c, _d, ago, n) => (c.id === "ms2" && ago < 4 ? 5 : 7) + 1.2 * n(2),
+    value: (c, _d, ago, n) => (story(c, "ms2") && ago < 4 ? 5 : 7) + 1.2 * n(2),
   },
   {
     indicator: "stress", unit: "/10", hourUtc: 7, decimals: 0,
-    value: (c, _d, ago, n) => (c.id === "cdr" ? 3 + Math.max(0, 7 - ago) * 0.55 : 3) + 0.8 * n(3),
+    value: (c, _d, ago, n) => (story(c, "cdr") ? 3 + Math.max(0, 7 - ago) * 0.55 : 3) + 0.8 * n(3),
   },
   {
     indicator: "glucose", unit: "mg/dL", hourUtc: 7.2, decimals: 0,
@@ -213,7 +253,7 @@ const DAILY: DailyDef[] = [
   },
   {
     indicator: "hydration", unit: "L", hourUtc: 20, decimals: 1,
-    value: (c, _d, _a, n) => (c.id === "plt" ? 1.9 : 2.7) + 0.3 * n(5),
+    value: (c, _d, _a, n) => (story(c, "plt") ? 1.9 : 2.7) + 0.3 * n(5),
   },
   {
     indicator: "exerciseMinutes", unit: "min", hourUtc: 20, decimals: 0,
@@ -221,11 +261,11 @@ const DAILY: DailyDef[] = [
   },
   {
     indicator: "bodyMassChange", unit: "%", hourUtc: 7.5, decimals: 1,
-    value: (c, _d, _a, n) => (c.id === "plt" ? -3.1 : -1.2) + 0.2 * n(7),
+    value: (c, _d, _a, n) => (story(c, "plt") ? -3.1 : -1.2) + 0.2 * n(7),
   },
   {
     indicator: "visionChange", unit: "/3", hourUtc: 7.5, decimals: 0,
-    value: (c) => (c.id === "cdr" ? 1 : 0),
+    value: (c) => (story(c, "cdr") ? 1 : 0),
   },
   {
     indicator: "boneLoss", unit: "%/month", hourUtc: 20.5, decimals: 1,
@@ -247,7 +287,9 @@ export function simulateDaily(crew: CrewMember, from: number, to: number = Date.
     for (const d of DAILY) {
       const t = dayStart + d.hourUtc * 3_600_000;
       if (t < from || t > to) continue;
-      const def = d.value(crew, day, daysAgo, (k) => hash(seed * 3 + day * 17 + k * 7));
+      const noise = (k: number) => hash(seed * 3 + day * 17 + k * 7);
+      const healthy = config.healthyCrew ? HEALTHY_DAILY[d.indicator] : undefined;
+      const def = healthy ? healthy(crew, noise) : d.value(crew, day, daysAgo, noise);
       const [lo, hi] = d.indicator === "mood" || d.indicator === "stress" ? [1, 10] : [-100, 1e6];
       const v = Math.min(hi, Math.max(lo, def));
       out.push({
@@ -314,7 +356,8 @@ export function baseState(crew: CrewMember, t: number): PhysioState {
   const ctx = context(crew, t);
   const seed = seedOf(crew.id);
   const val = (id: IndicatorId) => SIGNALS.find((s) => s.indicator === id)!.value(ctx);
-  const hr = val("heartRate") + 2 * jitter(seed, t, 1);
+  const hv = (id: IndicatorId, v: number) => healthyVital(id, v, ctx.exercising);
+  const hr = hv("heartRate", val("heartRate") + 2 * jitter(seed, t, 1));
   return {
     activity: ctx.exercising ? "exercise" : ctx.sleeping ? "sleep" : "rest",
     hr,
@@ -322,11 +365,11 @@ export function baseState(crew: CrewMember, t: number): PhysioState {
     stMm: 0.05 * jitter(seed, t, 7),
     pvcPerMin: 0,
     motion: 0,
-    sys: val("systolicBP") + 2 * jitter(seed, t, 2),
-    dia: val("diastolicBP") + 1.5 * jitter(seed, t, 3),
-    spo2: Math.min(100, val("spo2") + 0.5 * jitter(seed, t, 4)),
-    resp: val("respRate") + jitter(seed, t, 6),
-    temp: val("bodyTemp"),
+    sys: hv("systolicBP", val("systolicBP") + 2 * jitter(seed, t, 2)),
+    dia: hv("diastolicBP", val("diastolicBP") + 1.5 * jitter(seed, t, 3)),
+    spo2: hv("spo2", Math.min(100, val("spo2") + 0.5 * jitter(seed, t, 4))),
+    resp: hv("respRate", val("respRate") + jitter(seed, t, 6)),
+    temp: hv("bodyTemp", val("bodyTemp")),
   };
 }
 

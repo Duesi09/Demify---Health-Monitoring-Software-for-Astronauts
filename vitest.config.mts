@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // The tests check the scripted health stories; the pitch build runs the healthy crew (src/lib/config.ts).
+    env: { DEMIFY_HEALTHY_CREW: "false" },
   },
 });
