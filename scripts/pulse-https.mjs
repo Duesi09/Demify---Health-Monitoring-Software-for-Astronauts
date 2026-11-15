@@ -162,6 +162,18 @@ async function main() {
   const target = opts.targetUrl;
 
   const server = https.createServer(tls, (req, res) => {
+    // Links in the style of the earlier demify-pulse gateway
+    // (https://<ip>:8443/?token=...&crew=test) open the phone page directly.
+    // The token is not needed here and is dropped.
+    if (req.method === "GET" && req.url) {
+      const u = new URL(req.url, "https://pulse.local");
+      if (u.pathname === "/" && (u.searchParams.has("crew") || u.searchParams.has("token"))) {
+        const crew = u.searchParams.get("crew") || opts.crew;
+        res.writeHead(302, { location: `/pulse?crew=${encodeURIComponent(crew)}`, "cache-control": "no-store" });
+        res.end();
+        return;
+      }
+    }
     const upstream = http.request(
       {
         hostname: target.hostname,
