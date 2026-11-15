@@ -24,7 +24,7 @@ function prefixLines(stream, prefix, out) {
 }
 
 function run(name) {
-  const prefix = `[${name}]`.padEnd(9);
+  const prefix = `[${name === "broker-lite" ? "broker" : name}]`.padEnd(9);
   const child = spawn(process.execPath, [join(ROOT, `${name}.mjs`)], {
     cwd: ROOT,
     stdio: ["ignore", "pipe", "pipe"],
@@ -62,5 +62,10 @@ const PID_FILE = join(ROOT, ".start.pid");
 writeFileSync(PID_FILE, String(process.pid));
 process.on("exit", () => rmSync(PID_FILE, { force: true }));
 
-run("gateway");
-run("bridge");
+// EMBEDDED_BROKER=1 (set by tools/one-click.mjs when no broker runs): start
+// the built-in broker first, so no Docker is needed.
+if (process.env.EMBEDDED_BROKER === "1") run("broker-lite");
+setTimeout(() => {
+  run("gateway");
+  run("bridge");
+}, process.env.EMBEDDED_BROKER === "1" ? 800 : 0);

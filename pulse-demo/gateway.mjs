@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { join, resolve, extname, sep } from "node:path";
 import mqtt from "mqtt";
 import selfsigned from "selfsigned";
+import QRCode from "qrcode";
 import { loadEnv, mask, stamp, ROOT } from "./lib/env.mjs";
 import {
   validatePulse,
@@ -300,6 +301,13 @@ function printLinks(heading) {
   out.push(` MQTT: ${env.MQTT_URL}   pulse token: ${mask(env.PULSE_TOKEN)}`);
   out.push("==================================================================", "");
   console.log(out.join("\n"));
+  // QR code of the hotspot link: scan it with the phone camera instead of typing.
+  const best = ifaces.find(likely);
+  if (best) {
+    QRCode.toString(`https://${best.ip}:${env.PORT}/?${token}crew=${env.CREW_ID}`, { type: "terminal", small: true })
+      .then((qr) => console.log(` Scan with the phone camera (${best.ip}):\n${qr}`))
+      .catch(() => {});
+  }
 }
 
 server.listen(env.PORT, "0.0.0.0", () => {

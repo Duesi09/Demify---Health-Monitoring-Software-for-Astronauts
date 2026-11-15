@@ -19,6 +19,21 @@ Mosquitto in Docker (127.0.0.1:1883 only)
 bridge.mjs ── POST http://127.0.0.1:3000/api/readings ──► Demify /crew/cdr
 ```
 
+## One click (any Windows laptop)
+
+1. Get the repo: `git clone` it (or download the ZIP), branch **OG-Presentation**.
+2. Double-click **`pulse-demoSTART-DEMO.cmd`**.
+
+It installs Node.js if missing (winget; then double-click again), installs the
+packages, creates `.env` with a fresh phone token, starts Demify in its own
+window, opens the monitor `/crew/test` in the browser, and starts the phone
+part with a **built-in MQTT broker** (Docker is not needed; a running
+Mosquitto on 1883 is used instead if there is one). The window prints the
+phone link and a **QR code**: put laptop and phone on the same network (best
+the phone's hotspot) and scan it. If Windows asks whether Node.js may use the
+network: Private, Allow. Firewalls such as Portmaster must allow inbound
+connections for Node.js. Stop: close the window.
+
 ## Everyday use
 
 ```powershell
