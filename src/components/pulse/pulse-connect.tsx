@@ -56,6 +56,13 @@ export function PulseConnect({
           </li>
         </ol>
 
+        <p className="rounded-lg border border-border bg-surface p-3 text-[13px]">
+          <b>Phone does not load the page?</b> Use the USB cable instead: USB debugging on the phone, then{" "}
+          <code className="font-mono">npm run pulse:usb</code> on the laptop, and on the phone in Chrome{" "}
+          <code className="font-mono">http://localhost:3000/pulse?crew=test</code> (no Wi-Fi, firewall or certificate
+          involved). See docs/PHONE-PULSE.md.
+        </p>
+
         <div className="space-y-2">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted">Laptop address for the phone</p>
           {candidates.length > 0 ? (

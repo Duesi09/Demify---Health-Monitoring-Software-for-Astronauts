@@ -49,6 +49,36 @@ phone (Chrome)  --https:8443-->  scripts/pulse-https.mjs  --http-->  Demify :300
    Lifting the finger stops the readings; the monitor goes back to no signal
    after about 8 s.
 
+## Over a USB cable (recommended on stage)
+
+No Wi-Fi, no firewall, no certificate: the phone reaches Demify through the
+cable with `adb reverse`. Use this when a hotspot or venue network blocks
+devices from reaching each other (some phone hotspots do).
+
+1. On the phone, once: Settings -> About phone -> Software information ->
+   tap **Build number** 7 times. Then Settings -> Developer options ->
+   **USB debugging** on.
+2. Connect the phone with a data cable and confirm **Allow USB debugging**.
+3. Android platform tools, once, in the Demify folder (Git Bash; the folder
+   is git-ignored):
+
+   ```bash
+   curl -LO https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+   unzip -o platform-tools-latest-windows.zip
+   ```
+
+4. With Demify running on port 3000:
+
+   ```bash
+   npm run pulse:usb
+   ```
+
+5. On the phone in Chrome: `http://localhost:3000/pulse?crew=test`
+   (localhost counts as secure, so the camera is allowed without HTTPS).
+
+Run `npm run pulse:usb` again after re-plugging the cable. Close
+`chrome://inspect` tabs on the laptop; they compete with adb for the phone.
+
 ## How the estimate works
 
 `src/lib/pulse/estimator.ts`: mean red and green brightness of a centre
@@ -63,7 +93,7 @@ five estimates. Tests with synthetic pulse signals: `tests/pulse-estimator.test.
 
 | Problem | Fix |
 |---|---|
-| Phone cannot open the page (timeout) | Laptop really in **this** phone's hotspot? Firewall allows Node.js inbound on **Public** networks too (Windows, Portmaster)? Old block rule for Node.js? |
+| Phone cannot open the page (timeout) | Fastest: the USB cable (above). Otherwise: laptop really in **this** phone's hotspot? Firewall allows Node.js inbound on **Public** networks too (Windows, Portmaster)? Old block rule for Node.js? |
 | Flash stays off | Tap "Try torch again". Close other apps that use the camera. Otherwise a bright lamp behind the finger. |
 | "The camera needs HTTPS" | Open the `https://…:8443` link, not `http://…:3000`. |
 | `--` stays, "Searching for a steady pulse" | Press lighter (pressing hard stops the blood flow), keep the hand still, cover camera and flash completely. |

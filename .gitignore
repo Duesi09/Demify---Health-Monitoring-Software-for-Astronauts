@@ -49,3 +49,6 @@ next-env.d.ts
 
 # phone pulse demo: self-signed certificate (scripts/pulse-https.mjs)
 /.pulse-cert/
+# phone pulse demo over USB: Android platform tools unpacked here (scripts/pulse-usb.mjs)
+/platform-tools/
+/platform-tools-latest-*.zip

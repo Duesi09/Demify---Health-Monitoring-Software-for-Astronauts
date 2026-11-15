@@ -13,6 +13,7 @@
     "snapshots:promote": "node scripts/promote-snapshots.mjs",
     "sensor:demo": "node scripts/sensor-demo.mjs",
     "pulse:https": "node scripts/pulse-https.mjs",
+    "pulse:usb": "node scripts/pulse-usb.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "library:ingest": "node scripts/library-ingest.mjs",
     "sync:service": "node scripts/sync-service.mjs",
