@@ -812,13 +812,23 @@ try {
     Confirm-Ollama
     Write-Step 'Step 3 of 5: Language model for this computer'
     Show-HardwareAndModel
+    $envModel = Get-EnvFileValue 'DEMIFY_LLM_MODEL'
     if ($Model -ne '') {
       Write-Info ('Suggested for this computer: ' + $script:ChosenModel)
       $script:ChosenModel = $Model
       $script:ChosenReason = 'chosen with -Model.'
+      Write-Info ('Model: ' + $script:ChosenModel)
+      Write-Info ('Why:   ' + $script:ChosenReason)
+    } elseif ($envModel -ne '') {
+      # A re-run (for example after git pull) keeps the model this computer already uses.
+      Write-Info ('Suggested for this computer: ' + $script:ChosenModel)
+      $script:ChosenModel = $envModel
+      $script:ChosenReason = 'kept from .env.'
+      Write-Info ('Model: ' + $script:ChosenModel + ' (from .env; -Model <name> to change)')
+    } else {
+      Write-Info ('Model: ' + $script:ChosenModel)
+      Write-Info ('Why:   ' + $script:ChosenReason)
     }
-    Write-Info ('Model: ' + $script:ChosenModel)
-    Write-Info ('Why:   ' + $script:ChosenReason)
     if ($script:IsSpark) {
       Write-Info 'This is an NVIDIA DGX Spark. The installer sets up the single-container Demify; the'
       Write-Info 'full onboard server (PostgreSQL, model server, sync) is described in docs/SPARK.md.'
@@ -876,7 +886,7 @@ try {
   Write-Host ''
   Write-Info ('To stop Demify:        docker compose down        (in ' + $Root + ')')
   Write-Info 'To start it again:     docker compose up -d'
-  Write-Info 'To update:             git pull, then run the installer again: powershell -ExecutionPolicy Bypass -File install.ps1'
+  Write-Info 'To update:             git pull origin Project-2-Phase-1, then run the installer again: powershell -ExecutionPolicy Bypass -File install.ps1'
   if (-not $NoModel) { Write-Info ('To remove the model:   ollama rm ' + $script:ChosenModel) }
   Write-Info 'Help: docs\INSTALL.md'
 } finally {

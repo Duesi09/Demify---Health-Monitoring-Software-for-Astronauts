@@ -203,6 +203,19 @@ describe.skipIf(!TEST_DB)("onboard assistant on PostgreSQL with the fake model s
     expect(a.integrityFailures).toBe(0);
   });
 
+  it.each([
+    ["Jemand hat einen Krampfanfall, was tun wir zuerst?", /Seizure/],
+    ["Wo ist das Pulsoximeter im Medizinkit?", /./],
+    ["Someone is having a seizure, what do we do?", /Seizure/],
+    // Full-text ranking puts the ST-segment chest-pain actions first; the fake model cites passage [1] only.
+    ["The commander has crushing chest pain and is sweating. What should the crew do first?", /heart attack|ST segment/],
+  ])("German and natural questions find passages in database mode: %j", async (question, heading) => {
+    const a = await (await answer()).askAssistant({ question });
+    expect(a.status).toBe("answered");
+    expect(a.citations.length).toBeGreaterThan(0);
+    expect(a.citations.some((c) => heading.test(c.heading)), JSON.stringify([a.mode, a.citations.map((c) => [c.heading, c.score])])).toBe(true);
+  });
+
   it("says the library has no good answer to the kidney stone question", async () => {
     const a = await (await answer()).askAssistant({ question: NO_ANSWER_QUESTION });
     expect(a).toMatchObject({ status: "no-answer", citations: [] });

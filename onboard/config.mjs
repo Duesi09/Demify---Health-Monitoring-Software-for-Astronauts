@@ -64,7 +64,8 @@ export function onboardConfig(env = process.env) {
     syncMaxAgeHours: num(env, "DEMIFY_SYNC_MAX_AGE_HOURS", 24, 1),
     appUrl: (str(env, "DEMIFY_APP_URL") ?? "http://127.0.0.1:3000").replace(/\/+$/, ""),
     minScore: num(env, "DEMIFY_ASSISTANT_MIN_SCORE", 0.5, 0),
-    topK: Math.floor(num(env, "DEMIFY_ASSISTANT_TOP_K", 5, 1)),
+    // 3: shorter prompts answer faster on a laptop CPU (each passage ~300 tokens to read).
+    topK: Math.floor(num(env, "DEMIFY_ASSISTANT_TOP_K", 3, 1)),
     offline: str(env, "DEMIFY_OFFLINE")?.toLowerCase() === "true",
     dataDir: str(env, "DEMIFY_DATA_DIR") ?? path.join(process.cwd(), "data"),
     adminToken: str(env, "DEMIFY_ADMIN_TOKEN"),

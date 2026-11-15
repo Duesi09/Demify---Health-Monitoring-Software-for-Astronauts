@@ -80,7 +80,7 @@ function InlineText({ parts, prefix, citations }: { parts: Inline[]; prefix: str
 }
 
 /** Paragraphs and "- " lists of the answer text, rendered as React elements (never as HTML). */
-function AnswerText({ text, prefix, citations, hasCrew }: { text: string; prefix: string; citations: Citation[]; hasCrew: boolean }) {
+export function AnswerText({ text, prefix, citations, hasCrew }: { text: string; prefix: string; citations: Citation[]; hasCrew: boolean }) {
   const known = citations.map((c) => c.n);
   return (
     <div className="space-y-2.5 text-[15px] leading-relaxed">
@@ -161,7 +161,8 @@ function PassageText({ text }: { text: string }) {
   );
 }
 
-function CitationItem({ c, prefix, askedAt }: { c: Citation; prefix: string; askedAt: string }) {
+/** One cited library passage: title, category, source and review status, excerpt (whole passage on demand), version and checksum. */
+export function CitationItem({ c, prefix, askedAt }: { c: Citation; prefix: string; askedAt: string }) {
   // Citation.text is the whole checksum-verified passage; older answers may lack it.
   const full = typeof c.text === "string" ? c.text.trim() : "";
   const whole = excerptIsWhole(c.excerpt, full);

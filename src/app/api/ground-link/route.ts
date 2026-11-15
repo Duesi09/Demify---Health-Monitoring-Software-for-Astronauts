@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { isCrossOrigin, isJson, requireAdmin } from "@/lib/http";
 import { getGroundLink, setGroundLink } from "@/lib/onboard/ground-link";
+import { warmModel } from "@/lib/assistant/warm";
+import { onboardConfig } from "@onboard/config.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,8 @@ const Switch = z.object({
 
 /** GET /api/ground-link — the simulated ground link switch (GroundLinkState). */
 export async function GET() {
+  // The nav chip polls this on every page: keep the local model loaded (throttled, background).
+  warmModel(onboardConfig());
   return Response.json(await getGroundLink(), { headers: NO_STORE });
 }
 

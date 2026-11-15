@@ -15,7 +15,7 @@ export const ANALYTE_INFO: Record<string, AnalyteInfo> = {
   // Metabolic panel (CMP)
   glucose: {
     system: "Metabolism",
-    why: "Launch and landing stress hormones (cortisol, adrenaline) and physical inactivity reduce insulin sensitivity. Long-duration crews develop measurable insulin resistance, so glucose is a simple screen for metabolic strain.",
+    why: "Launch and landing stress hormones such as cortisol, together with physical inactivity, reduce glucose tolerance; long-duration crews develop measurable glucose intolerance, so glucose is a simple screen for metabolic strain.",
   },
   calcium: {
     system: "Bone",

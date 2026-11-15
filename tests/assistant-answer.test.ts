@@ -80,7 +80,15 @@ vi.mock("@/lib/store/readings", async () => {
 vi.mock("@/lib/health/assess", () => ({ assessCrewMember: mocks.assess }));
 vi.mock("@/lib/monitor/live", () => ({ getLiveVitals: mocks.live }));
 
-import { askAssistant, AssistantBusyError, EXCERPT_MAX, excerpt, MAX_CONCURRENT_CHATS, resetAssistantState } from "@/lib/assistant/answer";
+import {
+  askAssistant,
+  AssistantBusyError,
+  EXCERPT_MAX,
+  excerpt,
+  MAX_CONCURRENT_CHATS,
+  resetAssistantState,
+  VECTOR_GATE_REASON,
+} from "@/lib/assistant/answer";
 import { libraryFreshness, libraryListing, libraryStatus, resetLibrarySourceState, resolveLibrary, syncNow } from "@/lib/assistant/library-source";
 import {
   ACT_NOW_LINE,
@@ -204,6 +212,16 @@ describe("laptop setup: bundled library, no model", () => {
     expect(calm.reason).toBe(PASSAGES_ONLY_REASON.notConfigured);
   });
 
+  it.each([
+    ["Someone is having a seizure, what do we do?", /^Seizure/],
+    ["The commander has crushing chest pain and is sweating. What should the crew do first?", /^Suspected heart attack/],
+  ])("finds the checklist for a natural question %j", async (question, heading) => {
+    const a = await askAssistant({ question }, laptop());
+    expect(a.status).toBe("passages-only");
+    expect(a.citations[0].docId).toBe("alarm-response");
+    expect(a.citations[0].heading.split(" › ").at(-1)).toMatch(heading);
+  });
+
   it("says the library has no good answer instead of guessing", async () => {
     const a = await askAssistant({ question: NO_ANSWER_QUESTION }, laptop());
     expect(a).toMatchObject({ status: "no-answer", answer: null, reason: NO_ANSWER_LINK_UP, citations: [] });
@@ -274,12 +292,22 @@ describe("with a model", () => {
 
   it("an answer without a valid citation is not shown", async () => {
     mocks.searchLibrary.mockResolvedValue(vector([hit(1), hit(2)]));
-    mocks.chat.mockResolvedValue("Start the emergency checklist [5].");
+    // Not copied from a passage (copied text would be cited with its passage, see the answer check).
+    mocks.chat.mockResolvedValue("Begin the emergency procedure [5].");
     const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
     expect(a).toMatchObject({ status: "passages-only", answer: null, reason: PASSAGES_ONLY_REASON.uncited });
     expect(a.citations.map((c) => c.n)).toEqual([1, 2]);
     expect(a.mode.model).toBeNull();
     expect(a.mode.fallbackReason).toMatch(/cited no passage that exists/);
+  });
+
+  it("a sentence copied from a passage with a marker out of range is cited with that passage", async () => {
+    mocks.searchLibrary.mockResolvedValue(vector([hit(1), hit(2)]));
+    mocks.chat.mockResolvedValue("Start the emergency checklist and call the crew [5].");
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a.status).toBe("answered");
+    expect(a.answer).toBe("Start the emergency checklist and call the crew [1].");
+    expect(a.citations.map((c) => c.n)).toEqual([1]);
   });
 
   it("an answer with a dose pattern is not shown", async () => {
@@ -462,6 +490,29 @@ describe("retrieval gates and integrity", () => {
     mocks.searchLibrary.mockResolvedValue(vector([hit(1, { score: 0.56 })]));
     const offTopic = await askAssistant({ question: NO_ANSWER_QUESTION }, onboard());
     expect(offTopic).toMatchObject({ status: "no-answer", citations: [] });
+  });
+
+  it("falls back to full-text search when no vector hit passes the relevance gate", async () => {
+    const weak = hit(1, { score: 0.52 });
+    const fulltext = hit(2, { tier: "fulltext", score: 0.1, text: "Pulse oximeter: stowed in medical kit A." });
+    mocks.searchLibrary.mockImplementation(async (_pool: unknown, _cfg: unknown, _q: string, _k: number, opts: { skipVector?: boolean; skipVectorReason?: string }) =>
+      opts.skipVector
+        ? { tier: "fulltext", hits: [fulltext], integrityFailures: 0, fallbackReason: opts.skipVectorReason }
+        : vector([weak]),
+    );
+    mocks.chat.mockResolvedValue("It is in kit A [1].");
+    const a = await askAssistant({ question: EXAMPLES[3][0] }, onboard());
+    expect(a.status).toBe("answered");
+    expect(a.citations.map((c) => c.docId)).toEqual(["doc-2"]);
+    expect(a.mode).toMatchObject({ retrieval: "fulltext", fallbackReason: VECTOR_GATE_REASON });
+    expect(mocks.searchLibrary).toHaveBeenCalledTimes(2);
+    expect(mocks.searchLibrary.mock.calls[1][4]).toMatchObject({ skipVector: true, skipVectorReason: VECTOR_GATE_REASON });
+    // Full-text search finds nothing usable either: no answer, and no second fallback.
+    mocks.searchLibrary.mockClear();
+    mocks.searchLibrary.mockResolvedValue(vector([weak]));
+    const none = await askAssistant({ question: NO_ANSWER_QUESTION }, onboard());
+    expect(none).toMatchObject({ status: "no-answer", citations: [] });
+    expect(mocks.searchLibrary).toHaveBeenCalledTimes(2);
   });
 
   it("reports chunks dropped for a checksum mismatch and never cites them", async () => {

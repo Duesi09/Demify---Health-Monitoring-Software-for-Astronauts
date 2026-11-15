@@ -18,12 +18,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { GroundLinkChip } from "@/components/onboard/ground-link-indicators";
+import { NavAlarmBadge } from "@/components/onboard/nav-alarm-badge";
+import { useAlarmLevel } from "@/components/onboard/use-active-alarms";
+import { ALARM_PANEL_ID } from "@/lib/assistant/alarm-events";
 import { parseLinkParam, withLink, type LinkProfileId } from "@/lib/link";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Shows the alarm "!" while Demify has an active high- or medium-priority alarm. */
+  alarmBadge?: boolean;
 }
 
 /**
@@ -56,7 +61,7 @@ const NAV: { id: string; title: string; items: NavItem[] }[] = [
     id: "onboard",
     title: "Onboard server",
     items: [
-      { href: "/assistant", label: "Assistant", icon: MessageSquareText },
+      { href: "/assistant", label: "Assistant", icon: MessageSquareText, alarmBadge: true },
       { href: "/library", label: "Library", icon: LibraryBig },
     ],
   },
@@ -111,6 +116,8 @@ function NavBarWithLink() {
 function NavBar({ link }: { link: LinkProfileId | null }) {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement>(null);
+  // Any active high- or medium-priority alarm: the assistant has the matching checklist passages ready.
+  const alarm = useAlarmLevel() != null;
 
   // Phones: the nav is one horizontal row; bring the current page's link into view.
   useEffect(() => {
@@ -141,6 +148,16 @@ function NavBar({ link }: { link: LinkProfileId | null }) {
           className="hidden h-auto w-[100px] md:block"
         />
       </Link>
+      {/* Phones: the Assistant item may be scrolled out of the row, so the "!" also sits next to the mark. */}
+      {alarm && pathname !== "/assistant" && (
+        <Link
+          href={`${withLink("/assistant", link)}#${ALARM_PANEL_ID}`}
+          className="mr-1 flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-2 text-sm text-fg focus-visible:outline-2 focus-visible:outline-accent md:hidden"
+        >
+          <NavAlarmBadge />
+          <span className="sr-only">Assistant</span>
+        </Link>
+      )}
       {NAV.map((group, gi) => (
         <div
           key={group.id}
@@ -156,12 +173,13 @@ function NavBar({ link }: { link: LinkProfileId | null }) {
           >
             {group.title}
           </span>
-          {group.items.map(({ href, label, icon: Icon }) => {
+          {group.items.map(({ href, label, icon: Icon, alarmBadge }) => {
             const active = isActive(pathname, href);
+            const badge = alarmBadge && alarm;
             return (
               <Link
                 key={href}
-                href={withLink(href, link)}
+                href={badge ? `${withLink(href, link)}#${ALARM_PANEL_ID}` : withLink(href, link)}
                 aria-current={active ? "page" : undefined}
                 className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
                   active ? `bg-accent/15 ${ACTIVE_TEXT}` : "text-muted hover:bg-surface-2 hover:text-fg"
@@ -169,6 +187,7 @@ function NavBar({ link }: { link: LinkProfileId | null }) {
               >
                 <Icon size={16} aria-hidden />
                 <NavLabel label={label} />
+                {badge && <NavAlarmBadge />}
               </Link>
             );
           })}

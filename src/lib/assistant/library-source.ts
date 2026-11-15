@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import { onboardConfig, type OnboardConfig } from "@onboard/config.mjs";
 import { ensureSchema, getPool } from "@onboard/db.mjs";
 import {
+  bundledTermFrequency,
   chunkDoc,
   crewBaselineDoc,
   inventoryDoc,
@@ -294,13 +295,14 @@ export async function searchOnboardLibrary(
   question: string,
   lib: ResolvedLibrary,
   cfg: OnboardConfig = onboardConfig(),
-  opts: { skipVector?: boolean } = {},
+  opts: { skipVector?: boolean; skipVectorReason?: string } = {},
 ): Promise<LibrarySearch> {
   let fallbackReason = lib.fallbackReason;
   if (lib.source === "database" && lib.pool) {
     try {
       const result = await searchLibrary(lib.pool, cfg, question, cfg.topK, {
         skipVector: !!opts.skipVector,
+        ...(opts.skipVectorReason ? { skipVectorReason: opts.skipVectorReason } : {}),
         embedTimeoutMs: QUERY_EMBED_TIMEOUT_MS,
       });
       return { ...result, source: "database" };
@@ -314,6 +316,15 @@ export async function searchOnboardLibrary(
   const reasons = [fallbackReason, bundled.error ? `the bundled library could not be read (${bundled.error})` : undefined, result.fallbackReason];
   const reason = reasons.filter(Boolean).join("; ");
   return { ...result, source: "bundled", ...(reason ? { fallbackReason: reason } : {}) };
+}
+
+/**
+ * How rare a search word is (chunks of the bundled library that contain it),
+ * for the relevance gate (usableHits). The bundled copy stands in for the
+ * database library: both hold the same documents. Never throws.
+ */
+export async function libraryTermFrequency(): Promise<(term: string) => number> {
+  return bundledTermFrequency((await bundledLibrary()).docs);
 }
 
 /* ------------------------------------------------------------------------- */

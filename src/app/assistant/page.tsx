@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Info } from "lucide-react";
+import { AlarmGuidancePanels } from "@/components/onboard/alarm-guidance-panel";
 import { AssistantConsole, type CrewOption } from "@/components/onboard/assistant-console";
 import { PageHeader } from "@/components/ui";
 import { onboardStatus } from "@/lib/assistant/status";
@@ -28,6 +29,9 @@ export default async function AssistantPage(props: PageProps<"/assistant">) {
         title="Onboard assistant"
         description="Library assistant (local language model) on the onboard server. It answers crew questions from the curated onboard library and nothing else, cites every passage it used, shows how fresh the library is, and says so when the library has no good answer."
       />
+
+      {/* While Demify has an active alarm: what the crew does now, the matching checklist passages, then the walk-through. */}
+      <AlarmGuidancePanels link={link} />
 
       <section
         aria-labelledby="assistant-notice"

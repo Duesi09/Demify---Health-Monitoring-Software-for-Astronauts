@@ -8,10 +8,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { onboardConfig } from "@onboard/config.mjs";
 import { closePool, ensureSchema, getPool, LOCK_SYNC } from "@onboard/db.mjs";
 import {
+  bundledTermFrequency,
   chunkDoc,
   crewBaselineDoc,
   crewBaselinesState,
   embedPending,
+  germanToEnglish,
   inventoryDoc,
   lastLibrarySync,
   librarySyncInfo,
@@ -563,6 +565,20 @@ describe("the curated library (library/**)", () => {
       for (const [q] of [...EXAMPLES, ...MORE_EXAMPLES]) expect(searchBundled(all, q, 1).hits[0].score).toBeGreaterThan(weak);
     });
 
+    it("ignores the filler words of natural questions", () => {
+      expect(searchBundled(all, "Someone is having a seizure, what do we do? Please, quickly, ok, right now!", 5).hits[0].heading).toMatch(/Seizure/);
+      const chest = searchBundled(all, "The commander has crushing chest pain and is sweating. What should the crew do first?", 5).hits[0];
+      expect(chest.heading).toMatch(/heart attack/);
+      expect(chest.score).toBeGreaterThan(0.25);
+    });
+
+    it("counts how many chunks contain a search word (stemmed)", () => {
+      const df = bundledTermFrequency(all);
+      expect(df("seizur")).toBeGreaterThan(0);
+      expect(df("crew")).toBeGreaterThan(df("seizur"));
+      expect(df("kidneyx")).toBe(0);
+    });
+
     it("finds nothing for a question without searchable words", () => {
       const r = searchBundled(all, "What is it?", 5);
       expect(r.hits).toEqual([]);
@@ -916,6 +932,14 @@ describe.skipIf(!TEST_DB)("PostgreSQL sync and retrieval", () => {
     expect(skipped).toMatchObject({ tier: "fulltext", fallbackReason: "vector search skipped (the model server was not ready at the last check)" });
     expect(skipped.hits[0].docId).toBe("med-kit-inventory");
     expect(model.embed).not.toHaveBeenCalled();
+    const gated = await searchLibrary(pool, cfg, EXAMPLES[3][0], 5, { skipVector: true, skipVectorReason: "no vector hit passed" });
+    expect(gated).toMatchObject({ tier: "fulltext", fallbackReason: "no vector hit passed" });
+
+    // A German question is embedded by its English (the library and its embeddings are English).
+    const german = await searchLibrary(pool, cfg, "Wo ist das Pulsoximeter im Medizinkoffer?", 5);
+    expect(german.tier).toBe("vector");
+    expect(model.embed).toHaveBeenLastCalledWith({ ...cfg, embedTimeoutMs: 3000 }, [germanToEnglish("Wo ist das Pulsoximeter im Medizinkoffer?")], "query");
+    expect(germanToEnglish("Wo ist das Pulsoximeter im Medizinkoffer?")).toMatch(/pulse oximeter/);
 
     // Another embedding model: its vectors are not comparable, so everything is pending again.
     const other = await searchLibrary(pool, cfgOf({ DEMIFY_MODEL_URL: "http://model.test/v1", DEMIFY_EMBED_MODEL: "other-embed" }), "pulse oximeter");

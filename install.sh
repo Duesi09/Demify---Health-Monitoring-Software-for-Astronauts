@@ -881,13 +881,24 @@ main() {
     ensure_ollama
     step "Step 3 of 5: Language model for this computer"
     detect_hardware_and_model
+    local env_model
+    env_model="$(env_file_value DEMIFY_LLM_MODEL)"
     if [ -n "$model" ]; then
       say "  Suggested for this computer: $CHOSEN_MODEL"
       CHOSEN_MODEL="$model"
       CHOSEN_REASON="chosen with --model."
+      say "  Model: $CHOSEN_MODEL"
+      say "  Why:   $CHOSEN_REASON"
+    elif [ -n "$env_model" ]; then
+      # A re-run (for example after git pull) keeps the model this computer already uses.
+      say "  Suggested for this computer: $CHOSEN_MODEL"
+      CHOSEN_MODEL="$env_model"
+      CHOSEN_REASON="kept from .env."
+      say "  Model: $CHOSEN_MODEL (from .env; --model <name> to change)"
+    else
+      say "  Model: $CHOSEN_MODEL"
+      say "  Why:   $CHOSEN_REASON"
     fi
-    say "  Model: $CHOSEN_MODEL"
-    say "  Why:   $CHOSEN_REASON"
     if is_dgx_spark "$(nvidia_gpus)"; then
       say "  This is an NVIDIA DGX Spark. The installer sets up the single-container Demify; the"
       say "  full onboard server (PostgreSQL, model server, sync) is described in docs/SPARK.md."
@@ -922,7 +933,7 @@ main() {
   say ""
   say "  To stop Demify:        docker compose down        (in $INSTALL_ROOT)"
   say "  To start it again:     docker compose up -d"
-  say "  To update:             git pull, then run the installer again: bash install.sh"
+  say "  To update:             git pull origin Project-2-Phase-1, then run the installer again: bash install.sh"
   if [ "$no_model" = 0 ]; then
     say "  To remove the model:   ollama rm $CHOSEN_MODEL"
   fi

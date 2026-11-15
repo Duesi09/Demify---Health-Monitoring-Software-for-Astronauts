@@ -327,7 +327,7 @@ export function CommDelay({
             <li>Keep monitoring on schedule and keep the log going until the link is back.</li>
           </ol>
           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-            <Send size={12} aria-hidden /> NASA’s distance-from-Earth hazard: crews must be able to diagnose and treat
+            <Send size={12} aria-hidden /> NASA’s distance-from-Earth hazard: crews must be able to assess and treat
             themselves.
           </p>
         </div>
@@ -350,7 +350,7 @@ export function CommDelay({
             <li>Keep monitoring on schedule; send updates, do not sit idle waiting for the reply.</li>
           </ol>
           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-            <Send size={12} aria-hidden /> NASA’s distance-from-Earth hazard: crews must be able to diagnose and treat
+            <Send size={12} aria-hidden /> NASA’s distance-from-Earth hazard: crews must be able to assess and treat
             themselves.
           </p>
         </div>

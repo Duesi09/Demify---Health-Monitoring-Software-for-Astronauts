@@ -1,0 +1,38 @@
+/*
+ * The "!" on the Assistant nav item while Demify has an active high- or
+ * medium-priority alarm. Squared, high-priority red, flashing ~1.5 Hz like
+ * the alarm bar (period 0.66 s; IEC 60601-1-8 high priority: 1.4-2.8 Hz);
+ * solid with prefers-reduced-motion. White on #c9150c is 5.9:1, on the dark
+ * phase #6e0c07 above 10:1.
+ */
+.nav-alarm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: #c9150c;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  animation: nav-alarm-flash 0.66s steps(1, end) infinite;
+}
+@keyframes nav-alarm-flash {
+  0%,
+  54% {
+    background: #c9150c;
+  }
+  55%,
+  100% {
+    background: #6e0c07;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-alarm-badge {
+    animation: none;
+    background: #b3120a;
+  }
+}

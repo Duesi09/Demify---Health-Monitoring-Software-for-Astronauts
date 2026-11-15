@@ -24,7 +24,7 @@ export interface OnboardConfig {
   appUrl: string;
   /** DEMIFY_ASSISTANT_MIN_SCORE: cosine similarity below which a chunk does not count as an answer (default 0.5). */
   minScore: number;
-  /** DEMIFY_ASSISTANT_TOP_K: chunks retrieved per question (default 5). */
+  /** DEMIFY_ASSISTANT_TOP_K: chunks retrieved per question (default 3). */
   topK: number;
   /** DEMIFY_OFFLINE=true: hard air-gap, the ground link can never be up. */
   offline: boolean;
