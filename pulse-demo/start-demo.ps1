@@ -97,8 +97,8 @@ Ok 'MQTT broker on 127.0.0.1:1883'
 
 # 5. Demify (and the right branch)
 $branch = (& git -C $cfg.DEMIFY_DIR branch --show-current 2>$null)
-if ($branch -and $branch -ne 'presentation') {
-  Warn "Demify is on branch '$branch', not 'presentation': the Test Crew (phone) member is missing there. In the Demify folder: git switch presentation, then restart npm run dev."
+if ($branch -and $branch -notin @('presentation', 'OG-Presentation')) {
+  Warn "Demify is on branch '$branch', not 'OG-Presentation': the Test Crew (phone) member is missing there. In the Demify folder: git switch OG-Presentation, then restart npm run dev."
 }
 function DemifyHealth {
   try { return (Invoke-RestMethod -Uri "$($cfg.DEMIFY_URL)/api/health" -TimeoutSec 5 -ErrorAction Stop) } catch { return $null }

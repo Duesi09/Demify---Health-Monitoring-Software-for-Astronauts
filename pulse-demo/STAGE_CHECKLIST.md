@@ -6,7 +6,7 @@ All commands run in PowerShell in `C:\Users\duesi\demify-pulse`.
 
 ## Setup facts
 
-- Demify runs from git branch **`presentation`**. The monitor for the demo is **http://localhost:3000/crew/test**
+- Demify runs from git branch **`OG-Presentation`**. The monitor for the demo is **http://localhost:3000/crew/test**
   ("Test Crew (phone)"): `--` / NO SIGNAL until the iPhone sends, then only the measured heart rate (`DEVICE`).
   About 3 s after the finger is lifted it goes back to `--`. Everyone else stays simulated.
 - On the iPhone hotspot the laptop gets **172.20.10.x** (tonight: 172.20.10.4). Phone link:
@@ -35,7 +35,7 @@ All commands run in PowerShell in `C:\Users\duesi\demify-pulse`.
 
 1. [ ] iPhone hotspot on, laptop joined to it, laptop plugged in. Close Discord and extra browser tabs.
 2. [ ] Docker Desktop running (whale icon; `start-demo.ps1` also starts it).
-3. [ ] Demify in its own window: `cd C:\Repos\NSAC\Demify---Health-Monitoring-Software-for-Astronauts`, `git switch presentation`, `npm run dev`.
+3. [ ] Demify in its own window: `cd C:\Repos\NSAC\Demify---Health-Monitoring-Software-for-Astronauts`, `git switch OG-Presentation`, `npm run dev`.
 4. [ ] `powershell -ExecutionPolicy Bypass -File start-demo.ps1` in this folder. All lines `OK`; the phone link is in the `>>` line.
 5. [ ] Laptop browser: **http://localhost:3000/crew/test**, zoom 125-150 % (Ctrl +). Shows `--` / NO SIGNAL.
 6. [ ] iPhone Safari: open the bookmark. Certificate warning (normal, our own certificate; again after the laptop IP changed):
