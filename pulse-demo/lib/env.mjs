@@ -16,7 +16,7 @@ export function loadEnv() {
     PORT: Number(process.env.PORT || 8443),
     HTTP_PORT: process.env.HTTP_PORT ? Number(process.env.HTTP_PORT) : null,
     PULSE_TOKEN: (process.env.PULSE_TOKEN || "").trim(),
-    CREW_ID: (process.env.CREW_ID || "cdr").trim(),
+    CREW_ID: (process.env.CREW_ID || "test").trim(),
   };
 }
 

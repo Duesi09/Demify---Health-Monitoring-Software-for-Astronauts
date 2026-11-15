@@ -120,7 +120,7 @@ tests the page with the hold.
 **Fallback if HTTPS on the phone fails:** set `HTTP_PORT=8080` in `.env`,
 restart, then on the phone open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
 add `http://<laptop-IP>:8080`, relaunch Chrome, open
-`http://<laptop-IP>:8080/?token=…&crew=cdr`. Also allow port 8080 in the firewall (Private).
+`http://<laptop-IP>:8080/?token=…&crew=test`. Also allow port 8080 in the firewall (Private).
 
 ## Files
 

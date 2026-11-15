@@ -7,7 +7,7 @@ const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") ?? "";
 // Demo hold (hold.js) is on unless the link has hold=0.
 const HOLD = params.get("hold") !== "0";
-const CREW = /^[a-z0-9-]{1,32}$/.test(params.get("crew") ?? "") ? params.get("crew") : "cdr";
+const CREW = /^[a-z0-9-]{1,32}$/.test(params.get("crew") ?? "") ? params.get("crew") : "test"; // Test Crew (phone): the sensor-only crew member for the phone demo
 
 const $ = (id) => document.getElementById(id);
 const ui = {
