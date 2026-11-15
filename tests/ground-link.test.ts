@@ -44,7 +44,7 @@ afterEach(async () => {
   await (await db()).closePool();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await fs.rm(dir, { recursive: true, force: true });
+  await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 describe("ground link: file backend (no DATABASE_URL)", () => {
