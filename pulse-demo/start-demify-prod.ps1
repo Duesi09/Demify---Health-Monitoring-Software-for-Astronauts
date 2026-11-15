@@ -15,6 +15,9 @@ if (Test-Path $envFile) {
 $repo = $cfgDir
 $standalone = Join-Path $repo '.next\standalone'
 
+$busy = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+if ($busy) { Write-Host "Port $Port is in use (is 'npm run dev' still running? Stop it first)." -ForegroundColor Red; exit 1 }
+
 # Rebuild when the code changed since the last build (git pull, branch switch), not only with -Rebuild:
 # an old build would run without the newer features (for example the onboard assistant).
 $head = (& git -C $repo rev-parse HEAD 2>$null)
@@ -28,26 +31,43 @@ if ($Rebuild -or $stale -or -not (Test-Path (Join-Path $standalone 'server.js'))
   cmd /c "npm run build"
   $code = $LASTEXITCODE
   Pop-Location
-  if ($code -ne 0) { Write-Host 'Build failed.' -ForegroundColor Red; exit 1 }
-  if ($head) { Set-Content -LiteralPath $stamp -Value $head }
+  if ($code -ne 0) {
+    if (-not $Rebuild -and (Test-Path (Join-Path $standalone 'server.js'))) {
+      Write-Host 'Build failed: starting the previous build instead (without the newest changes).' -ForegroundColor Yellow
+    } else {
+      Write-Host 'Build failed.' -ForegroundColor Red; exit 1
+    }
+  } elseif ($head) { Set-Content -LiteralPath $stamp -Value $head }
 }
 
 # The standalone server needs the static assets and public files next to it.
 Copy-Item -Recurse -Force (Join-Path $repo '.next\static') (Join-Path $standalone '.next\static')
 Copy-Item -Recurse -Force (Join-Path $repo 'public') (Join-Path $standalone 'public')
 
-$busy = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-if ($busy) { Write-Host "Port $Port is in use (is 'npm run dev' still running? Stop it first)." -ForegroundColor Red; exit 1 }
 
 # Onboard assistant: the local model in Ollama on this laptop (set up once in the Demify folder:
 # powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1). Without Ollama the
 # assistant shows library passages only; everything else, the phone pulse included, works the same.
+function Select-LocalModel($names, $demifyDir) {
+  # Ollama lists "gemma3" as "gemma3:latest"; Demify matches names without ":latest".
+  $norm = @($names | ForEach-Object { $_ -replace ':latest$', '' })
+  $wanted = @()
+  $envPath = Join-Path $demifyDir '.env'
+  if (Test-Path $envPath) {
+    foreach ($line in (Get-Content -LiteralPath $envPath)) {
+      if ($line -match '^\s*DEMIFY_LLM_MODEL\s*=\s*(.+)$') { $wanted += ($matches[1].Trim().Trim('"').Trim("'") -replace ':latest$', ''); break }
+    }
+  }
+  $wanted += @('gemma3:4b', 'gemma3', 'gemma3:1b', 'gpt-oss:20b')
+  foreach ($w in $wanted) { if ($w -and ($norm -contains $w)) { return $w } }
+  return $null
+}
 $ollama = $null
 try { $ollama = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -ErrorAction Stop } catch { $ollama = $null }
 if ($ollama) {
   $names = @($ollama.models | ForEach-Object { $_.name })
   $llm = $env:DEMIFY_LLM_MODEL
-  if (-not $llm) { $llm = @('gemma3:4b', 'gemma3:1b', 'gpt-oss:20b') | Where-Object { $names -contains $_ } | Select-Object -First 1 }
+  if (-not $llm) { $llm = Select-LocalModel $names $repo }
   if ($llm) {
     $env:DEMIFY_MODEL_URL = 'http://127.0.0.1:11434/v1'
     $env:DEMIFY_LLM_MODEL = $llm
