@@ -15,7 +15,17 @@ function overHttps(req: Request): boolean {
 }
 
 /**
- * GET /unlock?token=<DEMIFY_ADMIN_TOKEN>
+ * Where to go after unlocking: ?next= when it is a path on this site
+ * ("/pulse?crew=test"), otherwise the overview. Never another site.
+ */
+function nextPath(req: Request): string {
+  const next = new URL(req.url).searchParams.get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//") || /[^\x21-\x7e]|\\/.test(next)) return "/";
+  return next;
+}
+
+/**
+ * GET /unlock?token=<DEMIFY_ADMIN_TOKEN>[&next=/path]
  *
  * Unlocks this browser for the write APIs (drills, sensor readings) when an
  * admin token is configured: compares the token in constant time, sets an
@@ -26,7 +36,7 @@ function overHttps(req: Request): boolean {
 export async function GET(req: Request) {
   const noStore = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
   const token = adminToken();
-  if (!token) return new Response(null, { status: 303, headers: { ...noStore, Location: "/" } });
+  if (!token) return new Response(null, { status: 303, headers: { ...noStore, Location: nextPath(req) } });
 
   const candidate = new URL(req.url).searchParams.get("token");
   if (!safeEqual(candidate, token)) {
@@ -41,5 +51,5 @@ export async function GET(req: Request) {
     "SameSite=Strict",
     ...(overHttps(req) ? ["Secure"] : []),
   ].join("; ");
-  return new Response(null, { status: 303, headers: { ...noStore, Location: "/", "Set-Cookie": cookie } });
+  return new Response(null, { status: 303, headers: { ...noStore, Location: nextPath(req), "Set-Cookie": cookie } });
 }

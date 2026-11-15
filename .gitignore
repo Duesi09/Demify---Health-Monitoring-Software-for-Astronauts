@@ -46,3 +46,6 @@ next-env.d.ts
 
 # local CA bundles for Docker builds behind a proxy (see docs/DEPLOYMENT.md)
 /certs/
+
+# phone pulse demo: self-signed certificate (scripts/pulse-https.mjs)
+/.pulse-cert/
