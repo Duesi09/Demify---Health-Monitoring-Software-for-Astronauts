@@ -313,7 +313,8 @@ export function activeProtocol(v: LiveVitals): { id: ProtocolId; alarm: MonitorA
   if (v.scenario) return { id: v.scenario.type, alarm: null };
   const high = v.alarms.filter((a) => a.priority === "high");
   if (!high.length) return null;
-  const arrest = high.find((a) => /VFIB|VTACH/.test(a.text));
+  // NO PULSE: VF alarm text "VFIB / NO PULSE" and the phone pulse demo's "NO PULSE (phone signal lost)".
+  const arrest = high.find((a) => /VFIB|VTACH|NO PULSE/.test(a.text));
   if (arrest) return { id: "vf", alarm: arrest };
   const st = high.find((a) => a.indicator === "stDeviation");
   if (st) return { id: "stemi", alarm: st };

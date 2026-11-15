@@ -217,5 +217,11 @@ export interface LiveVitals {
    */
   activity: "rest" | "exercise" | "sleep";
   scenario: (Scenario & { elapsedS: number; label: string }) | null;
+  /**
+   * Phone pulse demo (sensor-only crew member, training): a pulse was measured
+   * for at least 10 s, then the signal stopped (src/lib/monitor/pulse-loss.ts).
+   * Raises the high-priority "NO PULSE (phone signal lost)" alarm.
+   */
+  pulseLost?: { lostAt: string; measuredS: number; lastHr: number };
   alarms: MonitorAlarm[];
 }

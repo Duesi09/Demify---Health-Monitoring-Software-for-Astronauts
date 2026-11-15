@@ -1,5 +1,6 @@
 import type { IndicatorId, LiveVitals, MonitorAlarm } from "../types";
 import { SEIZURE_ALARM_TEXT, SEIZURE_ENDED_ALARM_TEXT, STROKE_ALARM_TEXT, seizureActive } from "./drills";
+import { PULSE_LOSS_ALARM_TEXT } from "./pulse-loss";
 
 /**
  * Patient-monitor alarm limits. Modelled on common bedside-monitor defaults
@@ -57,6 +58,7 @@ export function computeAlarms(v: Omit<LiveVitals, "alarms">): MonitorAlarm[] {
   const L = ALARM_LIMITS;
 
   out.push(...scenarioAlarms(v));
+  if (v.pulseLost && !v.scenario) add("nopulse", "high", PULSE_LOSS_ALARM_TEXT, "heartRate");
   if (v.rhythm === "vf") add("vfib", "high", "VFIB / NO PULSE", "heartRate");
   else if (v.rhythm === "vt") add("vtach", "high", "VTACH", "heartRate");
 

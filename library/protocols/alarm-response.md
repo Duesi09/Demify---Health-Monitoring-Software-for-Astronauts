@@ -16,7 +16,7 @@ Training material. These are the emergency response checklists Demify shows on t
 ## Which checklist applies
 
 - During a drill: the checklist of the drill's training scenario. The stroke and seizure checklists exist only as drills: no monitor value opens them.
-- Otherwise the checklist that matches the most serious high-priority alarm: VFIB / NO PULSE or VTACH opens the cardiac arrest checklist; an ST elevation alarm opens the suspected heart attack (STEMI) checklist; a systolic blood pressure above 180 mmHg opens the hypertensive crisis checklist; any other high-priority alarm opens the general high-priority alarm checklist.
+- Otherwise the checklist that matches the most serious high-priority alarm: VFIB / NO PULSE, VTACH or NO PULSE (phone signal lost) opens the cardiac arrest checklist; an ST elevation alarm opens the suspected heart attack (STEMI) checklist; a systolic blood pressure above 180 mmHg opens the hypertensive crisis checklist; any other high-priority alarm opens the general high-priority alarm checklist.
 - Each step is checked off with the time it was done, in the style of a resuscitation code sheet. The sheet is a training and coordination aid, not a medical record.
 - A drill alters the simulated telemetry of one crew member so the crew can rehearse; no real reading changes. A drill ends automatically after 30 minutes.
 
@@ -46,6 +46,17 @@ Checklist "Cardiac arrest (VF / pulseless VT)":
 5. Follow the onboard advanced cardiac life support (ACLS) checklist under flight surgeon direction.
 6. Contact the flight surgeon and report: time of onset, rhythm, vital signs, actions taken. (Timed by the signal delay; see "The flight-surgeon step" below.)
 7. Keep this sheet: record every shock, rhythm check and medication time.
+
+## No pulse: phone signal lost (training)
+
+Training alarm of the phone pulse demo: the phone measured a pulse for at least 10 seconds, then the signal stopped. Monitor alarm: NO PULSE (phone signal lost), high priority. It opens the cardiac arrest checklist. A lost camera signal most often means the fingertip left the camera, so the checklist starts by checking the crew member. The alarm ends when the pulse is measured again, or 5 minutes after the signal was lost.
+
+Checklist "No pulse (phone signal lost)":
+
+1. Check the crew member now: responsive? breathing normally? pulse?
+2. Not responsive and not breathing normally: call out "cardiac arrest" to the crew, start chest compressions and follow the cardiac arrest checklist; bring the AED.
+3. Responsive and breathing normally: place the fingertip back on the camera and confirm that the pulse returns on the monitor.
+4. Contact the flight surgeon and report: time the signal was lost, last measured heart rate, actions taken. (Timed by the signal delay; see "The flight-surgeon step" below.)
 
 ## Hypertensive crisis (BP > 180/120 mmHg)
 

@@ -13,6 +13,7 @@ import { AlarmCenter } from "@/components/alarms/alarm-center";
 import { AppNav } from "@/components/app-nav";
 import { GroundLinkBanner } from "@/components/onboard/ground-link-indicators";
 import { HideOnPhonePage } from "@/components/pulse/hide-on-phone-page";
+import { AssistantBubble } from "@/components/onboard/assistant-bubble";
 import { ATTRIBUTION, DISCLAIMER_LONG, DISCLAIMER_SHORT } from "@/lib/disclaimer";
 
 export const metadata: Metadata = {
@@ -38,6 +39,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {/* Shown only while the ground link is down (simulated blackout); nothing otherwise. */}
           <GroundLinkBanner />
           <main className="flex-1 min-w-0 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          {/* While a high-priority alarm is active: the assistant bubble (bottom right) with the first steps. */}
+          <AssistantBubble />
           <footer className="border-t border-border px-4 py-5 text-[11.5px] leading-relaxed text-muted md:px-8">
             <div className="max-w-4xl space-y-1.5">
               <p>{DISCLAIMER_LONG}</p>

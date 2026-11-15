@@ -5,6 +5,7 @@ import { getCrew, listCrew, listReadings } from "../store/readings";
 import { listScenarios } from "../store/scenarios";
 import type { CrewMember, IndicatorId, LiveVitals, Scenario } from "../types";
 import { computeAlarms } from "./alarms";
+import { PULSE_LOSS_HOLD_MS, pulseLoss } from "./pulse-loss";
 
 /** Sensor readings newer than this replace simulated numerics on the monitor. */
 const SENSOR_FRESH_MS = 2 * 60_000;
@@ -51,6 +52,13 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
       }
     }
   }
+  // Phone pulse demo: a measured pulse that stopped raises the NO PULSE training alarm.
+  let lost: LiveVitals["pulseLost"] = undefined;
+  if (!scenario && isSensorOnly(crew) && vals.hr == null) {
+    const since = new Date(now - PULSE_LOSS_HOLD_MS - 60_000).toISOString();
+    const hrReadings = (await listReadings({ crewId: crew.id, indicator: "heartRate", since })).filter((x) => x.source === "sensor");
+    lost = pulseLoss(hrReadings, now, SENSOR_ONLY_FRESH_MS) ?? undefined;
+  }
   const hr = vals.hr;
   const rhythm = sim?.rhythm ?? (hr == null ? "sinus" : hr > 100 ? "sinus-tachycardia" : hr < 50 ? "sinus-bradycardia" : "sinus");
   const map = vals.sys != null && vals.dia != null ? (vals.sys + 2 * vals.dia) / 3 : null;
@@ -79,6 +87,7 @@ async function liveFor(crew: CrewMember, scenario: Scenario | null, now: number)
           label: SCENARIO_LABEL[scenario.type],
         }
       : null,
+    ...(lost ? { pulseLost: lost } : {}),
   };
   return { ...base, alarms: computeAlarms(base) };
 }
