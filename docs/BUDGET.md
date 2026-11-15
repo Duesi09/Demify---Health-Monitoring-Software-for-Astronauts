@@ -138,6 +138,80 @@ Honest framing for the pitch and for planning:
   partner, roughly CHF 150–250 per hour).
 - Years 2 and 3: plan at least the same people cost plus growth.
 
+## 10-year outlook (planning model)
+
+Ten years cannot be budgeted precisely; this is a planning model with stated
+assumptions, based on the **recommended** year 1. The biggest decision is
+whether Demify stays a research and training tool or becomes a certified
+medical device.
+
+**Assumptions (both paths):** salaries CHF 110,000 per developer, 2 % raise a
+year, 20 % employer costs; a medical advisor (flight-surgeon or physician
+consultant) from year 2, about CHF 40,000 a year; hardware refresh of both
+DGX Spark units every 4 years (years 5 and 9); annual penetration test and
+data-protection review; software licences stay CHF 0 (open source); 10 %
+contingency every year; no inflation beyond the raises; no revenue or funding
+subtracted.
+
+### Path A: research and training tool (no medical certification)
+
+Team: 2 developers, a third from year 3. Pilots at analog stations, then
+integration with partners (ESA, commercial stations, NASA via partners).
+
+| Year | Team | People | Hardware | Software | Security | Company/legal | Pilots/travel | **Total** | Cumulative |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2 | 264,000 | 33,000 | 16,000 | 20,000 | 30,000 | 35,000 | **438,000** | 438,000 |
+| 2 | 2 | 309,000 | 10,000 | 16,000 | 20,000 | 25,000 | 40,000 | **462,000** | 900,000 |
+| 3 | 3 | 452,000 | 10,000 | 20,000 | 20,000 | 35,000 | 40,000 | **635,000** | 1,535,000 |
+| 4 | 3 | 460,000 | 10,000 | 20,000 | 20,000 | 35,000 | 50,000 | **655,000** | 2,190,000 |
+| 5 | 3 | 469,000 | 25,000 | 20,000 | 20,000 | 35,000 | 60,000 | **692,000** | 2,881,000 |
+| 6 | 3 | 477,000 | 10,000 | 20,000 | 20,000 | 35,000 | 60,000 | **684,000** | 3,566,000 |
+| 7 | 3 | 486,000 | 10,000 | 20,000 | 20,000 | 35,000 | 60,000 | **694,000** | 4,260,000 |
+| 8 | 3 | 495,000 | 10,000 | 20,000 | 20,000 | 35,000 | 60,000 | **704,000** | 4,963,000 |
+| 9 | 3 | 504,000 | 25,000 | 20,000 | 20,000 | 35,000 | 60,000 | **730,000** | 5,694,000 |
+| 10 | 3 | 513,000 | 10,000 | 20,000 | 20,000 | 35,000 | 60,000 | **724,000** | 6,418,000 |
+
+**10 years: about CHF 6.4 million**, about CHF 640,000 a year on average.
+
+### Path B: certified medical product (EU MDR)
+
+Team: 2 developers; from year 3 a quality and regulatory engineer and a third
+developer; from year 6 a fourth developer and a business/partnerships lead;
+from year 8 a clinical support person. Years 3 to 5: ISO 13485 quality system,
+technical documentation, clinical evaluation and notified-body certification
+(software of this kind is typically class IIa or higher under MDR Rule 11),
+budgeted at CHF 150,000 / 250,000 / 150,000; from year 6 about CHF 75,000 a
+year for surveillance audits, post-market surveillance and penetration tests.
+
+| Year | Team | People | Hardware | Software | Certification/security | Company/legal | Pilots/travel | **Total** | Cumulative |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2 | 264,000 | 33,000 | 16,000 | 20,000 | 30,000 | 35,000 | **438,000** | 438,000 |
+| 2 | 2 | 309,000 | 10,000 | 16,000 | 20,000 | 25,000 | 40,000 | **462,000** | 900,000 |
+| 3 | 4 | 602,000 | 10,000 | 24,000 | 150,000 | 35,000 | 40,000 | **947,000** | 1,847,000 |
+| 4 | 4 | 613,000 | 10,000 | 24,000 | 250,000 | 35,000 | 50,000 | **1,080,000** | 2,927,000 |
+| 5 | 4 | 625,000 | 25,000 | 24,000 | 150,000 | 35,000 | 60,000 | **1,010,000** | 3,938,000 |
+| 6 | 6 | 941,000 | 10,000 | 32,000 | 75,000 | 45,000 | 60,000 | **1,279,000** | 5,217,000 |
+| 7 | 6 | 959,000 | 10,000 | 32,000 | 75,000 | 45,000 | 60,000 | **1,299,000** | 6,516,000 |
+| 8 | 7 | 1,115,000 | 10,000 | 36,000 | 75,000 | 45,000 | 60,000 | **1,475,000** | 7,991,000 |
+| 9 | 7 | 1,137,000 | 25,000 | 36,000 | 75,000 | 45,000 | 60,000 | **1,515,000** | 9,507,000 |
+| 10 | 7 | 1,159,000 | 10,000 | 36,000 | 75,000 | 45,000 | 60,000 | **1,523,000** | 11,030,000 |
+
+**10 years: about CHF 11 million**, about CHF 1.1 million a year on average.
+
+### Reading the outlook
+
+- People are 70–85 % of every year. Hardware stays small (two refreshes in ten
+  years), software licences stay at zero.
+- Path B costs about CHF 4.6 million more and only makes sense with a
+  medical market on Earth too (remote and extreme-environment care, e.g.
+  research stations, ships, expeditions), not for spaceflight alone.
+- Not in the model: flight qualification of hardware (paid by an agency or
+  industry partner within a mission), revenue, investor money, grants (ESA BIC
+  about EUR 200,000 over two years; Innosuisse; later ESA or national
+  programmes), office rent (assumed coworking or university space), salary
+  levels beyond 2 % a year.
+- Treat years 4–10 as an order of magnitude: re-plan every year.
+
 ## Sources
 
 - DGX Spark price: [pi3g](https://pi3g.com/nvidia-dgx-spark-price/), [openclawdc](https://openclawdc.com/blog/dgx-spark-price-every-gb10-box/), [enverge](https://spark.enverge.ai/blog/nvidia-dgx-spark-price)
