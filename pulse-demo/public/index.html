@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f6fb">
+  <title>Demify pulse</title>
+  <link rel="icon" href="brand/demify-mark.png">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="brand/demify-mark.png" alt="" width="34" height="34">
+      <div class="brand-text"><strong>DEMIFY</strong><span>Health monitoring</span></div>
+    </div>
+    <div class="crew"><span>Crew</span><b id="crew" class="chip mono">cdr</b></div>
+  </header>
+
+  <main>
+    <div class="page-head">
+      <h1>Live pulse</h1>
+      <p>Camera pulse sensor for the Demify monitor. Rest a fingertip on the phone camera; the heart rate appears on the crew monitor.</p>
+    </div>
+
+    <p id="insecure" class="callout callout-bad" hidden>
+      Open this page over https and accept the certificate warning.
+    </p>
+
+    <section class="card reading" aria-live="polite">
+      <h2>Heart rate</h2>
+      <div class="reading-row">
+        <div class="heart" id="heart" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.4C.4 8.3 2.3 4.5 6 4.5c2.1 0 3.4 1.1 4.2 2.3.4.6.7.6 1.6.6s1.2 0 1.6-.6c.8-1.2 2.1-2.3 4.2-2.3 3.7 0 5.6 3.8 4 7.1C19.5 16.4 12 21 12 21z"/></svg>
+        </div>
+        <div class="bpm"><span id="bpm">--</span><span class="unit">bpm</span></div>
+      </div>
+      <div class="guide" id="guide">Tap Start, then rest a fingertip on the camera.</div>
+      <div class="quality-row">
+        <span class="label">Signal quality</span>
+        <div class="quality" title="signal quality"><div id="qbar"></div></div>
+      </div>
+    </section>
+
+    <button id="start" class="start" type="button">Start</button>
+
+    <section class="card aim">
+      <h2>Finger position</h2>
+      <div class="aim-row">
+        <canvas id="cells" width="160" height="160" aria-label="where the camera sees the finger"></canvas>
+        <div class="aim-text">
+          <b id="cover">Tap Start</b>
+          <span>Green frames are the tiles that see your fingertip. Cover as many as you can, lightly. Small movements are fine.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Pulse waveform</h2>
+      <canvas id="wave" width="600" height="140" aria-label="pulse waveform"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <ul class="status">
+        <li><span class="label">Camera</span><b id="s-camera">off</b></li>
+        <li><span class="label">Flash</span><b id="s-flash">off</b></li>
+        <li><span class="label">Finger</span><b id="s-finger">-</b></li>
+        <li><span class="label">Laptop</span><b id="s-link">not connected</b></li>
+        <li><span class="label">Last send</span><b id="s-send">-</b></li>
+      </ul>
+    </section>
+
+    <aside class="callout">
+      <svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.01"/></svg>
+      <div>
+        <strong>Camera pulse estimate for a demo.</strong>
+        <p>Not a medical measurement. Demify is a research prototype, not a certified medical device.</p>
+      </div>
+    </aside>
+  </main>
+
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="grab" width="32" height="24" hidden></canvas>
+</body>
+</html>

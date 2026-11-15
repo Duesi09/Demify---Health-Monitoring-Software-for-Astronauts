@@ -1,0 +1,28 @@
+{
+  "name": "demify-pulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phone camera pulse estimate -> MQTT -> Demify, for the Space Apps demo. Not a medical measurement.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "gateway": "node gateway.mjs",
+    "bridge": "node bridge.mjs",
+    "start": "node start.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:e2e": "node test/e2e.mjs",
+    "broker": "docker compose -f docker-compose.broker.yml up -d",
+    "broker:stop": "docker compose -f docker-compose.broker.yml down",
+    "fake-phone": "node tools/fake-phone.mjs",
+    "check": "node tools/check-demify.mjs"
+  },
+  "dependencies": {
+    "mqtt": "5.16.1",
+    "selfsigned": "5.5.0"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}

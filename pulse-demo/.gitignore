@@ -1,0 +1,7 @@
+node_modules/
+.env
+certs/
+test/out/
+test/*.y4m
+.start.pid
+network-setup.log
