@@ -103,11 +103,31 @@ if ($branch -and $branch -notin @('presentation', 'OG-Presentation')) {
 function DemifyHealth {
   try { return (Invoke-RestMethod -Uri "$($cfg.DEMIFY_URL)/api/health" -TimeoutSec 5 -ErrorAction Stop) } catch { return $null }
 }
+# Onboard assistant: the local model in Ollama on this laptop (set up once in the Demify folder:
+# powershell -ExecutionPolicy Bypass -File scripts\setup-local-model.ps1). Demify started by this
+# script gets the model settings; without Ollama the assistant shows library passages only.
+$modelEnv = ''
+$ollama = $null
+try { $ollama = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -ErrorAction Stop } catch { $ollama = $null }
+if ($ollama) {
+  $names = @($ollama.models | ForEach-Object { $_.name })
+  $llm = @('gemma3:4b', 'gemma3:1b', 'gpt-oss:20b') | Where-Object { $names -contains $_ } | Select-Object -First 1
+  if ($llm) {
+    $modelEnv = "`$env:DEMIFY_MODEL_URL = 'http://127.0.0.1:11434/v1'; `$env:DEMIFY_LLM_MODEL = '$llm'; "
+    Ok "Ollama with model $llm (assistant answers with the local model)"
+  } else {
+    Warn 'Ollama runs but has no model: in the Demify folder run scripts\setup-local-model.ps1 (assistant shows passages only until then).'
+  }
+} else {
+  Warn 'Ollama not running: the assistant shows library passages only (start Ollama for model answers).'
+}
+
 $health = DemifyHealth
 if (-not $health) {
   if (Test-Path (Join-Path $cfg.DEMIFY_DIR 'package.json')) {
     Warn "Demify not running: starting it in a new window ($($cfg.DEMIFY_DIR), npm run dev)..."
-    Start-Process powershell -ArgumentList '-NoExit', '-Command', "`$host.UI.RawUI.WindowTitle = 'Demify (npm run dev)'; Set-Location -LiteralPath '$($cfg.DEMIFY_DIR)'; npm run dev"
+    $devCmd = "`$host.UI.RawUI.WindowTitle = 'Demify (npm run dev)'; $($modelEnv)Set-Location -LiteralPath '$($cfg.DEMIFY_DIR)'; npm run dev"
+    Start-Process powershell -ArgumentList '-NoExit', '-Command', $devCmd
     $deadline = (Get-Date).AddSeconds(90)
     while (-not $health -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2; $health = DemifyHealth }
   }
@@ -117,6 +137,19 @@ if (-not $health) {
   }
 }
 Ok "Demify at $($cfg.DEMIFY_URL) (status $($health.status))"
+try {
+  $onboard = Invoke-RestMethod -Uri "$($cfg.DEMIFY_URL)/api/onboard/status" -TimeoutSec 10 -ErrorAction Stop
+  $m = $onboard.model
+  if ($m.state -eq 'not-configured') {
+    Warn 'Assistant: no model configured in this Demify (it was started without the model settings). Stop it and run this script again, or set DEMIFY_MODEL_URL / DEMIFY_LLM_MODEL in the Demify .env.'
+  } elseif ($m.state -eq 'unreachable') {
+    Warn "Assistant: model server not reachable ($($m.url)). Is Ollama running?"
+  } elseif ($m.available -contains $m.llm) {
+    Ok "Assistant: model $($m.llm) ready"
+  } else {
+    Warn "Assistant: model $($m.llm) not in Ollama. In the Demify folder: scripts\setup-local-model.ps1"
+  }
+} catch { Warn 'Assistant status not readable (older Demify build?).' }
 try {
   $live = Invoke-RestMethod -Uri "$($cfg.DEMIFY_URL)/api/vitals/live?crewId=$($cfg.CREW_ID)" -TimeoutSec 15 -ErrorAction Stop
   if ($live.scenario) { Warn "A DRILL is running for $($cfg.CREW_ID): Demify ignores sensor data during drills. End the drill first." }
