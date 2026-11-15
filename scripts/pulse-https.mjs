@@ -64,20 +64,32 @@ function parseArgs(argv) {
   return opts;
 }
 
-/** Same ranking as src/lib/pulse/lan.ts: hotspot/home ranges first, virtual adapters left out. */
+/** Same ranking as src/lib/pulse/lan.ts (rankLanInterfaces): Wi-Fi first, virtual and host-only adapters last or left out. */
 function lanAddresses() {
-  const score = (ip) =>
-    ip.startsWith("192.168.") ? 0 : ip.startsWith("10.") ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 3 : 2;
-  const ips = new Set();
-  for (const [name, list] of Object.entries(networkInterfaces())) {
-    if (/docker|veth|br-|vethernet|wsl|virtualbox|vmware|vmnet|hyper-v|tailscale|zerotier/i.test(name)) continue;
+  const WIRELESS = /wi-?fi|wlan|wireless|drahtlos|^en0$|^wl/i;
+  const VIRTUAL = /docker|veth|br-|vethernet|wsl|virtualbox|vmware|vmnet|hyper-v|tailscale|zerotier|host-only/i;
+  const score = (ip, adapter) =>
+    /^192\.168\.(56|99)\./.test(ip)
+      ? 9
+      : WIRELESS.test(adapter)
+        ? 0
+        : ip.startsWith("192.168.")
+          ? 1
+          : ip.startsWith("10.")
+            ? 2
+            : /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+              ? 4
+              : 3;
+  const out = new Map();
+  for (const [adapter, list] of Object.entries(networkInterfaces())) {
+    if (VIRTUAL.test(adapter)) continue;
     for (const a of list ?? []) {
       const v4 = a.family === "IPv4" || a.family === 4;
       if (!v4 || a.internal || a.address.startsWith("127.") || a.address.startsWith("169.254.")) continue;
-      ips.add(a.address);
+      if (!out.has(a.address)) out.set(a.address, { address: a.address, adapter, score: score(a.address, adapter) });
     }
   }
-  return [...ips].sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  return [...out.values()].sort((x, y) => x.score - y.score || x.address.localeCompare(y.address));
 }
 
 /** Self-signed certificate for localhost and the current LAN addresses; regenerated when they change. */
@@ -144,7 +156,8 @@ const NOT_RUNNING = (target) => `<!doctype html><meta charset="utf-8"><meta name
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const ips = lanAddresses();
+  const lan = lanAddresses();
+  const ips = lan.map((e) => e.address);
   const tls = await certificate(ips);
   const target = opts.targetUrl;
 
@@ -229,21 +242,24 @@ async function main() {
     console.log("Demify phone pulse demo: HTTPS access is running.");
     console.log(`  forwarding to ${target.origin} ${up ? "(Demify answers: OK)" : "(Demify does NOT answer yet: start it!)"}`);
     console.log("");
-    if (ips.length === 0) {
+    if (lan.length === 0) {
       console.log("  No network address found. Connect the laptop to the phone's hotspot and restart this script.");
     } else {
-      const [best, ...others] = ips;
-      const phoneUrl = `https://${best}:${opts.port}/pulse?crew=${encodeURIComponent(opts.crew)}`;
-      console.log(`  >> Phone link:   ${phoneUrl}`);
-      for (const ip of others) console.log(`     or:           https://${ip}:${opts.port}/pulse?crew=${encodeURIComponent(opts.crew)}`);
-      console.log(`  >> QR code on the laptop: ${target.origin.replace("127.0.0.1", "localhost")}/pulse/connect?host=${best}`);
+      const link = (ip) => `https://${ip}:${opts.port}/pulse?crew=${encodeURIComponent(opts.crew)}`;
+      const [best, ...others] = lan;
+      // QR first, links last: the links stay visible at the bottom of the window.
       try {
         const QRCode = (await import("qrcode")).default;
-        console.log("");
-        console.log(await QRCode.toString(phoneUrl, { type: "terminal", small: true }));
+        console.log(await QRCode.toString(link(best.address), { type: "terminal", small: true }));
       } catch {
-        // QR in the terminal is a convenience; the link above is enough.
+        // QR in the terminal is a convenience; the links below are enough.
       }
+      console.log(`  >> Phone link:   ${link(best.address)}   (adapter: ${best.adapter})`);
+      for (const e of others) console.log(`     or:           ${link(e.address)}   (adapter: ${e.adapter})`);
+      console.log(`  >> QR code on the laptop: ${target.origin.replace("127.0.0.1", "localhost")}/pulse/connect?host=${best.address}`);
+      console.log("     Wrong address? Use the IPv4 address of your Wi-Fi adapter (ipconfig):");
+      console.log(`     ${target.origin.replace("127.0.0.1", "localhost")}/pulse/connect?host=<that address>`);
+      console.log("");
     }
     console.log("  On the phone (Chrome): 'connection is not private' -> Advanced -> Proceed.");
     console.log("  Windows firewall prompt: tick BOTH 'Private' and 'Public' networks and allow");

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { isPlainHost, phonePulseUrl, rankLanAddresses } from "@/lib/pulse/lan";
+import { isPlainHost, phonePulseUrl, rankLanAddresses, rankLanInterfaces } from "@/lib/pulse/lan";
 
 describe("phone pulse demo: laptop addresses", () => {
   it("ranks hotspot/home addresses first and drops loopback, link-local, IPv6 and virtual adapters", () => {
@@ -18,6 +18,19 @@ describe("phone pulse demo: laptop addresses", () => {
       eth1: [{ address: "10.0.0.5", family: "IPv4", internal: false }],
     });
     expect(ips).toEqual(["192.168.43.17", "10.0.0.5", "172.18.5.4"]);
+  });
+
+  it("prefers the Wi-Fi adapter and puts VirtualBox host-only addresses last", () => {
+    const ips = rankLanAddresses({
+      "Ethernet 2": [{ address: "192.168.56.1", family: "IPv4", internal: false }],
+      "VirtualBox Host-Only Network": [{ address: "192.168.57.1", family: "IPv4", internal: false }],
+      Ethernet: [{ address: "192.168.1.20", family: "IPv4", internal: false }],
+      WLAN: [{ address: "10.95.12.4", family: "IPv4", internal: false }],
+    });
+    expect(ips).toEqual(["10.95.12.4", "192.168.1.20", "192.168.56.1"]);
+    expect(rankLanInterfaces({ "Wi-Fi": [{ address: "172.20.10.2", family: "IPv4", internal: false }] })).toEqual([
+      { address: "172.20.10.2", adapter: "Wi-Fi" },
+    ]);
   });
 
   it("accepts plain IPs and host names only", () => {

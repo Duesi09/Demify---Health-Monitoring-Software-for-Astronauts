@@ -13,30 +13,47 @@ export interface NetAddress {
   internal: boolean;
 }
 
+/** Adapter names of Wi-Fi interfaces (Windows EN/DE, macOS, Linux). */
+const WIRELESS = /wi-?fi|wlan|wireless|drahtlos|^en0$|^wl/i;
+/** Virtual adapters (Docker, WSL, VMs, VPN overlays): never the hotspot. */
+const VIRTUAL = /docker|veth|br-|vethernet|wsl|virtualbox|vmware|vmnet|hyper-v|tailscale|zerotier|host-only/i;
+
 /**
- * Rank: typical hotspot / home Wi-Fi ranges first (192.168.x, 10.x), then
- * 172.16-31.x (often Docker, WSL or VM adapters), never loopback or
- * link-local (169.254.x, no DHCP). IPv4 only: a phone types and scans those.
+ * Rank: Wi-Fi adapters first, then typical hotspot / home ranges
+ * (192.168.x, 10.x), then 172.16-31.x (often Docker, WSL or VMs), and the
+ * VirtualBox / docker-machine host-only defaults (192.168.56.x, 192.168.99.x)
+ * last. Never loopback or link-local (169.254.x, no DHCP). IPv4 only: a phone
+ * types and scans those.
  */
-export function rankLanAddresses(interfaces: Record<string, NetAddress[] | undefined>): string[] {
-  const score = (ip: string): number => {
-    if (ip.startsWith("192.168.")) return 0;
-    if (ip.startsWith("10.")) return 1;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 3;
-    return 2;
+export function rankLanInterfaces(
+  interfaces: Record<string, NetAddress[] | undefined>,
+): { address: string; adapter: string }[] {
+  const score = (ip: string, adapter: string): number => {
+    if (/^192\.168\.(56|99)\./.test(ip)) return 9;
+    if (WIRELESS.test(adapter)) return 0;
+    if (ip.startsWith("192.168.")) return 1;
+    if (ip.startsWith("10.")) return 2;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 4;
+    return 3;
   };
-  const ips = new Set<string>();
-  for (const [name, list] of Object.entries(interfaces)) {
-    // Virtual adapters (Docker, WSL, VirtualBox, VMware, Hyper-V) are never the hotspot.
-    if (/docker|veth|br-|vethernet|wsl|virtualbox|vmware|vmnet|hyper-v|tailscale|zerotier/i.test(name)) continue;
+  const out = new Map<string, { address: string; adapter: string; score: number }>();
+  for (const [adapter, list] of Object.entries(interfaces)) {
+    if (VIRTUAL.test(adapter)) continue;
     for (const a of list ?? []) {
       const v4 = a.family === "IPv4" || a.family === 4;
       if (!v4 || a.internal) continue;
       if (a.address.startsWith("127.") || a.address.startsWith("169.254.")) continue;
-      ips.add(a.address);
+      if (!out.has(a.address)) out.set(a.address, { address: a.address, adapter, score: score(a.address, adapter) });
     }
   }
-  return [...ips].sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  return [...out.values()]
+    .sort((x, y) => x.score - y.score || x.address.localeCompare(y.address))
+    .map(({ address, adapter }) => ({ address, adapter }));
+}
+
+/** The ranked addresses only (see rankLanInterfaces). */
+export function rankLanAddresses(interfaces: Record<string, NetAddress[] | undefined>): string[] {
+  return rankLanInterfaces(interfaces).map((e) => e.address);
 }
 
 /** A plain IPv4 address or host name (no scheme, path or port), as accepted in ?host=. */
