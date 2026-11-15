@@ -41,8 +41,9 @@ export function PulseConnect({
         <ol className="list-decimal space-y-1.5 pl-5">
           <li>Laptop and phone in the same network: best the phone&apos;s own hotspot, laptop connected to it.</li>
           <li>
-            On the laptop, in a second terminal: <code className="font-mono">npm run pulse:https</code> (leave it running;
-            allow it in the Windows firewall prompt for private networks).
+            On the laptop, in a second terminal: <code className="font-mono">npm run pulse:https</code> (leave it running).
+            Windows firewall prompt: tick both <b>Private</b> and <b>Public</b> networks and allow (a new phone hotspot is
+            usually a public network in Windows).
           </li>
           <li>Scan the QR code with the phone camera and open the link in Chrome.</li>
           <li>

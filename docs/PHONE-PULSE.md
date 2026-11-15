@@ -31,9 +31,13 @@ phone (Chrome)  --https:8443-->  scripts/pulse-https.mjs  --http-->  Demify :300
    ```
 
    It prints the phone link (`https://<laptop-ip>:8443/pulse?crew=test`) and a
-   QR code. Windows asks about the firewall: allow Node.js on **private**
-   networks. With Portmaster or another firewall, allow inbound connections
-   for Node.js.
+   QR code. Windows asks about the firewall: tick **both Private and
+   Public** networks and allow (a newly joined phone hotspot is usually a
+   "Public" network in Windows). If you once clicked "Cancel", Windows keeps
+   a block rule for Node.js: remove it under Windows Defender Firewall ->
+   Allow an app. With Portmaster or another firewall, allow inbound
+   connections for Node.js.
+   **Test this once from the phone before the pitch.**
 4. **On the laptop** open http://localhost:3000/pulse/connect for a large QR
    code (or scan the one in the terminal).
 5. **On the phone** scan the QR code and open it in **Chrome**. "Your
@@ -59,9 +63,9 @@ five estimates. Tests with synthetic pulse signals: `tests/pulse-estimator.test.
 
 | Problem | Fix |
 |---|---|
-| Phone cannot open the page (timeout) | Laptop really in **this** phone's hotspot? Windows network set to "Private"? Firewall (Windows, Portmaster) allows Node.js inbound? |
+| Phone cannot open the page (timeout) | Laptop really in **this** phone's hotspot? Firewall allows Node.js inbound on **Public** networks too (Windows, Portmaster)? Old block rule for Node.js? |
+| Flash stays off | Tap "Try torch again". Close other apps that use the camera. Otherwise a bright lamp behind the finger. |
 | "The camera needs HTTPS" | Open the `https://…:8443` link, not `http://…:3000`. |
-| Torch "not available" | Some lenses have no flash; the page tries all back cameras. Otherwise use a bright lamp behind the finger. |
 | `--` stays, "Searching for a steady pulse" | Press lighter (pressing hard stops the blood flow), keep the hand still, cover camera and flash completely. |
 | Readings refused (401) | The server has `DEMIFY_ADMIN_TOKEN`: open `https://<laptop-ip>:8443/unlock?token=<token>&next=/pulse` once on the phone. |
 | `EADDRINUSE` on 8443 | Another pulse gateway (for example the old demify-pulse package) is running; stop it or use `--port 8444`. |

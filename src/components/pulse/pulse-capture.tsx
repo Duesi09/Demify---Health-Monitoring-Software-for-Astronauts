@@ -15,19 +15,34 @@ interface TorchCapabilities extends MediaTrackCapabilities {
   torch?: boolean;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function hasTorch(track: MediaStreamTrack): boolean {
   const caps = (track.getCapabilities?.() ?? {}) as TorchCapabilities;
   return caps.torch === true;
 }
 
+/**
+ * Switches the torch on or off. Always tries (Chrome on Android sometimes
+ * reports the torch capability only once the track streams), up to three
+ * times, and reports success only when the track says the torch is set or at
+ * least offers one (Chrome silently ignores an unsupported advanced constraint).
+ */
 async function setTorch(track: MediaStreamTrack, on: boolean): Promise<boolean> {
-  if (!hasTorch(track)) return false;
-  try {
-    await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
-    return true;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (track.readyState !== "live") return false;
+    let failed = false;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
+    } catch {
+      failed = true;
+    }
+    const setting = (track.getSettings() as MediaTrackSettings & { torch?: boolean }).torch;
+    if (setting === on) return true;
+    if (!failed && setting === undefined && hasTorch(track)) return true;
+    await sleep(400);
   }
+  return false;
 }
 
 const VIDEO: MediaTrackConstraints = {
@@ -36,37 +51,75 @@ const VIDEO: MediaTrackConstraints = {
   frameRate: { ideal: 30 },
 };
 
-/**
- * Opens a back camera, preferring one with a torch (phones with several back
- * lenses often have the flash only next to the main one).
- */
-async function openBackCamera(): Promise<MediaStream> {
-  const first = await navigator.mediaDevices.getUserMedia({
-    video: { ...VIDEO, facingMode: { ideal: "environment" } },
-    audio: false,
-  });
-  if (hasTorch(first.getVideoTracks()[0])) return first;
-  // Labels are readable now that permission is granted.
-  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
-  const firstId = first.getVideoTracks()[0]?.getSettings().deviceId;
-  for (const d of devices) {
-    if (d.deviceId === firstId || /front|user|vorder/i.test(d.label)) continue;
-    let s: MediaStream | null = null;
-    try {
-      first.getTracks().forEach((t) => t.stop());
-      s = await navigator.mediaDevices.getUserMedia({ video: { ...VIDEO, deviceId: { exact: d.deviceId } }, audio: false });
-      if (hasTorch(s.getVideoTracks()[0])) return s;
-      s.getTracks().forEach((t) => t.stop());
-    } catch {
-      s?.getTracks().forEach((t) => t.stop());
-    }
-  }
-  // No lens with a torch: use the default back camera (needs a bright room).
+function stopStream(stream: MediaStream | null) {
+  stream?.getTracks().forEach((t) => t.stop());
+}
+
+async function openDefaultBack(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     video: { ...VIDEO, facingMode: { ideal: "environment" } },
     audio: false,
   });
 }
+
+async function playOn(video: HTMLVideoElement, stream: MediaStream) {
+  video.srcObject = stream;
+  await video.play();
+}
+
+/**
+ * Opens a back camera with the torch on: first the default back camera; when
+ * its torch does not switch on, the other back lenses one by one (phones with
+ * several back lenses often have the flash only next to the main one). Without
+ * any torch it ends on the default back camera (then a bright lamp helps).
+ * `alive()` false = the user stopped or left meanwhile: everything opened is
+ * closed and null returned.
+ */
+async function openBackCameraWithTorch(
+  video: HTMLVideoElement,
+  alive: () => boolean,
+): Promise<{ stream: MediaStream; torch: boolean } | null> {
+  let stream = await openDefaultBack();
+  if (!alive()) return stopStream(stream), null;
+  await playOn(video, stream);
+  if (await setTorch(stream.getVideoTracks()[0], true)) return { stream, torch: true };
+  if (!alive()) return stopStream(stream), null;
+
+  // Labels are readable now that permission is granted.
+  const firstId = stream.getVideoTracks()[0]?.getSettings().deviceId;
+  const others = (await navigator.mediaDevices.enumerateDevices())
+    .filter((d) => d.kind === "videoinput" && d.deviceId && d.deviceId !== firstId)
+    .filter((d) => !/front|user|vorder|selfie/i.test(d.label))
+    .slice(0, 4);
+  if (others.length === 0) return { stream, torch: false };
+
+  for (const d of others) {
+    stopStream(stream);
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { ...VIDEO, deviceId: { exact: d.deviceId } }, audio: false });
+    } catch {
+      continue;
+    }
+    if (!alive()) return stopStream(stream), null;
+    try {
+      await playOn(video, stream);
+      if (await setTorch(stream.getVideoTracks()[0], true)) return { stream, torch: true };
+    } catch {
+      // try the next lens
+    }
+    if (!alive()) return stopStream(stream), null;
+  }
+  // No lens with a torch: back to the default back camera.
+  stopStream(stream);
+  stream = await openDefaultBack();
+  if (!alive()) return stopStream(stream), null;
+  await playOn(video, stream);
+  return { stream, torch: false };
+}
+
+type FrameVideo = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: () => void) => number;
+};
 
 function drawWave(canvas: HTMLCanvasElement | null, wave: number[]) {
   const ctx = canvas?.getContext("2d");
@@ -103,6 +156,8 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
   const wakeRef = useRef<{ release(): Promise<void> } | null>(null);
   const trackerRef = useRef(new PulseTracker());
   const fingerRef = useRef(false);
+  /** Incremented by every stop (and unmount): a start that finds a newer run id gives up. */
+  const runRef = useRef(0);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +181,7 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
   }, []);
 
   const stop = useCallback(() => {
+    runRef.current++;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     rafRef.current = null;
@@ -176,25 +232,44 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
     [crewId],
   );
 
+  const requestWakeLock = useCallback(async () => {
+    try {
+      const wl = (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<{ release(): Promise<void> }> } })
+        .wakeLock;
+      wakeRef.current = (await wl?.request("screen")) ?? null;
+    } catch {
+      // Screen may dim; the demo still works while the page stays open.
+    }
+  }, []);
+
+  // The wake lock ends when the phone switches apps; take it again on return.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && streamRef.current) void requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [requestWakeLock]);
+
+  const retryTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track) setTorchState(await setTorch(track, true));
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     setSendError(null);
     setPhase("starting");
+    const run = ++runRef.current;
+    const alive = () => runRef.current === run;
     try {
-      const stream = await openBackCamera();
-      streamRef.current = stream;
-      const track = stream.getVideoTracks()[0];
-      setTorchState(await setTorch(track, true));
       const video = videoRef.current!;
-      video.srcObject = stream;
-      await video.play();
-      try {
-        const wl = (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<{ release(): Promise<void> }> } })
-          .wakeLock;
-        wakeRef.current = (await wl?.request("screen")) ?? null;
-      } catch {
-        // Screen may dim; the demo still works while the page stays open.
-      }
+      const opened = await openBackCameraWithTorch(video, alive);
+      if (!opened) return;
+      streamRef.current = opened.stream;
+      setTorchState(opened.torch);
+      await requestWakeLock();
+      if (!alive()) return;
 
       const canvas = document.createElement("canvas");
       canvas.width = SAMPLE_SIZE;
@@ -203,7 +278,15 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
       const tracker = trackerRef.current;
       tracker.reset();
 
+      // One sample per camera frame where the browser can tell us (Chrome:
+      // requestVideoFrameCallback), otherwise per display frame.
+      const v = video as FrameVideo;
+      const next = (cb: () => void) => {
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(cb);
+        else rafRef.current = requestAnimationFrame(cb);
+      };
       const frame = () => {
+        if (!alive()) return;
         if (video.readyState >= 2 && video.videoWidth > 0) {
           const side = Math.min(video.videoWidth, video.videoHeight) / 2;
           const sx = (video.videoWidth - side) / 2;
@@ -222,9 +305,9 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
           fingerRef.current = looksLikeFinger(red, green);
           tracker.add({ t: performance.now(), red, green });
         }
-        rafRef.current = requestAnimationFrame(frame);
+        next(frame);
       };
-      rafRef.current = requestAnimationFrame(frame);
+      next(frame);
 
       timerRef.current = window.setInterval(() => {
         const e = tracker.estimate();
@@ -236,6 +319,7 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
       }, SEND_EVERY_MS);
       setPhase("running");
     } catch (err) {
+      if (!alive()) return;
       stop();
       const name = (err as { name?: string })?.name;
       setError(
@@ -247,7 +331,7 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
       );
       setPhase("error");
     }
-  }, [send, stop]);
+  }, [requestWakeLock, send, stop]);
 
   const running = phase === "running";
   const bpm = estimate ? Math.round(estimate.bpm) : null;
@@ -323,8 +407,20 @@ export function PulseCapture({ crewId, crewName }: { crewId: string; crewName: s
         <li className="flex items-center gap-2">
           <Flashlight className="size-3.5" aria-hidden />
           torch:{" "}
-          {torch === null ? "–" : torch ? "on" : "not available on this camera (use a bright lamp behind the finger)"}
+          {torch === null ? "–" : torch ? "on" : "did not switch on"}
+          {running && torch === false && (
+            <button
+              type="button"
+              onClick={retryTorch}
+              className="ml-1 rounded-md px-2 py-0.5 text-fg ring-1 ring-inset ring-border"
+            >
+              Try torch again
+            </button>
+          )}
         </li>
+        {running && torch === false && (
+          <li className="pl-5">No flash on this camera: hold the finger in front of a bright lamp instead.</li>
+        )}
         <li className="flex items-center gap-2">
           <Send className="size-3.5" aria-hidden />
           readings sent: {sent}

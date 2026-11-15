@@ -168,6 +168,10 @@ async function main() {
         res.end(NOT_RUNNING(target.origin));
       } else res.destroy();
     });
+    // Phone gone (tab closed, network lost): stop waiting for Demify too.
+    res.on("close", () => {
+      if (!res.writableFinished) upstream.destroy();
+    });
     req.pipe(upstream);
   });
 
@@ -194,6 +198,8 @@ async function main() {
       socket.end(`HTTP/1.1 ${up.statusCode ?? 502} ${up.statusMessage ?? "Bad Gateway"}\r\n\r\n`);
     });
     upstream.on("error", () => socket.destroy());
+    upstream.setTimeout(15_000, () => upstream.destroy());
+    socket.on("error", () => upstream.destroy());
     upstream.end();
   });
 
@@ -240,7 +246,8 @@ async function main() {
       }
     }
     console.log("  On the phone (Chrome): 'connection is not private' -> Advanced -> Proceed.");
-    console.log("  Windows firewall prompt: allow Node.js on private networks.");
+    console.log("  Windows firewall prompt: tick BOTH 'Private' and 'Public' networks and allow");
+    console.log("  (a new phone hotspot is usually a 'Public' network in Windows).");
     console.log("  Stop with Ctrl+C.");
   });
 }
