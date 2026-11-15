@@ -170,3 +170,26 @@ export function demifyErrorHint(statusOrCode) {
 export function isLanAddress(ip) {
   return /^192\.168\./.test(ip) || /^10\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
 }
+
+/**
+ * Default host-only networks of VirtualBox (192.168.56.x) and docker-machine
+ * (192.168.99.x): on Windows their adapter is often just "Ethernet 2", so the
+ * name does not give them away. Never the phone's network.
+ */
+export function isHostOnlyAddress(ip) {
+  return /^192\.168\.(56|99)\./.test(ip);
+}
+
+/** Wi-Fi adapter names (Windows EN/DE, macOS en0, Linux wl*): the hotspot is reached over Wi-Fi. */
+export function isWifiAdapter(name) {
+  return /Wi-?Fi|WLAN|Wireless|Drahtlos|^en0$|^wl/i.test(name);
+}
+
+/**
+ * Order of the phone links: lower is better. Wi-Fi adapters with a LAN
+ * address first, then other LAN adapters; 99 = not the phone's network.
+ */
+export function phoneLinkRank({ ip, name }, isVirtual = () => false) {
+  if (!isLanAddress(ip) || isHostOnlyAddress(ip) || isVirtual(name)) return 99;
+  return isWifiAdapter(name) ? 0 : 1;
+}

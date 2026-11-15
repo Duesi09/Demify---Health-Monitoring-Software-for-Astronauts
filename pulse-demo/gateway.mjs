@@ -19,7 +19,7 @@ import {
   buildReadings,
   topicFor,
   tokenMatches,
-  isLanAddress,
+  phoneLinkRank,
   STATUS_TOPIC,
   MAX_PULSE_BODY,
 } from "./lib/contract.mjs";
@@ -290,8 +290,11 @@ function printLinks(heading) {
     " Open on the phone:",
   ];
   const ifaces = localInterfaces().filter((i) => i.ip !== "127.0.0.1");
-  const likely = (i) => isLanAddress(i.ip) && !isVirtualAdapter(i.name);
-  ifaces.sort((x, y) => Number(likely(y)) - Number(likely(x)));
+  // Wi-Fi first (the hotspot), then other LAN adapters; virtual and host-only
+  // adapters (VirtualBox 192.168.56.x is often just "Ethernet 2") never get ">>" or the QR code.
+  const rank = (i) => phoneLinkRank(i, isVirtualAdapter);
+  const likely = (i) => rank(i) < 99;
+  ifaces.sort((x, y) => rank(x) - rank(y));
   for (const i of ifaces) {
     const url = `https://${i.ip}:${env.PORT}/?${token}crew=${env.CREW_ID}`;
     out.push(`   ${likely(i) ? ">>" : "  "} ${url}   [${i.name}]${likely(i) ? "  <- use this on the hotspot" : ""}`);
@@ -302,7 +305,7 @@ function printLinks(heading) {
   out.push("==================================================================", "");
   console.log(out.join("\n"));
   // QR code of the hotspot link: scan it with the phone camera instead of typing.
-  const best = ifaces.find(likely);
+  const best = ifaces.find(likely); // sorted: the Wi-Fi adapter when there is one
   if (best) {
     QRCode.toString(`https://${best.ip}:${env.PORT}/?${token}crew=${env.CREW_ID}`, { type: "terminal", small: true })
       .then((qr) => console.log(` Scan with the phone camera (${best.ip}):\n${qr}`))

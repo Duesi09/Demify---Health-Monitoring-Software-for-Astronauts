@@ -9,6 +9,9 @@ import {
   tokenMatches,
   demifyErrorHint,
   isLanAddress,
+  isHostOnlyAddress,
+  isWifiAdapter,
+  phoneLinkRank,
   DEMIFY_HR_RANGE,
   BPM_MIN,
   BPM_MAX,
@@ -183,5 +186,25 @@ describe("hints and addresses", () => {
   test("LAN addresses", () => {
     for (const ip of ["192.168.43.10", "10.0.0.5", "172.20.10.2"]) assert.equal(isLanAddress(ip), true, ip);
     for (const ip of ["100.95.1.1", "127.0.0.1", "172.32.0.1", "8.8.8.8"]) assert.equal(isLanAddress(ip), false, ip);
+  });
+
+  test("phone link order: Wi-Fi first, VirtualBox host-only never (the QR code uses the first)", () => {
+    const virtual = (name) => /vEthernet|Tailscale/i.test(name);
+    const ifaces = [
+      { ip: "192.168.56.1", name: "Ethernet 2" },
+      { ip: "172.20.10.13", name: "WLAN" },
+      { ip: "169.254.83.107", name: "Tailscale" },
+      { ip: "172.28.240.1", name: "vEthernet (Default Switch)" },
+      { ip: "192.168.1.20", name: "Ethernet" },
+    ];
+    const sorted = [...ifaces].sort((x, y) => phoneLinkRank(x, virtual) - phoneLinkRank(y, virtual));
+    assert.equal(sorted[0].ip, "172.20.10.13");
+    assert.equal(sorted[1].ip, "192.168.1.20");
+    assert.equal(phoneLinkRank({ ip: "192.168.56.1", name: "Ethernet 2" }, virtual), 99);
+    assert.equal(phoneLinkRank({ ip: "172.28.240.1", name: "vEthernet (Default Switch)" }, virtual), 99);
+    assert.equal(isHostOnlyAddress("192.168.99.100"), true);
+    assert.equal(isHostOnlyAddress("192.168.43.1"), false);
+    for (const n of ["WLAN", "Wi-Fi", "WiFi", "Drahtlos-LAN", "en0", "wlp2s0"]) assert.equal(isWifiAdapter(n), true, n);
+    assert.equal(isWifiAdapter("Ethernet 2"), false);
   });
 });
